@@ -1,0 +1,130 @@
+# ---------------------------------------------------------------------------
+# MedSignal — .gitignore
+# Правило №1: в репозиторий не попадают секреты, персональные и медицинские
+# данные. Всё, что похоже на выгрузку из ИС БГ / ЭРСБ / ЕИП, игнорируется
+# по умолчанию.
+# ---------------------------------------------------------------------------
+
+# --- Секреты и конфигурация окружения --------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+secrets/
+infrastructure/security/secrets/
+**/credentials.json
+**/service-account*.json
+
+# --- Реальные данные (никогда не коммитим) ---------------------------------
+data/
+datasets/
+raw/
+/incoming/
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.dbf
+*.parquet
+*.sav
+*.sas7bdat
+!**/fixtures/**/*.csv
+!**/seeds/**/*.csv
+!**/tests/**/*.csv
+
+# --- ML артефакты ----------------------------------------------------------
+mlruns/
+mlartifacts/
+/models/
+ml/models/
+!backend/app/models/
+*.pkl
+*.joblib
+*.onnx
+*.cbm
+*.txt.model
+ml/.cache/
+
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+dist/
+build/
+*.egg-info/
+.tox/
+
+# --- Node / Next.js --------------------------------------------------------
+node_modules/
+.next/
+out/
+.turbo/
+.pnp.*
+.yarn/*
+!.yarn/patches
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+playwright-report/
+test-results/
+.playwright/
+
+# --- Docker / инфраструктура ----------------------------------------------
+docker-compose.override.yml
+.docker-data/
+volumes/
+pgdata/
+clickhouse-data/
+minio-data/
+redis-data/
+grafana-data/
+prometheus-data/
+
+# --- Логи и временные файлы ------------------------------------------------
+*.log
+logs/
+tmp/
+.tmp/
+*.bak
+*.orig
+
+# --- Архивы и дампы --------------------------------------------------------
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.7z
+*.rar
+
+# --- IDE / OS / Tooling ----------------------------------------------------
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.recommended.json
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+.claude/
+.import_linter_cache/
+

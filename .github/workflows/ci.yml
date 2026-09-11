@@ -1,0 +1,156 @@
+name: CI
+
+# Проверки качества и архитектурных границ.
+# Развёртывание отсюда не выполняется: выкатка появится вместе
+# с целевыми средами (DEPLOYMENT.md).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Новый запуск отменяет предыдущий для той же ветки.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+
+jobs:
+  backend-lint:
+    name: Backend — линтер и типы
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Установка зависимостей
+        working-directory: backend
+        run: pip install --requirement requirements-dev.txt
+
+      - name: Ruff — проверка
+        working-directory: backend
+        run: python -m ruff check --output-format=github .
+
+      - name: Ruff — форматирование
+        working-directory: backend
+        run: python -m ruff format --check .
+
+      - name: Mypy — типы
+        working-directory: backend
+        run: python -m mypy app
+
+  backend-tests:
+    name: Backend — тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Установка зависимостей
+        working-directory: backend
+        run: pip install --requirement requirements-dev.txt
+
+      - name: Pytest
+        working-directory: backend
+        # Тесты не требуют работающих сервисов данных: внешние зависимости
+        # подменяются, аутентификация использует подставной адаптер.
+        run: python -m pytest --cov=app --cov-report=term-missing
+
+  architecture:
+    name: Архитектурные границы
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Установка зависимостей
+        working-directory: backend
+        run: pip install --requirement requirements-dev.txt
+
+      - name: Проверка правил зависимостей
+        # Границы, зафиксированные в PHASE 0. Нарушение ломает сборку:
+        # граница, которую не проверяет машина, разрушается за недели.
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/backend
+        run: lint-imports --config .importlinter
+
+  frontend:
+    name: Frontend — линтер, типы, тесты
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Проверка типов
+        run: npm run typecheck
+
+      - name: Vitest
+        run: npm run test
+
+  compose:
+    name: Конфигурация Docker Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверка синтаксиса compose
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml config --quiet
+
+      - name: Хранилища не публикуются в базовой конфигурации
+        # Проверка требования SECURITY.md, раздел 2: наружу выходит
+        # только обратный прокси.
+        run: |
+          published=$(docker compose config --format json \
+            | python -c "
+import json, sys
+services = json.load(sys.stdin)['services']
+offenders = [
+    name for name, spec in services.items()
+    if name != 'nginx' and spec.get('ports')
+]
+print(','.join(offenders))
+")
+          if [ -n "$published" ]; then
+            echo "Порты наружу публикуют сервисы: $published"
+            exit 1
+          fi
+          echo "Публикует порты только nginx"

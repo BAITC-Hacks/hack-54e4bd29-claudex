@@ -1,0 +1,122 @@
+# Архитектурные границы MedSignal.
+#
+# Правила зафиксированы в PHASE 0 (docs/ARCHITECTURE.md, разделы 5.1 и 5.3).
+# Проверка выполняется в CI и ломает сборку при нарушении: граница,
+# которую не проверяет машина, разрушается за несколько недель.
+#
+# Запуск: lint-imports --config .importlinter
+# PYTHONPATH должен включать корень репозитория и каталог backend.
+
+[importlinter]
+root_packages =
+    app
+    ml
+    data_pipeline
+include_external_packages = True
+
+# ---------------------------------------------------------------------------
+# Слои backend: зависимости направлены строго сверху вниз.
+# ---------------------------------------------------------------------------
+[importlinter:contract:backend-layers]
+name = Слои backend: api -> business -> repositories -> models
+type = layers
+layers =
+    app.api
+    app.business
+    app.repositories
+    app.models
+
+# ---------------------------------------------------------------------------
+# API не обращается к данным напрямую.
+# ---------------------------------------------------------------------------
+[importlinter:contract:api-not-data]
+name = API не импортирует репозитории напрямую
+type = forbidden
+# Косвенный путь api -> business -> repositories разрешён: он и есть
+# предписанное направление. Запрещено обращение в обход бизнес-слоя.
+allow_indirect_imports = True
+source_modules =
+    app.api
+forbidden_modules =
+    app.repositories
+
+# ---------------------------------------------------------------------------
+# Бизнес-слой не знает о протоколе доставки.
+# ---------------------------------------------------------------------------
+[importlinter:contract:business-framework-free]
+name = Бизнес-слой не зависит от FastAPI и Starlette
+type = forbidden
+source_modules =
+    app.business
+forbidden_modules =
+    fastapi
+    starlette
+
+# ---------------------------------------------------------------------------
+# Модели и схемы не тянут за собой прикладную логику.
+# ---------------------------------------------------------------------------
+[importlinter:contract:models-independent]
+name = Модели не импортируют прикладные слои
+type = forbidden
+source_modules =
+    app.models
+forbidden_modules =
+    app.api
+    app.business
+    app.repositories
+    app.workers
+
+[importlinter:contract:schemas-independent]
+name = Схемы не импортируют прикладные слои
+type = forbidden
+source_modules =
+    app.schemas
+forbidden_modules =
+    app.api
+    app.business
+    app.repositories
+    app.database
+
+# ---------------------------------------------------------------------------
+# Инфраструктурные слои не знают о домене.
+# ---------------------------------------------------------------------------
+[importlinter:contract:database-independent]
+name = Слой подключений не импортирует бизнес-слой и API
+type = forbidden
+source_modules =
+    app.database
+forbidden_modules =
+    app.api
+    app.business
+    app.repositories
+
+[importlinter:contract:security-independent]
+name = Слой безопасности не импортирует бизнес-слой и API
+type = forbidden
+source_modules =
+    app.security
+forbidden_modules =
+    app.api
+    app.business
+    app.repositories
+
+# ---------------------------------------------------------------------------
+# ML и конвейер данных не зависят от прикладного кода (ADR-0005).
+# Взаимодействие идёт через порт, объявленный в бизнес-слое.
+# ---------------------------------------------------------------------------
+[importlinter:contract:ml-separation]
+name = ML не импортирует backend
+type = forbidden
+source_modules =
+    ml
+forbidden_modules =
+    app
+
+[importlinter:contract:data-pipeline-separation]
+name = Конвейер данных не импортирует бизнес-слой и API
+type = forbidden
+source_modules =
+    data_pipeline
+forbidden_modules =
+    app.api
+    app.business
