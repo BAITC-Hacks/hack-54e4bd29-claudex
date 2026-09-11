@@ -1,0 +1,30 @@
+# Контекст сборки не должен содержать секреты, данные и артефакты.
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.egg-info/
+
+# Данные и модели в образ не попадают.
+*.csv
+*.parquet
+*.xlsx
+data/
+datasets/
+mlruns/
+models/
+
+.git/
+.github/
+*.md
+!README.md
