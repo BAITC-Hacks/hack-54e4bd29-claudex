@@ -137,20 +137,14 @@ jobs:
 
       - name: Хранилища не публикуются в базовой конфигурации
         # Проверка требования SECURITY.md, раздел 2: наружу выходит
-        # только обратный прокси.
+        # только обратный прокси. Логика вынесена в скрипт, чтобы её
+        # можно было запустить локально тем же способом, что и в CI.
         run: |
-          published=$(docker compose config --format json \
-            | python -c "
-import json, sys
-services = json.load(sys.stdin)['services']
-offenders = [
-    name for name, spec in services.items()
-    if name != 'nginx' and spec.get('ports')
-]
-print(','.join(offenders))
-")
-          if [ -n "$published" ]; then
-            echo "Порты наружу публикуют сервисы: $published"
-            exit 1
-          fi
-          echo "Публикует порты только nginx"
+          docker compose config --format json \
+            | python scripts/check-published-ports.py
+
+      - name: Диагностическое наложение слушает только петлевой адрес
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml \
+            config --format json \
+            | python scripts/check-published-ports.py --allow-loopback

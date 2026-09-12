@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
-import { DECISION_SUPPORT_NOTICE, env } from "@/config/env";
 import { Providers } from "@/app/providers";
+import { SiteHeader } from "@/components/site-header";
+import { DECISION_SUPPORT_NOTICE, env } from "@/config/env";
 
 import "@/app/globals.css";
 
@@ -20,16 +21,7 @@ export default function RootLayout({
       <body className="min-h-screen">
         <Providers>
           <div className="flex min-h-screen flex-col">
-            <header className="border-b border-border bg-card">
-              <div className="container flex h-14 items-center justify-between">
-                <span className="text-sm font-semibold tracking-tight">
-                  MedSignal
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {env.appEnv}
-                </span>
-              </div>
-            </header>
+            <SiteHeader />
 
             <main className="container flex-1 py-8">{children}</main>
 

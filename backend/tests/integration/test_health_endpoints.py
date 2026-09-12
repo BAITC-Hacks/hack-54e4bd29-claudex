@@ -39,7 +39,7 @@ def test_health_returns_200_without_touching_dependencies(
 
 def test_ready_returns_200_when_required_dependencies_are_up(
     client: TestClient,
-    all_dependencies_up: None,  # noqa: ARG001 - фикстура применяется по факту
+    all_dependencies_up: None,
 ) -> None:
     response = client.get(f"{API}/ready")
 

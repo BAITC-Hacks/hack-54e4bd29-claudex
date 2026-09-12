@@ -146,6 +146,29 @@ class AuthenticationService:
 
 
 @lru_cache(maxsize=1)
+def get_token_verifier() -> TokenVerifier:
+    """Проверяющий токен для процесса.
+
+    Кэшируется: клиент ключей провайдера держит их у себя и не должен
+    создаваться заново на каждый запрос.
+
+    Подставной адаптер включается только явной настройкой и только
+    в локальной среде — за этим следит валидация конфигурации. Запасным
+    вариантом при отказе Keycloak он не является никогда.
+    """
+    settings = get_settings()
+    if settings.auth_test_mode:
+        from app.security.testing import StaticTokenVerifier
+
+        logger.warning(
+            "Включён подставной адаптер аутентификации. "
+            "Допустимо только для автоматических тестов."
+        )
+        return StaticTokenVerifier()
+    return KeycloakTokenVerifier(settings)
+
+
+@lru_cache(maxsize=1)
 def get_authentication_service() -> AuthenticationService:
     """Служба аутентификации процесса.
 

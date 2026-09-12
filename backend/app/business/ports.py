@@ -1,0 +1,293 @@
+"""Порты доступа к данным.
+
+Бизнес-слой объявляет, что ему нужно от хранилища; слой репозиториев
+это выполняет. Направление зависимости обращено намеренно: правила
+не должны знать, чем именно реализовано хранение (ADR-0005).
+
+Протоколы структурные: реализации не импортируют этот модуль, поэтому
+правило «репозитории не импортируют бизнес-слой» остаётся в силе.
+
+Область данных передаётся явным параметром каждому запросу. Это
+сознательное решение ADR-0006: неявный контекст легко забыть, а забытый
+фильтр области — это утечка за границу видимости.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+from types import TracebackType
+from typing import Any, Protocol
+
+from app.models.access import User
+from app.models.action import Action
+from app.models.analytics import Forecast, Scenario
+from app.models.audit import AuditEvent
+from app.models.data_import import DataImport
+from app.models.directory import Hospital, Region
+from app.models.enums import (
+    AuditAction,
+    AuditEntityType,
+    DataImportStatus,
+    SignalStatus,
+)
+from app.models.incident import Incident
+from app.models.signal import Signal
+from app.models.system import SystemOperation
+from app.security.context import DataScope
+from app.shared.filters import (
+    AuditFilter,
+    HospitalFilter,
+    IncidentFilter,
+    SignalFilter,
+)
+from app.shared.pagination import PageRequest
+
+# Псевдонимы нужны потому, что внутри протоколов имя `list`
+# занято методом: аннотация разрешилась бы в него.
+type RegionPage = tuple[list[Region], int]
+type HospitalPage = tuple[list[Hospital], int]
+type SignalPage = tuple[list[Signal], int]
+type SignalList = list[Signal]
+type IncidentPage = tuple[list[Incident], int]
+type ActionList = list[Action]
+type ScenarioPage = tuple[list[Scenario], int]
+type AuditPage = tuple[list[AuditEvent], int]
+type AuditEventList = list[AuditEvent]
+type OperationList = list[SystemOperation]
+
+
+class RegionRepository(Protocol):
+    def get(self, region_id: uuid.UUID, scope: DataScope) -> Region | None: ...
+
+    def list(self, scope: DataScope, page: PageRequest) -> tuple[list[Region], int]: ...
+
+
+class HospitalRepository(Protocol):
+    def get(self, hospital_id: uuid.UUID, scope: DataScope) -> Hospital | None: ...
+
+    def list(
+        self, scope: DataScope, filters: HospitalFilter, page: PageRequest
+    ) -> HospitalPage: ...
+
+
+class SignalRepository(Protocol):
+    def get(self, signal_id: uuid.UUID, scope: DataScope) -> Signal | None: ...
+
+    def list(
+        self, scope: DataScope, filters: SignalFilter, page: PageRequest
+    ) -> SignalPage: ...
+
+    def update_status(
+        self,
+        signal_id: uuid.UUID,
+        *,
+        expected_version: int,
+        new_status: SignalStatus,
+        closed_reason: str | None,
+        closed_at: datetime | None,
+        now: datetime,
+    ) -> Signal | None:
+        """Сменить статус при совпадении версии.
+
+        Возвращает None, если версия не совпала: это конфликт одновременного
+        изменения, а не отсутствие объекта.
+        """
+        ...
+
+    def update_assignment(
+        self,
+        signal_id: uuid.UUID,
+        *,
+        expected_version: int,
+        assigned_user_id: uuid.UUID | None,
+        now: datetime,
+    ) -> Signal | None: ...
+
+    def add(self, signal: Signal) -> Signal: ...
+
+
+class IncidentRepository(Protocol):
+    def get(self, incident_id: uuid.UUID, scope: DataScope) -> Incident | None: ...
+
+    def list(
+        self, scope: DataScope, filters: IncidentFilter, page: PageRequest
+    ) -> IncidentPage: ...
+
+    def signals_of(self, incident_id: uuid.UUID, scope: DataScope) -> SignalList: ...
+
+
+class ActionRepository(Protocol):
+    def add(self, action: Action) -> Action: ...
+
+    def list_for_signal(self, signal_id: uuid.UUID) -> ActionList: ...
+
+
+class ForecastRepository(Protocol):
+    def get(self, forecast_id: uuid.UUID, scope: DataScope) -> Forecast | None: ...
+
+    def latest_for_hospital(
+        self, hospital_id: uuid.UUID, target: str, scope: DataScope
+    ) -> Forecast | None: ...
+
+    def add(self, forecast: Forecast) -> Forecast: ...
+
+
+class ScenarioRepository(Protocol):
+    def get(self, scenario_id: uuid.UUID, scope: DataScope) -> Scenario | None: ...
+
+    def add(self, scenario: Scenario) -> Scenario: ...
+
+    def list(self, scope: DataScope, page: PageRequest) -> tuple[list[Scenario], int]: ...
+
+
+class DataImportRepository(Protocol):
+    def get(self, import_id: uuid.UUID) -> DataImport | None: ...
+
+    def find_by_hash(self, dataset_type: str, file_hash: str) -> DataImport | None: ...
+
+    def add(self, data_import: DataImport) -> DataImport: ...
+
+    def update_status(
+        self,
+        import_id: uuid.UUID,
+        *,
+        status: DataImportStatus,
+        error_summary: str | None,
+        now: datetime,
+    ) -> DataImport | None: ...
+
+
+class AuditRepository(Protocol):
+    """Журнал аудита. Только добавление и чтение.
+
+    Методов изменения и удаления не существует намеренно: смысл журнала
+    в неизменности.
+    """
+
+    def append(
+        self,
+        *,
+        actor_user_id: uuid.UUID | None,
+        action: AuditAction,
+        entity_type: AuditEntityType,
+        entity_id: uuid.UUID,
+        request_id: str | None,
+        metadata: dict[str, Any],
+    ) -> AuditEvent: ...
+
+    def list(
+        self, scope: DataScope, filters: AuditFilter, page: PageRequest
+    ) -> AuditPage: ...
+
+    def list_for_entity(
+        self, entity_type: AuditEntityType, entity_id: uuid.UUID, *, limit: int
+    ) -> AuditEventList:
+        """История одного объекта для его карточки."""
+        ...
+
+
+class UserRepository(Protocol):
+    def get_by_subject(self, external_subject: str) -> User | None: ...
+
+    def get(self, user_id: uuid.UUID) -> User | None: ...
+
+    def ensure(
+        self, *, external_subject: str, display_name: str | None, email: str | None
+    ) -> User:
+        """Создать проекцию пользователя, если её ещё нет.
+
+        Создание проекции не выдаёт никаких прав: область данных
+        назначается администратором отдельно.
+        """
+        ...
+
+    def resolve_scope(self, user: User) -> DataScope: ...
+
+
+class SystemOperationRepository(Protocol):
+    """Состояние технических и долгих операций (ADR-0010)."""
+
+    def create(
+        self, *, operation_type: str, request_id: str | None, created_at: datetime
+    ) -> SystemOperation: ...
+
+    def get(self, operation_id: uuid.UUID) -> SystemOperation | None: ...
+
+    def list_recent(self, *, limit: int) -> OperationList: ...
+
+    def mark_running(
+        self, operation_id: uuid.UUID, *, celery_task_id: str | None, at: datetime
+    ) -> SystemOperation | None: ...
+
+    def mark_completed(
+        self, operation_id: uuid.UUID, *, result: dict[str, Any] | None, at: datetime
+    ) -> SystemOperation | None: ...
+
+    def mark_failed(
+        self, operation_id: uuid.UUID, *, error_summary: str, at: datetime
+    ) -> SystemOperation | None: ...
+
+
+class UnitOfWork(Protocol):
+    """Единица работы: общая транзакция для набора репозиториев.
+
+    Нужна требованию атомарности: бизнес-операция и запись аудита
+    фиксируются вместе. Журнал, расходящийся с данными, хуже
+    отсутствующего журнала.
+    """
+
+    # Объявлены свойствами, а не полями: изменяемое поле протокола
+    # требует точного совпадения типа, и конкретная реализация
+    # с собственными классами репозиториев его не удовлетворяла бы.
+    @property
+    def regions(self) -> RegionRepository: ...
+
+    @property
+    def hospitals(self) -> HospitalRepository: ...
+
+    @property
+    def signals(self) -> SignalRepository: ...
+
+    @property
+    def incidents(self) -> IncidentRepository: ...
+
+    @property
+    def actions(self) -> ActionRepository: ...
+
+    @property
+    def forecasts(self) -> ForecastRepository: ...
+
+    @property
+    def scenarios(self) -> ScenarioRepository: ...
+
+    @property
+    def data_imports(self) -> DataImportRepository: ...
+
+    @property
+    def audit(self) -> AuditRepository: ...
+
+    @property
+    def users(self) -> UserRepository: ...
+
+    @property
+    def operations(self) -> SystemOperationRepository: ...
+
+    def __enter__(self) -> UnitOfWork: ...
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None: ...
+
+    def commit(self) -> None: ...
+
+    def rollback(self) -> None: ...
+
+    def flush(self) -> None: ...
+
+
+class UnitOfWorkFactory(Protocol):
+    def __call__(self) -> UnitOfWork: ...

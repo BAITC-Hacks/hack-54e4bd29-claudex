@@ -1,15 +1,14 @@
-"""Сборка маршрутов версии v1.
-
-Доменные маршруты — регионы, организации, сигналы, прогнозы, симуляции —
-подключаются здесь начиная с PHASE 2.
-"""
+"""Сборка маршрутов версии v1."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.v1 import health, system
+from app.api.v1 import audit, directory, health, signals, system
 
 api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(system.router)
+api_router.include_router(directory.router)
+api_router.include_router(signals.router)
+api_router.include_router(audit.router)

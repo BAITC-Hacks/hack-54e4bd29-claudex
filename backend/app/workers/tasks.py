@@ -17,7 +17,7 @@ from celery import Task
 
 from app.business.system.operations import OperationService
 from app.core.logging import get_logger
-from app.database.postgres import session_scope
+from app.repositories.unit_of_work import create_unit_of_work
 from app.workers.celery_app import REQUEST_ID_TASK_HEADER, celery_app
 
 logger = get_logger(__name__)
@@ -26,7 +26,7 @@ PING_OPERATION_TYPE = "system.ping"
 
 
 def _operation_service() -> OperationService:
-    return OperationService(session_scope)
+    return OperationService(create_unit_of_work)
 
 
 @celery_app.task(

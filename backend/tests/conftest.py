@@ -47,13 +47,23 @@ for _key, _value in TEST_ENVIRONMENT.items():
     os.environ[_key] = _value
 
 
-from fastapi import FastAPI  # noqa: E402
+from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.api.deps import get_operation_service  # noqa: E402
+from app.api.deps import (  # noqa: E402
+    get_operation_service,
+    get_security_context,
+)
 from app.business.system.operations import OperationSnapshot  # noqa: E402
-from app.core.exceptions import NotFoundError  # noqa: E402
+from app.core.exceptions import NotFoundError, UnauthenticatedError  # noqa: E402
 from app.models.system import OperationStatus  # noqa: E402
+from app.security.context import (  # noqa: E402
+    GLOBAL_SCOPE_ROLES,
+    DataScope,
+    SecurityContext,
+)
+from app.security.testing import StaticTokenVerifier  # noqa: E402
+from tests.fakes import FakeStore, unit_of_work_factory  # noqa: E402
 
 
 class FakeOperationService:
@@ -121,12 +131,77 @@ def operation_service() -> FakeOperationService:
 
 
 @pytest.fixture
-def app(operation_service: FakeOperationService) -> Iterator[FastAPI]:
+def store() -> FakeStore:
+    """Хранилище предметной области в памяти."""
+    return FakeStore()
+
+
+@pytest.fixture
+def uow_factory(store: FakeStore):
+    return unit_of_work_factory(store)
+
+
+class ScopeOverride:
+    """Область данных, назначаемая тестом конкретному субъекту токена."""
+
+    def __init__(self) -> None:
+        self.by_subject: dict[str, DataScope] = {}
+        self.user_ids: dict[str, uuid.UUID] = {}
+
+    def assign(self, subject: str, scope: DataScope, user_id: uuid.UUID) -> None:
+        self.by_subject[subject] = scope
+        self.user_ids[subject] = user_id
+
+
+@pytest.fixture
+def scopes() -> ScopeOverride:
+    return ScopeOverride()
+
+
+def _build_test_context(scopes: ScopeOverride):
+    """Замена зависимости аутентификации без обращения к базе.
+
+    Токен проверяется тем же подставным адаптером, что и в приложении,
+    поэтому покрытие «действительный принимается, недействительный
+    отклоняется» сохраняется. Из базы берётся только область данных —
+    её подставляет тест.
+    """
+    verifier = StaticTokenVerifier()
+
+    def dependency(request: Request) -> SecurityContext:
+        header = request.headers.get("Authorization", "")
+        scheme, _, token = header.partition(" ")
+        if scheme.lower() != "bearer" or not token:
+            raise UnauthenticatedError("Требуется токен доступа")
+
+        claims = verifier.verify(token)
+        scope = scopes.by_subject.get(claims.subject, DataScope.unresolved())
+        if claims.roles & GLOBAL_SCOPE_ROLES:
+            scope = DataScope.global_scope()
+
+        return SecurityContext(
+            user_id=claims.subject,
+            username=claims.username,
+            email=claims.email,
+            roles=claims.roles,
+            scope=scope,
+            token_id=claims.token_id,
+            internal_user_id=scopes.user_ids.get(claims.subject, uuid.uuid4()),
+        )
+
+    return dependency
+
+
+@pytest.fixture
+def app(
+    operation_service: FakeOperationService, scopes: ScopeOverride
+) -> Iterator[FastAPI]:
     """Экземпляр приложения с подменёнными внешними зависимостями."""
     from app.main import create_app
 
     application = create_app()
     application.dependency_overrides[get_operation_service] = lambda: operation_service
+    application.dependency_overrides[get_security_context] = _build_test_context(scopes)
     yield application
     application.dependency_overrides.clear()
 

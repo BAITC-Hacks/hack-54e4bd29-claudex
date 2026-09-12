@@ -15,6 +15,10 @@ const environmentSchema = z.object({
   apiBaseUrl: z.string().min(1, "NEXT_PUBLIC_API_BASE_URL не задан"),
   appEnv: z.enum(["local", "dev", "staging", "production"]).default("local"),
   disclaimerEnabled: z.boolean().default(true),
+  // Провайдер идентификации. Секретов здесь нет: публичный клиент
+  // работает по коду авторизации с PKCE (ADR-0009).
+  oidcIssuer: z.string().min(1, "NEXT_PUBLIC_OIDC_ISSUER не задан"),
+  oidcClientId: z.string().min(1, "NEXT_PUBLIC_OIDC_CLIENT_ID не задан"),
 });
 
 export type AppEnvironment = z.infer<typeof environmentSchema>;
@@ -24,6 +28,11 @@ function readEnvironment(): AppEnvironment {
     apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1",
     appEnv: process.env.NEXT_PUBLIC_APP_ENV ?? "local",
     disclaimerEnabled: process.env.NEXT_PUBLIC_DISCLAIMER_ENABLED !== "false",
+    oidcIssuer:
+      process.env.NEXT_PUBLIC_OIDC_ISSUER ??
+      "http://localhost/auth/realms/medsignal",
+    oidcClientId:
+      process.env.NEXT_PUBLIC_OIDC_CLIENT_ID ?? "medsignal-frontend",
   });
 
   if (!parsed.success) {

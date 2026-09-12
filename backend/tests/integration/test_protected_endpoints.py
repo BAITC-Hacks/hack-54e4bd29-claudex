@@ -117,7 +117,7 @@ def test_broker_failure_marks_operation_failed(
     Запись остаётся видимой и переводится в FAILED с понятной причиной.
     """
 
-    def failing_enqueue(operation_id: uuid.UUID, request_id: str | None) -> str:  # noqa: ARG001
+    def failing_enqueue(operation_id: uuid.UUID, request_id: str | None) -> str:
         raise ConnectionError("broker unreachable at redis:6379")
 
     monkeypatch.setattr("app.api.v1.system.enqueue_ping", failing_enqueue)

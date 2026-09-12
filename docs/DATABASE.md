@@ -1,6 +1,6 @@
 # DATABASE — модель данных
 
-> **Статус.** Модель операционных сущностей устойчива и следует из предметной области. Схемы аналитических таблиц зависят от фактической структуры выгрузок и уточняются после Data Audit ([ADR-0007](ADR/0007-data-audit-before-ml-target.md)).
+> **Статус.** Доменные таблицы PostgreSQL созданы миграцией `0002_domain_foundation` (PHASE 2). Таблицы временных рядов в ClickHouse не создаются: их схема зависит от фактической структуры выгрузок и определяется после Data Audit ([ADR-0007](ADR/0007-data-audit-before-ml-target.md)).
 
 ## 1. Разделение хранилищ
 
@@ -16,28 +16,37 @@
 
 ## 2. ER-модель операционной БД
 
+Схема ниже отражает таблицы, созданные миграцией `0002_domain_foundation`.
+
 ```mermaid
 erDiagram
     REGIONS ||--o{ HOSPITALS : "содержит"
-    HOSPITALS ||--|| HOSPITAL_PROFILES : "имеет"
     HOSPITALS ||--o{ SIGNALS : "порождает"
-    HOSPITALS ||--o{ HOSPITAL_RISK_SCORES : "оценивается"
+    HOSPITALS ||--o{ INCIDENTS : "порождает"
+    HOSPITALS ||--o{ FORECASTS : "прогнозируется"
+    HOSPITALS ||--o{ SCENARIOS : "проверяется"
+
     SIGNALS ||--o| SIGNAL_EXPLANATIONS : "объясняется"
     SIGNALS }o--o| INCIDENTS : "входит в"
-    SIGNALS ||--o{ SIGNAL_STATUS_HISTORY : "меняет статус"
+    SIGNALS }o--o| FORECASTS : "опирается на"
     SIGNALS ||--o{ ACTIONS : "порождает"
-    SIGNALS ||--o{ SCENARIOS : "проверяется"
-    SCENARIOS ||--|| SIMULATION_RESULTS : "даёт"
-    FORECAST_RUNS }o--|| MODEL_VERSIONS : "использует"
-    USERS }o--|| ROLES : "имеет"
-    ROLES ||--o{ ROLE_PERMISSIONS : "включает"
-    ROLE_PERMISSIONS }o--|| PERMISSIONS : "ссылается"
+    SIGNALS }o--o| USERS : "назначен"
+
+    INCIDENTS ||--o{ ACTIONS : "порождает"
+
     USERS ||--o{ USER_DATA_SCOPES : "ограничен"
     USERS ||--o{ ACTIONS : "выполняет"
-    USERS ||--o{ AUDIT_EVENTS : "оставляет"
-    DATA_IMPORTS ||--o{ DATA_QUALITY_CHECKS : "порождает"
-    METRICS ||--o{ HOSPITAL_RISK_SCORES : "входит в"
+    USERS ||--o{ AUDIT_EVENTS : "оставляет след"
+    USERS ||--o{ SCENARIOS : "создаёт"
+    USER_DATA_SCOPES }o--o| REGIONS : "охватывает"
+    USER_DATA_SCOPES }o--o| HOSPITALS : "охватывает"
+
+    DATA_IMPORTS }o--o| USERS : "инициирован"
 ```
+
+Ролей и разрешений в схеме нет намеренно: роли приходят от провайдера идентификации, а разрешения задаются сопоставлением в коде ([ADR-0009](ADR/0009-keycloak-oidc-authentication.md)). Хранить их в базе значило бы держать два источника истины.
+
+Появляются позже: профиль организации и мощность, показатели и оценки риска, история статусов отдельной таблицей, версии моделей, результаты симуляций, проверки качества данных.
 
 ## 3. Таблицы PostgreSQL
 
@@ -59,30 +68,35 @@ erDiagram
 
 | Таблица | Назначение | Ключевые поля |
 |---|---|---|
-| `users` | Пользователи | `id`, `external_subject`, `email`, `full_name`, `role_id`, `is_active` |
-| `roles` | Роли | `id`, `code`, `name` |
-| `permissions` | Атомарные права | `id`, `code`, `description` |
-| `role_permissions` | Права роли | `role_id`, `permission_id` |
-| `user_data_scopes` | Область данных | `user_id`, `scope_type`, `scope_id` |
+| `users` | Проекция субъекта провайдера | `id`, `external_subject`, `display_name`, `email`, `is_active` |
+| `user_data_scopes` | Область данных | `id`, `user_id`, `scope_type`, `region_id`, `hospital_id` |
+
+Таблица пользователей не содержит и не может содержать учётных данных: пароли остаются в Keycloak. Роли в базе не хранятся — они приходят в токене.
+
+Ограничение `ck_user_data_scopes_target_matches_type` требует, чтобы строка области указывала ровно на тот объект, который соответствует её типу: глобальная область не ссылается ни на что, региональная — на регион, организационная — на организацию. Без него возможна строка области без смысла.
 
 `user_data_scopes` хранит область видимости строками вида «регион X» или «организация Y». Это позволяет задавать нестандартные комбинации без изменения кода: координатор может получить доступ к нескольким организациям из разных регионов.
 
-`external_subject` — идентификатор субъекта из OIDC-провайдера. Поле присутствует с самого начала, чтобы переход с локальной аутентификации на Keycloak не требовал миграции модели пользователей.
+Отсутствие строк означает неразрешённую область, то есть запрет. Пустая область и «область не настроена» различаются признаком в коде: иначе дефект настройки выглядел бы как корректная работа системы.
+
+`external_subject` — идентификатор субъекта из токена провайдера (claim `sub`). Он связывает запись с учётной записью Keycloak, не дублируя её. Проекция создаётся при первом обращении пользователя и прав не выдаёт: область данных назначает администратор.
 
 ### 3.3 Сигналы и работа с ними
 
 | Таблица | Назначение | Ключевые поля |
 |---|---|---|
-| `signals` | Сигналы | `id`, `hospital_id`, `signal_type`, `source`, `severity`, `status`, `detected_at`, `last_confirmed_at`, `occurrence_count`, `assignee_id`, `confidence_flag`, `is_condition_active` |
-| `signal_explanations` | Объяснения | `signal_id`, `summary`, `factors`, `comparison_period`, `caveats` |
-| `signal_metrics` | Значения метрик на момент сигнала | `signal_id`, `metric_code`, `value`, `baseline_value`, `change_pct` |
-| `signal_status_history` | История статусов | `signal_id`, `from_status`, `to_status`, `reason`, `changed_by`, `changed_at` |
-| `incidents` | Группы сигналов | `id`, `region_id`, `hospital_id`, `title`, `status`, `opened_at` |
-| `actions` | Действия человека | `id`, `signal_id`, `user_id`, `action_type`, `payload`, `created_at` |
+| `signals` | Сигналы | `id`, `hospital_id`, `type`, `severity`, `status`, `source_type`, `title`, `summary`, `detected_at`, `forecast_id`, `incident_id`, `assigned_user_id`, `version`, `closed_reason`, `closed_at` |
+| `signal_explanations` | Объяснения с происхождением | `signal_id`, `summary`, `factors`, `caveats`, `generator`, `generator_version`, `model_version`, `input_period_start`, `input_period_end`, `generated_at` |
+| `incidents` | Группы сигналов | `id`, `hospital_id`, `title`, `description`, `status` |
+| `actions` | Действия человека | `id`, `signal_id`, `incident_id`, `created_by`, `action_type`, `description`, `created_at` |
 
-`occurrence_count` и `last_confirmed_at` реализуют дедупликацию: повторное срабатывание обновляет существующий сигнал вместо создания нового.
+`version` — оптимистическая блокировка. Изменение выполняется условием `WHERE id = ? AND version = ?`, и расхождение версии даёт конфликт вместо молчаливой перезаписи чужого решения. Ограничение `ck_signals_version_positive` не позволяет версии опуститься ниже единицы.
 
-`is_condition_active` отделяет «условие больше не выполняется» от «сигнал закрыт человеком». Система может обновить первое, но не второе.
+Поля происхождения в `signal_explanations` обязательны: объяснение без источника невозможно перепроверить. Свободный текст языковой модели здесь не хранится.
+
+`actions.created_by` не допускает пустого значения: действие без автора не является решением человека. Ограничение `ck_actions_target_present` требует, чтобы действие относилось хотя бы к сигналу или к инциденту.
+
+Появляются позже: счётчик повторных срабатываний и признак активности условия для дедупликации, значения метрик на момент сигнала, история статусов отдельной таблицей.
 
 ### 3.4 Прогнозы и модели
 

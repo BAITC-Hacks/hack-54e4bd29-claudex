@@ -11,26 +11,24 @@
 
 Сервис не знает об HTTP и вызывается одинаково из API и из воркера.
 Это исключает расхождение правил между синхронным и фоновым путями.
+
+Доступ к хранилищу идёт через единицу работы, как и во всех остальных
+сервисах: одна транзакционная модель на весь бизнес-слой.
 """
 
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy.orm import Session
-
+from app.business.ports import UnitOfWorkFactory
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
 from app.models.system import OperationStatus, SystemOperation
-from app.repositories.operations import OperationRepository
 
 logger = get_logger(__name__)
-
-SessionScope = Callable[[], AbstractContextManager[Session]]
 
 # Предел длины причины отказа: сообщение предназначено пользователю,
 # а не для переноса содержимого исключения.
@@ -40,8 +38,8 @@ MAX_ERROR_SUMMARY_LENGTH = 500
 class OperationService:
     """Управление состоянием долгих операций."""
 
-    def __init__(self, session_scope: SessionScope) -> None:
-        self._session_scope = session_scope
+    def __init__(self, uow_factory: UnitOfWorkFactory) -> None:
+        self._uow_factory = uow_factory
 
     # ------------------------------------------------------------------
     # Регистрация
@@ -53,14 +51,14 @@ class OperationService:
         Возвращает идентификатор, по которому вызывающая сторона ставит
         задачу в очередь. Порядок важен: сначала запись, потом очередь.
         """
-        with self._session_scope() as session:
-            repository = OperationRepository(session)
-            operation = repository.create(
+        with self._uow_factory() as uow:
+            operation = uow.operations.create(
                 operation_type=operation_type,
                 request_id=request_id,
                 created_at=_utcnow(),
             )
             operation_id = operation.id
+            uow.commit()
 
         logger.info(
             "Операция зарегистрирована",
@@ -75,23 +73,25 @@ class OperationService:
     def mark_running(
         self, operation_id: uuid.UUID, *, celery_task_id: str | None = None
     ) -> None:
-        with self._session_scope() as session:
-            updated = OperationRepository(session).mark_running(
+        with self._uow_factory() as uow:
+            updated = uow.operations.mark_running(
                 operation_id, celery_task_id=celery_task_id, at=_utcnow()
             )
             if updated is None:
                 raise NotFoundError("Операция не найдена")
+            uow.commit()
         logger.info("Операция выполняется", extra={"operation_id": str(operation_id)})
 
     def mark_completed(
         self, operation_id: uuid.UUID, *, result: dict[str, Any] | None = None
     ) -> None:
-        with self._session_scope() as session:
-            updated = OperationRepository(session).mark_completed(
+        with self._uow_factory() as uow:
+            updated = uow.operations.mark_completed(
                 operation_id, result=result, at=_utcnow()
             )
             if updated is None:
                 raise NotFoundError("Операция не найдена")
+            uow.commit()
         logger.info("Операция завершена", extra={"operation_id": str(operation_id)})
 
     def mark_failed(self, operation_id: uuid.UUID, *, reason: str) -> None:
@@ -101,12 +101,13 @@ class OperationService:
         в статусе RUNNING навсегда, — дефект (ADR-0010).
         """
         summary = reason.strip()[:MAX_ERROR_SUMMARY_LENGTH] or "Операция прервана"
-        with self._session_scope() as session:
-            updated = OperationRepository(session).mark_failed(
+        with self._uow_factory() as uow:
+            updated = uow.operations.mark_failed(
                 operation_id, error_summary=summary, at=_utcnow()
             )
             if updated is None:
                 raise NotFoundError("Операция не найдена")
+            uow.commit()
         logger.warning(
             "Операция прервана",
             extra={"operation_id": str(operation_id), "error_code": "OPERATION_FAILED"},
@@ -117,23 +118,23 @@ class OperationService:
     # ------------------------------------------------------------------
 
     def get(self, operation_id: uuid.UUID) -> OperationSnapshot:
-        with self._session_scope() as session:
-            operation = OperationRepository(session).get(operation_id)
+        with self._uow_factory() as uow:
+            operation = uow.operations.get(operation_id)
             if operation is None:
                 raise NotFoundError("Операция не найдена")
             return _to_snapshot(operation)
 
     def list_recent(self, *, limit: int = 20) -> list[OperationSnapshot]:
-        with self._session_scope() as session:
-            operations = OperationRepository(session).list_recent(limit=limit)
+        with self._uow_factory() as uow:
+            operations = uow.operations.list_recent(limit=limit)
             return [_to_snapshot(item) for item in operations]
 
 
 class OperationSnapshot:
-    """Состояние операции, отделённое от сессии SQLAlchemy.
+    """Состояние операции, отделённое от сессии хранилища.
 
     Возврат объекта модели наружу привязал бы вызывающую сторону
-    к жизненному циклу сессии.
+    к жизненному циклу транзакции.
     """
 
     __slots__ = (

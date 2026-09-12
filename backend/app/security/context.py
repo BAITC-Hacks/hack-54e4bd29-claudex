@@ -10,6 +10,7 @@ PHASE 1 создаёт абстракцию и разрешение ролей. 
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
@@ -85,6 +86,19 @@ class SecurityContext:
     username: str | None = None
     email: str | None = None
     token_id: str | None = None
+    # Идентификатор строки пользователя в MedSignal. Нужен внешним ключам
+    # назначения и авторства: `user_id` — это субъект провайдера, а не
+    # первичный ключ нашей таблицы.
+    internal_user_id: uuid.UUID | None = None
+
+    @property
+    def actor_id(self) -> uuid.UUID:
+        """Автор действия. Отсутствие проекции пользователя — дефект."""
+        if self.internal_user_id is None:
+            raise RuntimeError(
+                "Контекст не содержит внутреннего идентификатора пользователя"
+            )
+        return self.internal_user_id
 
     # ------------------------------------------------------------------
     # Права

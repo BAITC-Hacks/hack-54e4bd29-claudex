@@ -1,0 +1,83 @@
+import { apiRequest } from "@/services/api-client";
+import {
+  hospitalPageSchema,
+  regionPageSchema,
+  signalDetailSchema,
+  signalPageSchema,
+  type Hospital,
+  type Page,
+  type Region,
+  type SignalDetail,
+  type SignalListItem,
+  type SignalStatus,
+} from "@/types/domain";
+
+/** Обращения к доменному API. Бизнес-правил здесь нет. */
+
+export interface SignalQuery {
+  page?: number;
+  pageSize?: number;
+  status?: SignalStatus | "";
+  hospitalId?: string;
+  regionId?: string;
+}
+
+function buildQuery(params: Record<string, string | number | undefined>): string {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") {
+      search.set(key, String(value));
+    }
+  });
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
+export function fetchRegions(signal?: AbortSignal): Promise<Page<Region>> {
+  return apiRequest("/regions?page_size=100", regionPageSchema, { signal });
+}
+
+export function fetchHospitals(
+  regionId?: string,
+  signal?: AbortSignal,
+): Promise<Page<Hospital>> {
+  const query = buildQuery({ page_size: 100, region_id: regionId });
+  return apiRequest(`/hospitals${query}`, hospitalPageSchema, { signal });
+}
+
+export function fetchSignals(
+  query: SignalQuery,
+  signal?: AbortSignal,
+): Promise<Page<SignalListItem>> {
+  const search = buildQuery({
+    page: query.page ?? 1,
+    page_size: query.pageSize ?? 20,
+    status: query.status,
+    hospital_id: query.hospitalId,
+    region_id: query.regionId,
+  });
+  return apiRequest(`/signals${search}`, signalPageSchema, { signal });
+}
+
+export function fetchSignal(
+  id: string,
+  signal?: AbortSignal,
+): Promise<SignalDetail> {
+  return apiRequest(`/signals/${id}`, signalDetailSchema, { signal });
+}
+
+export function changeSignalStatus(params: {
+  id: string;
+  status: SignalStatus;
+  version: number;
+  reason: string;
+}): Promise<SignalDetail> {
+  return apiRequest(`/signals/${params.id}/status`, signalDetailSchema, {
+    method: "PATCH",
+    body: {
+      status: params.status,
+      version: params.version,
+      reason: params.reason,
+    },
+  });
+}

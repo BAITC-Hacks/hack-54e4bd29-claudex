@@ -13,7 +13,7 @@ import uuid
 
 from fastapi import APIRouter, status
 
-from app.api.deps import OperationServiceDep, RequestIdDep
+from app.api.deps import CurrentUser, OperationServiceDep, RequestIdDep
 from app.core.exceptions import DependencyUnavailableError
 from app.core.logging import get_logger
 from app.models.system import OperationStatus
@@ -23,7 +23,6 @@ from app.schemas.system import (
     OperationResponse,
     SecurityContextResponse,
 )
-from app.security.dependencies import CurrentUser
 from app.workers.tasks import PING_OPERATION_TYPE, enqueue_ping
 
 logger = get_logger(__name__)
