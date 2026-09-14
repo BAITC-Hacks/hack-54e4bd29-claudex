@@ -146,3 +146,57 @@ class SqlAlchemyDataImportRepository:
 
         self._session.flush()
         return data_import
+
+    def update_statistics(
+        self,
+        import_id: uuid.UUID,
+        *,
+        rows_read: int,
+        rows_valid: int,
+        rows_rejected: int,
+        rows_loaded: int,
+        warnings_count: int,
+        source_size_bytes: int,
+        duration_seconds: float,
+    ) -> DataImport | None:
+        """Записать итоговые счётчики импорта.
+
+        Счётчики хранятся вместе с записью об импорте, а не вычисляются
+        запросом к аналитическому хранилищу: расхождение между источником
+        и витриной нужно уметь объяснить и после того, как партиция будет
+        удалена политикой хранения.
+        """
+        data_import = self._session.get(DataImport, import_id)
+        if data_import is None:
+            return None
+
+        data_import.rows_read = rows_read
+        data_import.rows_valid = rows_valid
+        data_import.rows_rejected = rows_rejected
+        data_import.rows_loaded = rows_loaded
+        data_import.warnings_count = warnings_count
+        data_import.source_size_bytes = source_size_bytes
+        data_import.duration_seconds = duration_seconds
+
+        self._session.flush()
+        return data_import
+
+    def list(
+        self, page: PageRequest, dataset_type: str | None = None
+    ) -> tuple[list[DataImport], int]:
+        """Страница импортов, новые сверху.
+
+        Области данных здесь нет намеренно: импорт — операция уровня
+        системы, и доступ к нему ограничен правом, а не территорией.
+        """
+        statement = select(DataImport)
+        if dataset_type is not None:
+            statement = statement.where(DataImport.dataset_type == dataset_type)
+
+        total = count_of(self._session, statement)
+        ordered = (
+            statement.order_by(DataImport.created_at.desc())
+            .limit(page.page_size)
+            .offset(page.offset)
+        )
+        return list(self._session.scalars(ordered).all()), total

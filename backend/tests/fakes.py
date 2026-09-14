@@ -18,16 +18,19 @@ from typing import Any
 from app.models.access import User
 from app.models.action import Action
 from app.models.audit import AuditEvent
+from app.models.data_import import DataImport
 from app.models.directory import Hospital, Region
 from app.models.enums import (
     AuditAction,
     AuditEntityType,
+    DataImportStatus,
     SignalSeverity,
     SignalSourceType,
     SignalStatus,
     SignalType,
 )
 from app.models.incident import Incident
+from app.models.quality import DataQualityResult, QuarantineBatch
 from app.models.signal import Signal
 from app.security.context import DataScope, Role, SecurityContext
 from app.shared.filters import AuditFilter, HospitalFilter, IncidentFilter, SignalFilter
@@ -145,6 +148,12 @@ class FakeStore:
         self.audit: list[AuditEvent] = []
         self.users: dict[uuid.UUID, User] = {}
         self.user_scopes: dict[uuid.UUID, DataScope] = {}
+        self.data_imports: dict[uuid.UUID, DataImport] = {}
+        self.quality: list[DataQualityResult] = []
+        self.quarantine: list[QuarantineBatch] = []
+        self.organization_aliases: dict[tuple[str, str], int] = {}
+        self.region_aliases: dict[tuple[str, str], int] = {}
+        self.profile_aliases: dict[tuple[str, str], int] = {}
         self.commits = 0
 
     def add_region(self, region: Region) -> Region:
@@ -454,6 +463,126 @@ class FakeUserRepository:
         return self._store.user_scopes.get(user.id, DataScope.unresolved())
 
 
+class FakeDataImportRepository:
+    """Импорты в памяти. Ключ идемпотентности повторяет рабочий."""
+
+    def __init__(self, store: FakeStore) -> None:
+        self._store = store
+
+    def get(self, import_id: uuid.UUID) -> DataImport | None:
+        return self._store.data_imports.get(import_id)
+
+    def find_by_hash(self, dataset_type: str, file_hash: str) -> DataImport | None:
+        for item in self._store.data_imports.values():
+            if item.dataset_type == dataset_type and item.file_hash == file_hash:
+                return item
+        return None
+
+    def add(self, data_import: DataImport) -> DataImport:
+        self._store.data_imports[data_import.id] = data_import
+        return data_import
+
+    def update_status(
+        self,
+        import_id: uuid.UUID,
+        *,
+        status: DataImportStatus,
+        error_summary: str | None,
+        now: datetime,
+    ) -> DataImport | None:
+        item = self._store.data_imports.get(import_id)
+        if item is None:
+            return None
+        item.status = status
+        if status is DataImportStatus.RUNNING:
+            item.started_at = now
+        if status.is_terminal:
+            item.completed_at = now
+        if error_summary is not None:
+            item.error_summary = error_summary
+        return item
+
+    def update_statistics(
+        self,
+        import_id: uuid.UUID,
+        *,
+        rows_read: int,
+        rows_valid: int,
+        rows_rejected: int,
+        rows_loaded: int,
+        warnings_count: int,
+        source_size_bytes: int,
+        duration_seconds: float,
+    ) -> DataImport | None:
+        item = self._store.data_imports.get(import_id)
+        if item is None:
+            return None
+        item.rows_read = rows_read
+        item.rows_valid = rows_valid
+        item.rows_rejected = rows_rejected
+        item.rows_loaded = rows_loaded
+        item.warnings_count = warnings_count
+        item.source_size_bytes = source_size_bytes
+        item.duration_seconds = duration_seconds
+        return item
+
+    def list(
+        self, page: PageRequest, dataset_type: str | None = None
+    ) -> tuple[list[DataImport], int]:
+        items = [
+            item
+            for item in self._store.data_imports.values()
+            if dataset_type is None or item.dataset_type == dataset_type
+        ]
+        items.sort(key=lambda i: i.created_at, reverse=True)
+        return _paginate(items, page)
+
+
+class FakeDataQualityRepository:
+    def __init__(self, store: FakeStore) -> None:
+        self._store = store
+
+    def add_many(self, results) -> int:
+        self._store.quality.extend(results)
+        return len(list(results))
+
+    def list_for_import(self, import_id: uuid.UUID) -> list[DataQualityResult]:
+        return [r for r in self._store.quality if r.data_import_id == import_id]
+
+
+class FakeQuarantineRepository:
+    def __init__(self, store: FakeStore) -> None:
+        self._store = store
+
+    def add_many(self, batches) -> int:
+        self._store.quarantine.extend(batches)
+        return len(list(batches))
+
+    def list_for_import(self, import_id: uuid.UUID) -> list[QuarantineBatch]:
+        return [b for b in self._store.quarantine if b.data_import_id == import_id]
+
+
+class FakeAliasRepository:
+    """Справочник встреченных значений. Автоматического сопоставления нет."""
+
+    def __init__(self, registry: dict[tuple[str, str], int]) -> None:
+        self._registry = registry
+
+    def register_many(self, *, source_system: str, values, import_id=None) -> int:
+        _ = import_id
+        count = 0
+        for _source_value, normalized in values:
+            if not normalized:
+                continue
+            key = (source_system, normalized)
+            self._registry[key] = self._registry.get(key, 0) + 1
+            count += 1
+        return count
+
+    def count_unmapped(self) -> int:
+        return len(self._registry)
+
+
 class FakeUnitOfWork:
     """Единица работы в памяти.
 
@@ -470,6 +599,12 @@ class FakeUnitOfWork:
         self.actions = FakeActionRepository(store)
         self.audit = FakeAuditRepository(store)
         self.users = FakeUserRepository(store)
+        self.data_imports = FakeDataImportRepository(store)
+        self.data_quality = FakeDataQualityRepository(store)
+        self.quarantine = FakeQuarantineRepository(store)
+        self.organization_aliases = FakeAliasRepository(store.organization_aliases)
+        self.region_aliases = FakeAliasRepository(store.region_aliases)
+        self.profile_aliases = FakeAliasRepository(store.profile_aliases)
 
     def __enter__(self) -> FakeUnitOfWork:
         return self

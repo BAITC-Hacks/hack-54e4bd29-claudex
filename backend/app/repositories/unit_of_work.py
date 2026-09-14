@@ -31,7 +31,16 @@ from app.repositories.incidents import (
     SqlAlchemyActionRepository,
     SqlAlchemyIncidentRepository,
 )
+from app.repositories.mapping import (
+    SqlAlchemyOrganizationAliasRepository,
+    SqlAlchemyProfileAliasRepository,
+    SqlAlchemyRegionAliasRepository,
+)
 from app.repositories.operations import OperationRepository
+from app.repositories.quality import (
+    SqlAlchemyDataQualityRepository,
+    SqlAlchemyQuarantineRepository,
+)
 from app.repositories.signals import SqlAlchemySignalRepository
 
 
@@ -48,6 +57,11 @@ class SqlAlchemyUnitOfWork:
     forecasts: SqlAlchemyForecastRepository
     scenarios: SqlAlchemyScenarioRepository
     data_imports: SqlAlchemyDataImportRepository
+    data_quality: SqlAlchemyDataQualityRepository
+    quarantine: SqlAlchemyQuarantineRepository
+    organization_aliases: SqlAlchemyOrganizationAliasRepository
+    region_aliases: SqlAlchemyRegionAliasRepository
+    profile_aliases: SqlAlchemyProfileAliasRepository
     audit: SqlAlchemyAuditRepository
     users: SqlAlchemyUserRepository
     operations: OperationRepository
@@ -74,6 +88,11 @@ class SqlAlchemyUnitOfWork:
         self.forecasts = SqlAlchemyForecastRepository(session)
         self.scenarios = SqlAlchemyScenarioRepository(session)
         self.data_imports = SqlAlchemyDataImportRepository(session)
+        self.data_quality = SqlAlchemyDataQualityRepository(session)
+        self.quarantine = SqlAlchemyQuarantineRepository(session)
+        self.organization_aliases = SqlAlchemyOrganizationAliasRepository(session)
+        self.region_aliases = SqlAlchemyRegionAliasRepository(session)
+        self.profile_aliases = SqlAlchemyProfileAliasRepository(session)
         self.audit = SqlAlchemyAuditRepository(session)
         self.users = SqlAlchemyUserRepository(session)
         self.operations = OperationRepository(session)

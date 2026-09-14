@@ -27,6 +27,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # содержащий эту подстроку, допустим только в локальной среде.
 LOCAL_ONLY_SECRET_MARKER = "local_dev_only"  # noqa: S105 — маркер, а не секрет
 
+# Минимальная длина ключа псевдонимизации. Значение совпадает с порогом
+# в data_pipeline.privacy: проверка выполняется и при старте приложения,
+# и при создании конвейера, потому что оба пути ведут к записи данных.
+MIN_PSEUDONYMIZATION_KEY_LENGTH = 32
+
 
 class AppEnv(StrEnum):
     LOCAL = "local"
@@ -116,6 +121,24 @@ class Settings(BaseSettings):
     minio_bucket_models: str = "medsignal-models"
     minio_bucket_exports: str = "medsignal-exports"
     minio_bucket_reports: str = "medsignal-reports"
+    # Зоны хранения конвейера загрузки (PHASE 3B). Карантин и сырая зона
+    # держат данные в исходном виде, поэтому доступ к ним ограничен
+    # сильнее остальных бакетов.
+    minio_bucket_raw: str = "medsignal-raw"
+    minio_bucket_quarantine: str = "medsignal-quarantine"
+    minio_bucket_quality: str = "medsignal-quality"
+    minio_bucket_artifacts: str = "medsignal-artifacts"
+
+    # --- Конвейер загрузки данных ---
+    # Каталог с выгрузками. Открывается только на чтение; в контейнере
+    # монтируется с флагом ro, поэтому запись невозможна физически.
+    data_source_dir: str = "/data/source"
+    # Размер пакета обработки. Определяет расход памяти: файл целиком
+    # в память не читается никогда.
+    data_batch_size: int = 50_000
+    # Секрет псевдонимизации. Обычный SHA-256 от кода случая подбирается
+    # перебором, поэтому применяется HMAC с этим ключом.
+    data_pseudonymization_key: str = ""
 
     # --- Celery ---
     celery_task_soft_time_limit_s: int = 600
@@ -279,6 +302,19 @@ class Settings(BaseSettings):
                     f"и не может использоваться при APP_ENV={env}"
                 )
 
+        # Ключ псевдонимизации проверяется отдельно и строже остальных
+        # секретов. Он защищает не доступ, а обратимость: короткий ключ
+        # позволяет восстановить код случая перебором, и утечка витрины
+        # превращается в утечку идентификаторов пациентов.
+        if (
+            self.data_pseudonymization_key
+            and len(self.data_pseudonymization_key) < MIN_PSEUDONYMIZATION_KEY_LENGTH
+        ):
+            problems.append(
+                "DATA_PSEUDONYMIZATION_KEY короче "
+                f"{MIN_PSEUDONYMIZATION_KEY_LENGTH} символов"
+            )
+
     def _secret_fields(self) -> dict[str, str]:
         return {
             "APP_SECRET": self.app_secret,
@@ -287,6 +323,7 @@ class Settings(BaseSettings):
             "REDIS_PASSWORD": self.redis_password,
             "MINIO_ACCESS_KEY": self.minio_access_key,
             "MINIO_SECRET_KEY": self.minio_secret_key,
+            "DATA_PSEUDONYMIZATION_KEY": self.data_pseudonymization_key,
         }
 
 

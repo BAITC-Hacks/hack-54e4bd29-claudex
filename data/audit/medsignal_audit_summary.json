@@ -1,0 +1,1841 @@
+{
+  "audit_version": "3A.1",
+  "generated_from": "локальный каталог выгрузок; сами данные не передаются",
+  "total_files": 127,
+  "total_size_bytes": 17175832893,
+  "datasets": [
+    {
+      "name": "Количество пролеченных случаев в разрезе МО",
+      "table": "Количество пролеченных случаев в разрезе МО",
+      "source": "ЭРСБ",
+      "source_confidence": "HIGH",
+      "files": 1,
+      "size_bytes": 591716,
+      "rows": 2196,
+      "columns": [
+        {
+          "name": "medicine_organization",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 2196,
+          "unique_approx": false
+        },
+        {
+          "name": "discharged_total",
+          "type": "integer",
+          "null_pct": 0.0,
+          "unique": 1964,
+          "unique_approx": false
+        },
+        {
+          "name": "discharged_children",
+          "type": "integer",
+          "null_pct": 0.0,
+          "unique": 976,
+          "unique_approx": false
+        },
+        {
+          "name": "treated_budget",
+          "type": "integer",
+          "null_pct": 0.0,
+          "unique": 1694,
+          "unique_approx": false
+        },
+        {
+          "name": "treated_paid",
+          "type": "integer",
+          "null_pct": 0.0,
+          "unique": 317,
+          "unique_approx": false
+        },
+        {
+          "name": "discharged_within_day",
+          "type": "integer",
+          "null_pct": 0.0,
+          "unique": 567,
+          "unique_approx": false
+        },
+        {
+          "name": "deaths_total",
+          "type": "integer",
+          "null_pct": 0.0,
+          "unique": 415,
+          "unique_approx": false
+        },
+        {
+          "name": "bed_days",
+          "type": "integer",
+          "null_pct": 0.0,
+          "unique": 2159,
+          "unique_approx": false
+        },
+        {
+          "name": "amount_to_pay",
+          "type": "float",
+          "null_pct": 0.0,
+          "unique": 2154,
+          "unique_approx": false
+        },
+        {
+          "name": "sdu_load_date",
+          "type": "datetime",
+          "null_pct": 0.0,
+          "unique": 1,
+          "unique_approx": false
+        }
+      ],
+      "date_range": {
+        "column": "sdu_load_date",
+        "min": "2026-04-01",
+        "max": "2026-04-01",
+        "months": 1,
+        "granularity": "single snapshot",
+        "missing_months": [],
+        "time_series_possible": false
+      },
+      "regions": {},
+      "hospitals": {
+        "medicine_organization": 2172
+      },
+      "quality": {
+        "critical": 0,
+        "warning": 1,
+        "duplicate_rows": 0,
+        "duplicate_rows_status": "OK",
+        "skipped_checks": [],
+        "findings": [
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "medicine_organization",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 35
+          },
+          {
+            "check": "CONSTANT COLUMN",
+            "severity": "INFO",
+            "column": "sdu_load_date",
+            "detail": "во всех строках одно и то же значение",
+            "affected_rows": null
+          }
+        ]
+      },
+      "privacy": {
+        "highest_risk": "LOW",
+        "columns_requiring_action": [
+          {
+            "column_name": "amount_to_pay",
+            "detected_type": "Денежная величина",
+            "risk_level": "LOW",
+            "handling": "AGGREGATE"
+          }
+        ]
+      },
+      "join_keys": [
+        "medicine_organization"
+      ]
+    },
+    {
+      "name": "Направления на плановую госпитализацию в стационары",
+      "table": "Направления на плановую госпитализацию в стационары",
+      "source": "ИС БГ",
+      "source_confidence": "HIGH",
+      "files": 3,
+      "size_bytes": 690734815,
+      "rows": 767130,
+      "columns": [
+        {
+          "name": "hospitalization_code",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 765161,
+          "unique_approx": false
+        },
+        {
+          "name": "referring_mo",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 1140,
+          "unique_approx": false
+        },
+        {
+          "name": "hospital_mo",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 1385,
+          "unique_approx": false
+        },
+        {
+          "name": "icd10_ref_diag_code",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 3825,
+          "unique_approx": false
+        },
+        {
+          "name": "diagnosis_name",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 3825,
+          "unique_approx": false
+        },
+        {
+          "name": "bed_profile",
+          "type": "string",
+          "null_pct": 48.5336,
+          "unique": 96,
+          "unique_approx": false
+        },
+        {
+          "name": "registration_dt",
+          "type": "datetime",
+          "null_pct": 0.0,
+          "unique": 761652,
+          "unique_approx": false
+        },
+        {
+          "name": "planned_dt",
+          "type": "datetime",
+          "null_pct": 4.3935,
+          "unique": 1261,
+          "unique_approx": false
+        },
+        {
+          "name": "polyclinic_dt",
+          "type": "datetime",
+          "null_pct": 18.3026,
+          "unique": 623594,
+          "unique_approx": false
+        },
+        {
+          "name": "hospitalization_dt",
+          "type": "datetime",
+          "null_pct": 11.4768,
+          "unique": 125665,
+          "unique_approx": false
+        },
+        {
+          "name": "refusal_dt",
+          "type": "datetime",
+          "null_pct": 89.0395,
+          "unique": 83922,
+          "unique_approx": false
+        },
+        {
+          "name": "territorial_type",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 2,
+          "unique_approx": false
+        },
+        {
+          "name": "referral_purpose",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 10,
+          "unique_approx": false
+        },
+        {
+          "name": "finance_source",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 9,
+          "unique_approx": false
+        },
+        {
+          "name": "sdu_load_date",
+          "type": "datetime",
+          "null_pct": 0.0,
+          "unique": 1,
+          "unique_approx": false
+        }
+      ],
+      "date_range": {
+        "column": "registration_dt",
+        "min": "2025-01-01",
+        "max": "2025-03-01",
+        "months": 3,
+        "granularity": "event-level",
+        "missing_months": [],
+        "time_series_possible": true
+      },
+      "regions": {},
+      "hospitals": {
+        "referring_mo": 1139,
+        "hospital_mo": 1381
+      },
+      "quality": {
+        "critical": 2,
+        "warning": 7,
+        "duplicate_rows": 0,
+        "duplicate_rows_status": "OK",
+        "skipped_checks": [],
+        "findings": [
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "referring_mo",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 2462
+          },
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "hospital_mo",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 6783
+          },
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "diagnosis_name",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 23437
+          },
+          {
+            "check": "MISSING VALUES",
+            "severity": "WARNING",
+            "column": "bed_profile",
+            "detail": "пусто в 48.5% строк",
+            "affected_rows": 372316
+          },
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "bed_profile",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 4598
+          },
+          {
+            "check": "MISSING VALUES",
+            "severity": "WARNING",
+            "column": "polyclinic_dt",
+            "detail": "пусто в 18.3% строк",
+            "affected_rows": 140405
+          },
+          {
+            "check": "MISSING VALUES",
+            "severity": "WARNING",
+            "column": "hospitalization_dt",
+            "detail": "пусто в 11.5% строк",
+            "affected_rows": 88042
+          },
+          {
+            "check": "MISSING VALUES",
+            "severity": "CRITICAL",
+            "column": "refusal_dt",
+            "detail": "пусто в 89.0% строк",
+            "affected_rows": 683049
+          },
+          {
+            "check": "CONSTANT COLUMN",
+            "severity": "INFO",
+            "column": "sdu_load_date",
+            "detail": "во всех строках одно и то же значение",
+            "affected_rows": null
+          },
+          {
+            "check": "DUPLICATE KEYS",
+            "severity": "CRITICAL",
+            "column": "hospitalization_code",
+            "detail": "значение ключа повторяется: уникальных 765161 при 767130 непустых строках",
+            "affected_rows": 1969
+          }
+        ]
+      },
+      "privacy": {
+        "highest_risk": "HIGH",
+        "columns_requiring_action": [
+          {
+            "column_name": "hospitalization_code",
+            "detected_type": "Составной код случая госпитализации",
+            "risk_level": "HIGH",
+            "handling": "PSEUDONYMIZE"
+          },
+          {
+            "column_name": "icd10_ref_diag_code",
+            "detected_type": "Медицинский диагноз или код МКБ-10",
+            "risk_level": "MEDIUM",
+            "handling": "AGGREGATE"
+          },
+          {
+            "column_name": "diagnosis_name",
+            "detected_type": "Медицинский диагноз или код МКБ-10",
+            "risk_level": "MEDIUM",
+            "handling": "AGGREGATE"
+          }
+        ]
+      },
+      "join_keys": [
+        "bed_profile",
+        "hospital_mo",
+        "hospitalization_code",
+        "referring_mo"
+      ]
+    },
+    {
+      "name": "Ожидающие плановую госпитализацию в стационары",
+      "table": "Ожидающие плановую госпитализацию в стационары",
+      "source": "ИС БГ",
+      "source_confidence": "HIGH",
+      "files": 1,
+      "size_bytes": 164407376,
+      "rows": 765182,
+      "columns": [
+        {
+          "name": "region_origin_code",
+          "type": "integer",
+          "null_pct": 0.0,
+          "unique": 20,
+          "unique_approx": false
+        },
+        {
+          "name": "mo_destination_code",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 1406,
+          "unique_approx": false
+        },
+        {
+          "name": "profile_code",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 97,
+          "unique_approx": false
+        },
+        {
+          "name": "patient_seq_no",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 8680,
+          "unique_approx": false
+        },
+        {
+          "name": "icd10_ref_diag_code",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 3825,
+          "unique_approx": false
+        },
+        {
+          "name": "diagnosis_name",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 3825,
+          "unique_approx": false
+        },
+        {
+          "name": "operation_code",
+          "type": "float",
+          "null_pct": 76.375,
+          "unique": 1908,
+          "unique_approx": false
+        },
+        {
+          "name": "operation_name",
+          "type": "string",
+          "null_pct": 76.375,
+          "unique": 1907,
+          "unique_approx": false
+        },
+        {
+          "name": "registration_dt",
+          "type": "datetime",
+          "null_pct": 0.0,
+          "unique": 761652,
+          "unique_approx": false
+        },
+        {
+          "name": "planned_dt",
+          "type": "datetime",
+          "null_pct": 4.3939,
+          "unique": 1261,
+          "unique_approx": false
+        },
+        {
+          "name": "sdu_load_date",
+          "type": "datetime",
+          "null_pct": 0.0,
+          "unique": 1,
+          "unique_approx": false
+        }
+      ],
+      "date_range": {
+        "column": "registration_dt",
+        "min": "2025-01-01",
+        "max": "2025-03-01",
+        "months": 3,
+        "granularity": "event-level",
+        "missing_months": [],
+        "time_series_possible": true
+      },
+      "regions": {
+        "region_origin_code": 20
+      },
+      "hospitals": {
+        "mo_destination_code": 1406
+      },
+      "quality": {
+        "critical": 2,
+        "warning": 2,
+        "duplicate_rows": 0,
+        "duplicate_rows_status": "OK",
+        "skipped_checks": [],
+        "findings": [
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "diagnosis_name",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 23437
+          },
+          {
+            "check": "MISSING VALUES",
+            "severity": "CRITICAL",
+            "column": "operation_code",
+            "detail": "пусто в 76.4% строк",
+            "affected_rows": 584408
+          },
+          {
+            "check": "MISSING VALUES",
+            "severity": "CRITICAL",
+            "column": "operation_name",
+            "detail": "пусто в 76.4% строк",
+            "affected_rows": 584408
+          },
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "operation_name",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 60
+          },
+          {
+            "check": "CONSTANT COLUMN",
+            "severity": "INFO",
+            "column": "sdu_load_date",
+            "detail": "во всех строках одно и то же значение",
+            "affected_rows": null
+          }
+        ]
+      },
+      "privacy": {
+        "highest_risk": "HIGH",
+        "columns_requiring_action": [
+          {
+            "column_name": "patient_seq_no",
+            "detected_type": "Идентификатор или номер карты пациента",
+            "risk_level": "HIGH",
+            "handling": "PSEUDONYMIZE"
+          },
+          {
+            "column_name": "icd10_ref_diag_code",
+            "detected_type": "Медицинский диагноз или код МКБ-10",
+            "risk_level": "MEDIUM",
+            "handling": "AGGREGATE"
+          },
+          {
+            "column_name": "diagnosis_name",
+            "detected_type": "Медицинский диагноз или код МКБ-10",
+            "risk_level": "MEDIUM",
+            "handling": "AGGREGATE"
+          },
+          {
+            "column_name": "operation_code",
+            "detected_type": "Сведения о медицинском вмешательстве",
+            "risk_level": "MEDIUM",
+            "handling": "AGGREGATE"
+          },
+          {
+            "column_name": "operation_name",
+            "detected_type": "Сведения о медицинском вмешательстве",
+            "risk_level": "MEDIUM",
+            "handling": "AGGREGATE"
+          }
+        ]
+      },
+      "join_keys": [
+        "mo_destination_code",
+        "profile_code",
+        "region_origin_code"
+      ]
+    },
+    {
+      "name": "Отказы в плановой госпитализации (приёмный покой)",
+      "table": "Отказы в плановой госпитализации",
+      "source": "ИС БГ",
+      "source_confidence": "MEDIUM",
+      "files": 6,
+      "size_bytes": 1321643951,
+      "rows": 1508732,
+      "columns": [
+        {
+          "name": "region_in",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 20,
+          "unique_approx": false
+        },
+        {
+          "name": "org_in",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 449,
+          "unique_approx": false
+        },
+        {
+          "name": "resident",
+          "type": "string",
+          "null_pct": 0.1709,
+          "unique": 3,
+          "unique_approx": false
+        },
+        {
+          "name": "insured",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 2,
+          "unique_approx": false
+        },
+        {
+          "name": "benefit_cat",
+          "type": "string",
+          "null_pct": 23.9235,
+          "unique": 42,
+          "unique_approx": false
+        },
+        {
+          "name": "refuse_dt",
+          "type": "datetime",
+          "null_pct": 0.0,
+          "unique": 261334,
+          "unique_approx": false
+        },
+        {
+          "name": "attach_region",
+          "type": "string",
+          "null_pct": 1.2426,
+          "unique": 23,
+          "unique_approx": false
+        },
+        {
+          "name": "attach_org",
+          "type": "string",
+          "null_pct": 1.2022,
+          "unique": 985,
+          "unique_approx": false
+        },
+        {
+          "name": "icd10",
+          "type": "string",
+          "null_pct": 0.0017,
+          "unique": 5292,
+          "unique_approx": false
+        },
+        {
+          "name": "icd_name",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 5290,
+          "unique_approx": false
+        },
+        {
+          "name": "amount",
+          "type": "float",
+          "null_pct": 24.4094,
+          "unique": 1117,
+          "unique_approx": false
+        },
+        {
+          "name": "finance_src",
+          "type": "string",
+          "null_pct": 0.1214,
+          "unique": 12,
+          "unique_approx": false
+        },
+        {
+          "name": "sdu_load_date",
+          "type": "datetime",
+          "null_pct": 0.0,
+          "unique": 1,
+          "unique_approx": false
+        }
+      ],
+      "date_range": {
+        "column": "refuse_dt",
+        "min": "2025-01-01",
+        "max": "2025-03-01",
+        "months": 3,
+        "granularity": "event-level",
+        "missing_months": [],
+        "time_series_possible": true
+      },
+      "regions": {
+        "region_in": 20,
+        "attach_region": 22
+      },
+      "hospitals": {
+        "org_in": 449,
+        "attach_org": 983
+      },
+      "quality": {
+        "critical": 0,
+        "warning": 6,
+        "duplicate_rows": 0,
+        "duplicate_rows_status": "OK",
+        "skipped_checks": [],
+        "findings": [
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "org_in",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 2901
+          },
+          {
+            "check": "MISSING VALUES",
+            "severity": "WARNING",
+            "column": "benefit_cat",
+            "detail": "пусто в 23.9% строк",
+            "affected_rows": 360942
+          },
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "benefit_cat",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 249
+          },
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "attach_org",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 1728
+          },
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "icd_name",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 10471
+          },
+          {
+            "check": "MISSING VALUES",
+            "severity": "WARNING",
+            "column": "amount",
+            "detail": "пусто в 24.4% строк",
+            "affected_rows": 368272
+          },
+          {
+            "check": "CONSTANT COLUMN",
+            "severity": "INFO",
+            "column": "sdu_load_date",
+            "detail": "во всех строках одно и то же значение",
+            "affected_rows": null
+          }
+        ]
+      },
+      "privacy": {
+        "highest_risk": "MEDIUM",
+        "columns_requiring_action": [
+          {
+            "column_name": "insured",
+            "detected_type": "Социальный или страховой статус",
+            "risk_level": "MEDIUM",
+            "handling": "AGGREGATE"
+          },
+          {
+            "column_name": "benefit_cat",
+            "detected_type": "Социальный или страховой статус",
+            "risk_level": "MEDIUM",
+            "handling": "AGGREGATE"
+          },
+          {
+            "column_name": "icd10",
+            "detected_type": "Медицинский диагноз или код МКБ-10",
+            "risk_level": "MEDIUM",
+            "handling": "AGGREGATE"
+          },
+          {
+            "column_name": "icd_name",
+            "detected_type": "Медицинский диагноз или код МКБ-10",
+            "risk_level": "MEDIUM",
+            "handling": "AGGREGATE"
+          },
+          {
+            "column_name": "amount",
+            "detected_type": "Денежная величина",
+            "risk_level": "LOW",
+            "handling": "AGGREGATE"
+          }
+        ]
+      },
+      "join_keys": [
+        "attach_org",
+        "attach_region",
+        "org_in",
+        "region_in"
+      ]
+    },
+    {
+      "name": "Отказы от вакцинации и противопоказания",
+      "table": "Отказы от вакцинации и противопоказания",
+      "source": "ЕИП / регистр вакцинации",
+      "source_confidence": "HIGH",
+      "files": 1,
+      "size_bytes": 13379149,
+      "rows": 66709,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "null_pct": 0.0,
+          "unique": 66709,
+          "unique_approx": false
+        },
+        {
+          "name": "reason",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 7,
+          "unique_approx": false
+        },
+        {
+          "name": "contraindication",
+          "type": "string",
+          "null_pct": 79.2127,
+          "unique": 3,
+          "unique_approx": false
+        },
+        {
+          "name": "vaccination_plan_code",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 26,
+          "unique_approx": false
+        },
+        {
+          "name": "sdu_load_date",
+          "type": "datetime",
+          "null_pct": 0.0,
+          "unique": 1,
+          "unique_approx": false
+        }
+      ],
+      "date_range": {
+        "column": "sdu_load_date",
+        "min": "2026-04-01",
+        "max": "2026-04-01",
+        "months": 1,
+        "granularity": "single snapshot",
+        "missing_months": [],
+        "time_series_possible": false
+      },
+      "regions": {},
+      "hospitals": {},
+      "quality": {
+        "critical": 1,
+        "warning": 1,
+        "duplicate_rows": 0,
+        "duplicate_rows_status": "OK",
+        "skipped_checks": [],
+        "findings": [
+          {
+            "check": "MISSING VALUES",
+            "severity": "CRITICAL",
+            "column": "contraindication",
+            "detail": "пусто в 79.2% строк",
+            "affected_rows": 52842
+          },
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "vaccination_plan_code",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 1639
+          },
+          {
+            "check": "CONSTANT COLUMN",
+            "severity": "INFO",
+            "column": "sdu_load_date",
+            "detail": "во всех строках одно и то же значение",
+            "affected_rows": null
+          }
+        ]
+      },
+      "privacy": {
+        "highest_risk": "LOW",
+        "columns_requiring_action": []
+      },
+      "join_keys": [
+        "id"
+      ]
+    },
+    {
+      "name": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+      "table": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+      "source": "ЕИП / регистр вакцинации",
+      "source_confidence": "HIGH",
+      "files": 105,
+      "size_bytes": 14983982356,
+      "rows": 104441465,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "null_pct": 0.0,
+          "unique": 99084417,
+          "unique_approx": true
+        },
+        {
+          "name": "vaccination_date",
+          "type": "datetime",
+          "null_pct": 0.0,
+          "unique": 35572660,
+          "unique_approx": true
+        },
+        {
+          "name": "age",
+          "type": "integer",
+          "null_pct": 0.0,
+          "unique": 285,
+          "unique_approx": true
+        },
+        {
+          "name": "vaccination_plan",
+          "type": "string",
+          "null_pct": 0.0,
+          "unique": 23,
+          "unique_approx": true
+        },
+        {
+          "name": "medicine_organization_code",
+          "type": "string",
+          "null_pct": 20.3058,
+          "unique": 1703,
+          "unique_approx": true
+        },
+        {
+          "name": "region",
+          "type": "string",
+          "null_pct": 0.0002,
+          "unique": 22,
+          "unique_approx": true
+        },
+        {
+          "name": "sdu_load_date",
+          "type": "datetime",
+          "null_pct": 0.0,
+          "unique": 1,
+          "unique_approx": true
+        }
+      ],
+      "date_range": {
+        "column": "vaccination_date",
+        "min": "2015-01-01",
+        "max": "2029-08-01",
+        "months": 163,
+        "granularity": "event-level",
+        "missing_months": [
+          "2027-05",
+          "2027-07",
+          "2027-09",
+          "2028-01",
+          "2028-03",
+          "2028-04",
+          "2028-08",
+          "2028-09",
+          "2028-10",
+          "2029-02",
+          "2029-03",
+          "2029-04",
+          "2029-06"
+        ],
+        "time_series_possible": true
+      },
+      "regions": {
+        "region": 20
+      },
+      "hospitals": {
+        "medicine_organization_code": 1610
+      },
+      "quality": {
+        "critical": 1,
+        "warning": 4,
+        "duplicate_rows": null,
+        "duplicate_rows_status": "SKIPPED_DUE_TO_RESOURCE_LIMIT",
+        "skipped_checks": [
+          "DUPLICATES: SKIPPED_DUE_TO_RESOURCE_LIMIT (объём 15.0 ГБ превышает бюджет памяти для поиска полных дубликатов)",
+          "DUPLICATE KEYS / id: SKIPPED_DUE_TO_RESOURCE_LIMIT (сравнение опирается на приблизительный подсчёт уникальных)",
+          "INCONSISTENT CATEGORY SPELLING: SKIPPED_DUE_TO_RESOURCE_LIMIT (объём выгрузки превышает бюджет проверки)"
+        ],
+        "findings": [
+          {
+            "check": "TYPE INCONSISTENCIES",
+            "severity": "WARNING",
+            "column": "vaccination_date",
+            "detail": "неразобранных дат: 155",
+            "affected_rows": null
+          },
+          {
+            "check": "IMPOSSIBLE VALUES",
+            "severity": "CRITICAL",
+            "column": "age",
+            "detail": "минимум -999 при семантике, не допускающей отрицательных",
+            "affected_rows": null
+          },
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "vaccination_plan",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 5638191
+          },
+          {
+            "check": "MISSING VALUES",
+            "severity": "WARNING",
+            "column": "medicine_organization_code",
+            "detail": "пусто в 20.3% строк",
+            "affected_rows": 21207670
+          },
+          {
+            "check": "WHITESPACE ISSUES",
+            "severity": "WARNING",
+            "column": "medicine_organization_code",
+            "detail": "значения содержат ведущие или завершающие пробелы",
+            "affected_rows": 174
+          },
+          {
+            "check": "CONSTANT COLUMN",
+            "severity": "INFO",
+            "column": "sdu_load_date",
+            "detail": "во всех строках одно и то же значение",
+            "affected_rows": null
+          }
+        ]
+      },
+      "privacy": {
+        "highest_risk": "MEDIUM",
+        "columns_requiring_action": [
+          {
+            "column_name": "age",
+            "detected_type": "Возраст или дата рождения",
+            "risk_level": "MEDIUM",
+            "handling": "AGGREGATE"
+          }
+        ]
+      },
+      "join_keys": [
+        "id",
+        "medicine_organization_code",
+        "region"
+      ]
+    }
+  ],
+  "target_candidates": [
+    {
+      "key": "queue_size",
+      "name": "queue_size(t+n)",
+      "definition": "Число пациентов, ожидающих плановую госпитализацию, на организацию и профиль на горизонте n",
+      "status": "AVAILABLE",
+      "reason": "Все требуемые поля найдены в одной таблице",
+      "feasibility": "WEAK",
+      "feasibility_reason": "История покрывает 3 мес.: годовая сезонность не наблюдается ни разу",
+      "supporting_tables": [
+        "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+        "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары"
+      ],
+      "requirements": [
+        {
+          "role": "queue_registration",
+          "description": "дата постановки в очередь",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+            "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары"
+          ]
+        },
+        {
+          "role": "organization",
+          "description": "принимающая организация",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Количество пролеченных случаев в разрезе МО.Количество пролеченных случаев в разрезе МО",
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+            "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары",
+            "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов.Факты проведённых вакцинаций с возможностью представления в разрезе возрастов"
+          ]
+        },
+        {
+          "role": "profile",
+          "description": "профиль койки",
+          "required": false,
+          "satisfied": true,
+          "found_in": [
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+            "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары"
+          ]
+        },
+        {
+          "role": "queue_exit",
+          "description": "дата выбытия из очереди",
+          "required": false,
+          "satisfied": true,
+          "found_in": [
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары"
+          ]
+        }
+      ],
+      "leakage_risks": []
+    },
+    {
+      "key": "incoming_referrals",
+      "name": "incoming_referrals(t+n)",
+      "definition": "Число направлений на плановую госпитализацию, поступивших в организацию за период",
+      "status": "AVAILABLE",
+      "reason": "Все требуемые поля найдены в одной таблице",
+      "feasibility": "WEAK",
+      "feasibility_reason": "История покрывает 3 мес.: годовая сезонность не наблюдается ни разу",
+      "supporting_tables": [
+        "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+        "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары"
+      ],
+      "requirements": [
+        {
+          "role": "referral_registration",
+          "description": "дата регистрации направления",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+            "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары"
+          ]
+        },
+        {
+          "role": "receiving_organization",
+          "description": "принимающая организация",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+            "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары"
+          ]
+        }
+      ],
+      "leakage_risks": []
+    },
+    {
+      "key": "waiting_time_days",
+      "name": "waiting_time_days",
+      "definition": "Число дней между постановкой в очередь и фактической госпитализацией",
+      "status": "AVAILABLE",
+      "reason": "Все требуемые поля найдены в одной таблице",
+      "feasibility": "WEAK",
+      "feasibility_reason": "История покрывает 3 мес.: годовая сезонность не наблюдается ни разу",
+      "supporting_tables": [
+        "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары"
+      ],
+      "requirements": [
+        {
+          "role": "queue_start",
+          "description": "дата постановки в очередь",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+            "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары"
+          ]
+        },
+        {
+          "role": "queue_end",
+          "description": "фактическая дата госпитализации в той же строке",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары"
+          ]
+        }
+      ],
+      "leakage_risks": []
+    },
+    {
+      "key": "refusal_rate",
+      "name": "refusal_rate",
+      "definition": "Доля отказов в плановой госпитализации от числа обращений за период по организации",
+      "status": "AVAILABLE",
+      "reason": "Все требуемые поля найдены в одной таблице",
+      "feasibility": "WEAK",
+      "feasibility_reason": "История покрывает 3 мес.: годовая сезонность не наблюдается ни разу",
+      "supporting_tables": [
+        "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+        "Отказы в плановой госпитализации (приёмный покой).Отказы в плановой госпитализации"
+      ],
+      "requirements": [
+        {
+          "role": "refusal_event",
+          "description": "дата отказа",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+            "Отказы в плановой госпитализации (приёмный покой).Отказы в плановой госпитализации"
+          ]
+        },
+        {
+          "role": "refusal_organization",
+          "description": "организация обращения",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+            "Отказы в плановой госпитализации (приёмный покой).Отказы в плановой госпитализации"
+          ]
+        },
+        {
+          "role": "denominator",
+          "description": "знаменатель: обращения или направления за тот же период",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+            "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары"
+          ]
+        }
+      ],
+      "leakage_risks": []
+    },
+    {
+      "key": "treated_cases",
+      "name": "treated_cases(t+n)",
+      "definition": "Число пролеченных случаев по организации за период",
+      "status": "PARTIALLY AVAILABLE",
+      "reason": "Все обязательные поля найдены, но не в одной таблице: величина вычислима только после связывания выгрузок",
+      "feasibility": "NOT FEASIBLE",
+      "feasibility_reason": "История покрывает 0 мес.: ряд построить нельзя",
+      "supporting_tables": [
+        "Количество пролеченных случаев в разрезе МО.Количество пролеченных случаев в разрезе МО"
+      ],
+      "requirements": [
+        {
+          "role": "treated_measure",
+          "description": "показатель пролеченных случаев",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Количество пролеченных случаев в разрезе МО.Количество пролеченных случаев в разрезе МО"
+          ]
+        },
+        {
+          "role": "treated_period",
+          "description": "дата отчётного периода, отличная от отметки выгрузки",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+            "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары",
+            "Отказы в плановой госпитализации (приёмный покой).Отказы в плановой госпитализации",
+            "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов.Факты проведённых вакцинаций с возможностью представления в разрезе возрастов"
+          ]
+        },
+        {
+          "role": "treated_organization",
+          "description": "организация",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Количество пролеченных случаев в разрезе МО.Количество пролеченных случаев в разрезе МО",
+            "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов.Факты проведённых вакцинаций с возможностью представления в разрезе возрастов"
+          ]
+        }
+      ],
+      "leakage_risks": []
+    },
+    {
+      "key": "overload_risk_proxy",
+      "name": "overload / risk proxy",
+      "definition": "Составной показатель риска перегрузки: очередь, отказы и загрузка коечного фонда, сведённые к одной величине",
+      "status": "NOT AVAILABLE",
+      "reason": "Отсутствуют обязательные поля: ground_truth (наблюдаемая метка перегрузки)",
+      "feasibility": "NOT FEASIBLE",
+      "feasibility_reason": "Целевая величина не вычислима из имеющихся столбцов",
+      "supporting_tables": [
+        "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+        "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары"
+      ],
+      "requirements": [
+        {
+          "role": "queue_component",
+          "description": "компонента очереди",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
+            "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары"
+          ]
+        },
+        {
+          "role": "refusal_component",
+          "description": "компонента отказов",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Отказы в плановой госпитализации (приёмный покой).Отказы в плановой госпитализации"
+          ]
+        },
+        {
+          "role": "capacity_component",
+          "description": "коечный фонд или его загрузка",
+          "required": true,
+          "satisfied": true,
+          "found_in": [
+            "Количество пролеченных случаев в разрезе МО.Количество пролеченных случаев в разрезе МО"
+          ]
+        },
+        {
+          "role": "ground_truth",
+          "description": "наблюдаемая метка перегрузки",
+          "required": true,
+          "satisfied": false,
+          "found_in": []
+        }
+      ],
+      "leakage_risks": []
+    }
+  ],
+  "recommended_target": null,
+  "recommendation_reason": "RECOMMENDATION DEFERRED: ни один кандидат не доступен полностью при пригодной для обучения истории",
+  "joinability": {
+    "matrix": {
+      "hospital": {
+        "Количество пролеченных случаев в разрезе МО ↔ Направления на плановую госпитализацию в стационары": "STRONG JOIN",
+        "Количество пролеченных случаев в разрезе МО ↔ Ожидающие плановую госпитализацию в стационары": "NO JOIN",
+        "Количество пролеченных случаев в разрезе МО ↔ Отказы в плановой госпитализации (приёмный покой)": "POSSIBLE JOIN",
+        "Количество пролеченных случаев в разрезе МО ↔ Факты проведённых вакцинаций с возможностью представления в разрезе возрастов": "NO JOIN",
+        "Направления на плановую госпитализацию в стационары ↔ Ожидающие плановую госпитализацию в стационары": "NO JOIN",
+        "Направления на плановую госпитализацию в стационары ↔ Отказы в плановой госпитализации (приёмный покой)": "POSSIBLE JOIN",
+        "Направления на плановую госпитализацию в стационары ↔ Факты проведённых вакцинаций с возможностью представления в разрезе возрастов": "NO JOIN",
+        "Ожидающие плановую госпитализацию в стационары ↔ Отказы в плановой госпитализации (приёмный покой)": "NO JOIN",
+        "Ожидающие плановую госпитализацию в стационары ↔ Факты проведённых вакцинаций с возможностью представления в разрезе возрастов": "POSSIBLE JOIN",
+        "Отказы в плановой госпитализации (приёмный покой) ↔ Факты проведённых вакцинаций с возможностью представления в разрезе возрастов": "NO JOIN"
+      },
+      "profile": {
+        "Направления на плановую госпитализацию в стационары ↔ Ожидающие плановую госпитализацию в стационары": "NO JOIN"
+      },
+      "stable key": {
+        "Направления на плановую госпитализацию в стационары ↔ Отказы от вакцинации и противопоказания": "NO JOIN",
+        "Направления на плановую госпитализацию в стационары ↔ Факты проведённых вакцинаций с возможностью представления в разрезе возрастов": "NO JOIN",
+        "Отказы от вакцинации и противопоказания ↔ Факты проведённых вакцинаций с возможностью представления в разрезе возрастов": "NO JOIN"
+      },
+      "region": {
+        "Ожидающие плановую госпитализацию в стационары ↔ Отказы в плановой госпитализации (приёмный покой)": "NO JOIN",
+        "Ожидающие плановую госпитализацию в стационары ↔ Факты проведённых вакцинаций с возможностью представления в разрезе возрастов": "NO JOIN",
+        "Отказы в плановой госпитализации (приёмный покой) ↔ Факты проведённых вакцинаций с возможностью представления в разрезе возрастов": "POSSIBLE JOIN"
+      }
+    },
+    "assessments": [
+      {
+        "left_dataset": "Количество пролеченных случаев в разрезе МО",
+        "right_dataset": "Направления на плановую госпитализацию в стационары",
+        "role": "hospital",
+        "left_column": "medicine_organization",
+        "right_column": "referring_mo",
+        "left_distinct": 2172,
+        "right_distinct": 1139,
+        "overlap": 1090,
+        "left_coverage_pct": 50.18,
+        "right_coverage_pct": 95.7,
+        "strength": "STRONG JOIN",
+        "rationale": "Пересечение покрывает 96% меньшего множества"
+      },
+      {
+        "left_dataset": "Количество пролеченных случаев в разрезе МО",
+        "right_dataset": "Направления на плановую госпитализацию в стационары",
+        "role": "hospital",
+        "left_column": "medicine_organization",
+        "right_column": "hospital_mo",
+        "left_distinct": 2172,
+        "right_distinct": 1381,
+        "overlap": 1362,
+        "left_coverage_pct": 62.71,
+        "right_coverage_pct": 98.62,
+        "strength": "STRONG JOIN",
+        "rationale": "Пересечение покрывает 99% меньшего множества"
+      },
+      {
+        "left_dataset": "Количество пролеченных случаев в разрезе МО",
+        "right_dataset": "Ожидающие плановую госпитализацию в стационары",
+        "role": "hospital",
+        "left_column": "medicine_organization",
+        "right_column": "mo_destination_code",
+        "left_distinct": 2172,
+        "right_distinct": 1406,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Количество пролеченных случаев в разрезе МО",
+        "right_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "role": "hospital",
+        "left_column": "medicine_organization",
+        "right_column": "org_in",
+        "left_distinct": 2172,
+        "right_distinct": 449,
+        "overlap": 445,
+        "left_coverage_pct": 20.49,
+        "right_coverage_pct": 99.11,
+        "strength": "STRONG JOIN",
+        "rationale": "Пересечение покрывает 99% меньшего множества"
+      },
+      {
+        "left_dataset": "Количество пролеченных случаев в разрезе МО",
+        "right_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "role": "hospital",
+        "left_column": "medicine_organization",
+        "right_column": "attach_org",
+        "left_distinct": 2172,
+        "right_distinct": 983,
+        "overlap": 830,
+        "left_coverage_pct": 38.21,
+        "right_coverage_pct": 84.44,
+        "strength": "POSSIBLE JOIN",
+        "rationale": "Пересечение покрывает 84% меньшего множества: часть записей останется несвязанной"
+      },
+      {
+        "left_dataset": "Количество пролеченных случаев в разрезе МО",
+        "right_dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+        "role": "hospital",
+        "left_column": "medicine_organization",
+        "right_column": "medicine_organization_code",
+        "left_distinct": 2172,
+        "right_distinct": 1610,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Направления на плановую госпитализацию в стационары",
+        "right_dataset": "Ожидающие плановую госпитализацию в стационары",
+        "role": "hospital",
+        "left_column": "referring_mo",
+        "right_column": "mo_destination_code",
+        "left_distinct": 1139,
+        "right_distinct": 1406,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Направления на плановую госпитализацию в стационары",
+        "right_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "role": "hospital",
+        "left_column": "referring_mo",
+        "right_column": "org_in",
+        "left_distinct": 1139,
+        "right_distinct": 449,
+        "overlap": 427,
+        "left_coverage_pct": 37.49,
+        "right_coverage_pct": 95.1,
+        "strength": "STRONG JOIN",
+        "rationale": "Пересечение покрывает 95% меньшего множества"
+      },
+      {
+        "left_dataset": "Направления на плановую госпитализацию в стационары",
+        "right_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "role": "hospital",
+        "left_column": "referring_mo",
+        "right_column": "attach_org",
+        "left_distinct": 1139,
+        "right_distinct": 983,
+        "overlap": 764,
+        "left_coverage_pct": 67.08,
+        "right_coverage_pct": 77.72,
+        "strength": "POSSIBLE JOIN",
+        "rationale": "Пересечение покрывает 78% меньшего множества: часть записей останется несвязанной"
+      },
+      {
+        "left_dataset": "Направления на плановую госпитализацию в стационары",
+        "right_dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+        "role": "hospital",
+        "left_column": "referring_mo",
+        "right_column": "medicine_organization_code",
+        "left_distinct": 1139,
+        "right_distinct": 1610,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Направления на плановую госпитализацию в стационары",
+        "right_dataset": "Ожидающие плановую госпитализацию в стационары",
+        "role": "hospital",
+        "left_column": "hospital_mo",
+        "right_column": "mo_destination_code",
+        "left_distinct": 1381,
+        "right_distinct": 1406,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Направления на плановую госпитализацию в стационары",
+        "right_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "role": "hospital",
+        "left_column": "hospital_mo",
+        "right_column": "org_in",
+        "left_distinct": 1381,
+        "right_distinct": 449,
+        "overlap": 444,
+        "left_coverage_pct": 32.15,
+        "right_coverage_pct": 98.89,
+        "strength": "STRONG JOIN",
+        "rationale": "Пересечение покрывает 99% меньшего множества"
+      },
+      {
+        "left_dataset": "Направления на плановую госпитализацию в стационары",
+        "right_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "role": "hospital",
+        "left_column": "hospital_mo",
+        "right_column": "attach_org",
+        "left_distinct": 1381,
+        "right_distinct": 983,
+        "overlap": 774,
+        "left_coverage_pct": 56.05,
+        "right_coverage_pct": 78.74,
+        "strength": "POSSIBLE JOIN",
+        "rationale": "Пересечение покрывает 79% меньшего множества: часть записей останется несвязанной"
+      },
+      {
+        "left_dataset": "Направления на плановую госпитализацию в стационары",
+        "right_dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+        "role": "hospital",
+        "left_column": "hospital_mo",
+        "right_column": "medicine_organization_code",
+        "left_distinct": 1381,
+        "right_distinct": 1610,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Направления на плановую госпитализацию в стационары",
+        "right_dataset": "Ожидающие плановую госпитализацию в стационары",
+        "role": "profile",
+        "left_column": "bed_profile",
+        "right_column": "profile_code",
+        "left_distinct": 95,
+        "right_distinct": 97,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Направления на плановую госпитализацию в стационары",
+        "right_dataset": "Отказы от вакцинации и противопоказания",
+        "role": "stable key",
+        "left_column": "hospitalization_code",
+        "right_column": "id",
+        "left_distinct": 200001,
+        "right_distinct": 66709,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует; множество значений усечено пределом аудита, оценка занижена"
+      },
+      {
+        "left_dataset": "Направления на плановую госпитализацию в стационары",
+        "right_dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+        "role": "stable key",
+        "left_column": "hospitalization_code",
+        "right_column": "id",
+        "left_distinct": 200001,
+        "right_distinct": 200001,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует; множество значений усечено пределом аудита, оценка занижена"
+      },
+      {
+        "left_dataset": "Ожидающие плановую госпитализацию в стационары",
+        "right_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "role": "region",
+        "left_column": "region_origin_code",
+        "right_column": "region_in",
+        "left_distinct": 20,
+        "right_distinct": 20,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Ожидающие плановую госпитализацию в стационары",
+        "right_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "role": "region",
+        "left_column": "region_origin_code",
+        "right_column": "attach_region",
+        "left_distinct": 20,
+        "right_distinct": 22,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Ожидающие плановую госпитализацию в стационары",
+        "right_dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+        "role": "region",
+        "left_column": "region_origin_code",
+        "right_column": "region",
+        "left_distinct": 20,
+        "right_distinct": 20,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Ожидающие плановую госпитализацию в стационары",
+        "right_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "role": "hospital",
+        "left_column": "mo_destination_code",
+        "right_column": "org_in",
+        "left_distinct": 1406,
+        "right_distinct": 449,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Ожидающие плановую госпитализацию в стационары",
+        "right_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "role": "hospital",
+        "left_column": "mo_destination_code",
+        "right_column": "attach_org",
+        "left_distinct": 1406,
+        "right_distinct": 983,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Ожидающие плановую госпитализацию в стационары",
+        "right_dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+        "role": "hospital",
+        "left_column": "mo_destination_code",
+        "right_column": "medicine_organization_code",
+        "left_distinct": 1406,
+        "right_distinct": 1610,
+        "overlap": 910,
+        "left_coverage_pct": 64.72,
+        "right_coverage_pct": 56.52,
+        "strength": "POSSIBLE JOIN",
+        "rationale": "Пересечение покрывает 65% меньшего множества: часть записей останется несвязанной"
+      },
+      {
+        "left_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "right_dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+        "role": "region",
+        "left_column": "region_in",
+        "right_column": "region",
+        "left_distinct": 20,
+        "right_distinct": 20,
+        "overlap": 17,
+        "left_coverage_pct": 85.0,
+        "right_coverage_pct": 85.0,
+        "strength": "POSSIBLE JOIN",
+        "rationale": "Пересечение покрывает 85% меньшего множества: часть записей останется несвязанной"
+      },
+      {
+        "left_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "right_dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+        "role": "region",
+        "left_column": "attach_region",
+        "right_column": "region",
+        "left_distinct": 22,
+        "right_distinct": 20,
+        "overlap": 17,
+        "left_coverage_pct": 77.27,
+        "right_coverage_pct": 85.0,
+        "strength": "POSSIBLE JOIN",
+        "rationale": "Пересечение покрывает 85% меньшего множества: часть записей останется несвязанной"
+      },
+      {
+        "left_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "right_dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+        "role": "hospital",
+        "left_column": "org_in",
+        "right_column": "medicine_organization_code",
+        "left_distinct": 449,
+        "right_distinct": 1610,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Отказы в плановой госпитализации (приёмный покой)",
+        "right_dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+        "role": "hospital",
+        "left_column": "attach_org",
+        "right_column": "medicine_organization_code",
+        "left_distinct": 983,
+        "right_distinct": 1610,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует"
+      },
+      {
+        "left_dataset": "Отказы от вакцинации и противопоказания",
+        "right_dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+        "role": "stable key",
+        "left_column": "id",
+        "right_column": "id",
+        "left_distinct": 66709,
+        "right_distinct": 200001,
+        "overlap": 0,
+        "left_coverage_pct": 0.0,
+        "right_coverage_pct": 0.0,
+        "strength": "NO JOIN",
+        "rationale": "Множества значений не пересекаются: общий ключ отсутствует; множество значений усечено пределом аудита, оценка занижена"
+      }
+    ]
+  },
+  "critical_gaps": [
+    "Выгрузки распадаются на несвязанные группы по идентификатору медицинской организации. Внутри группы связь есть, между группами пересечение значений нулевое: одни выгрузки идентифицируют организацию полным юридическим наименованием, другие — коротким кодом. Без официального сопоставления объединить их нельзя. Группа 1: Количество пролеченных случаев в разрезе МО, Направления на плановую госпитализацию в стационары, Отказы в плановой госпитализации (приёмный покой). Группа 2: Ожидающие плановую госпитализацию в стационары, Факты проведённых вакцинаций с возможностью представления в разрезе возрастов.",
+    "Выгрузки без пригодной оси времени: Количество пролеченных случаев в разрезе МО, Отказы от вакцинации и противопоказания. Из них временной ряд не строится.",
+    "История короче двух лет в выгрузках: Количество пролеченных случаев в разрезе МО, Направления на плановую госпитализацию в стационары, Ожидающие плановую госпитализацию в стационары, Отказы в плановой госпитализации (приёмный покой), Отказы от вакцинации и противопоказания. Годовая сезонность наблюдается менее двух раз, и отделить её от тренда невозможно.",
+    "Обнаружены значения, невозможные по смыслу поля. До выяснения их происхождения обучение на этих столбцах даст смещённую модель.",
+    "Даты выходят за правдоподобные границы. Часть записей датирована задолго до начала наблюдений, часть — будущим. Для плановой даты будущее нормально, для даты состоявшегося события — нет, и различить это можно только с владельцем данных. Направления на плановую госпитализацию в стационары / planned_dt: до правдоподобного окна 2, позже сегодняшнего дня 284; Ожидающие плановую госпитализацию в стационары / planned_dt: до правдоподобного окна 2, позже сегодняшнего дня 284; Факты проведённых вакцинаций с возможностью представления в разрезе возрастов / vaccination_date: до правдоподобного окна 16 173 387, позже сегодняшнего дня 158.",
+    "Коечный фонд организации в выгрузках отсутствует. Без знаменателя перегрузка не определяется: одно и то же число ожидающих значит разное для организаций разного размера.",
+    "Наблюдаемая метка перегрузки отсутствует. Ни одна выгрузка не содержит признака, по которому можно было бы обучать классификатор риска напрямую."
+  ],
+  "questions_for_dataset_owner": [
+    "Существует ли справочник медицинских организаций с устойчивым кодом, и можно ли получить его отдельной выгрузкой? Без него связать выгрузки по организации невозможно.",
+    "Как соотносятся короткий код организации в одних выгрузках и полное юридическое наименование в других? Существует ли официальное сопоставление?",
+    "Доступен ли коечный фонд по организациям и профилям? Без него загрузка стационара не вычисляется.",
+    "Возможна ли история срезов очереди, а не один срез на момент выгрузки? Текущая форма не позволяет восстановить, как очередь менялась.",
+    "Какой отчётный период относится к агрегированной выгрузке пролеченных случаев? В файле указана только отметка загрузки.",
+    "С какой периодичностью планируется поставка данных в эксплуатации? От этого зависит и горизонт прогноза, и порог сигнала об устаревании.",
+    "Даты в будущем за пределами планового горизонта — дефект выгрузки или допустимое состояние записи?",
+    "Отрицательные значения в полях, где они невозможны по смыслу, — это способ кодирования отсутствия данных или дефект выгрузки?",
+    "Повторяющиеся значения в поле, объявленном идентификатором, — это версии одной записи или разные записи?"
+  ],
+  "phase3b_recommendations": [
+    "Начать с контрактов загрузки на те выгрузки, где ось времени определена и история достаточна. Остальные принимать только после ответов владельца данных.",
+    "Идемпотентность импорта строить на SHA-256 файла: отпечатки уже посчитаны и лежат в data/audit/file_fingerprints.json.",
+    "Псевдонимизацию выполнять до записи в аналитическое хранилище, а не после. Составной код случая госпитализации содержит порядковый номер пациента и должен заменяться суррогатным ключом на входе.",
+    "Не переносить в ClickHouse ни один столбец с уровнем риска CRITICAL или HIGH в исходном виде.",
+    "Валидацию строить четырьмя уровнями: структура файла, типы, справочные значения, бизнес-правила. Замечания этого аудита дают готовый перечень правил третьего и четвёртого уровня.",
+    "Отчёт о качестве загрузки формировать на каждый импорт и хранить вместе с ним: расхождение витрины с источником иначе необъяснимо.",
+    "Целевую переменную не фиксировать до ответов владельца данных. Контракты загрузки от неё не зависят и могут быть построены раньше."
+  ],
+  "excel_workbooks": [
+    {
+      "dataset": "Запущенность злокачественных новообразований по локализациям",
+      "file": "Запущенность злокачественных новообразований по локализациям.xlsx",
+      "size_bytes": 6562,
+      "sheet_count": 1,
+      "sheets": [
+        {
+          "sheet_name": "Sheet1",
+          "used_rows": 23,
+          "used_columns": 9,
+          "header_row_index": 1,
+          "headers": [
+            "localization_id",
+            "localization_name",
+            "icd_code",
+            "total_patients",
+            "advanced_stage_3_count",
+            "advanced_stage_3_pct",
+            "advanced_stage_4_count",
+            "advanced_stage_4_pct",
+            "sdu_load_date"
+          ],
+          "leading_empty_rows": 0,
+          "merged_ranges": 0,
+          "formula_cells": 0,
+          "blank_separator_rows": [],
+          "likely_multiple_tables": false,
+          "looks_like_reference": false,
+          "notes": []
+        }
+      ],
+      "notes": []
+    },
+    {
+      "dataset": "Информация по онкобольным с впервые установленным диагнозом",
+      "file": "Информация по онкобольным с впервые установленным диагнозом.xlsx",
+      "size_bytes": 1078723,
+      "sheet_count": 1,
+      "sheets": [
+        {
+          "sheet_name": "Sheet1",
+          "used_rows": 8516,
+          "used_columns": 20,
+          "header_row_index": 1,
+          "headers": [
+            "clinic_name",
+            "age",
+            "number_card",
+            "take_in_date",
+            "take_of_date",
+            "diagnosis_code",
+            "diagnosis_date",
+            "deregistration_cause",
+            "death_cause",
+            "death_date",
+            "death_place",
+            "social_position",
+            "first_time_in_life_diagnosed",
+            "first_time_in_year_diagnosed",
+            "circumstances",
+            "clinic_group_at_registration",
+            "clinic_group_end_of_year",
+            "cancer_circumstances",
+            "invalidnost",
+            "sdu_load_date"
+          ],
+          "leading_empty_rows": 0,
+          "merged_ranges": 0,
+          "formula_cells": 0,
+          "blank_separator_rows": [],
+          "likely_multiple_tables": false,
+          "looks_like_reference": false,
+          "notes": []
+        }
+      ],
+      "notes": []
+    }
+  ]
+}

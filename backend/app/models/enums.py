@@ -159,3 +159,55 @@ class AuditEntityType(StrEnum):
     ACTION = "ACTION"
     DATA_IMPORT = "DATA_IMPORT"
     AUDIT_LOG = "AUDIT_LOG"
+
+
+class DatasetType(StrEnum):
+    """Наборы данных, которые система принимает.
+
+    Перечень закрыт намеренно. Он же служит разрешающим списком: набора,
+    которого здесь нет, загрузить нельзя. Выгрузки о вакцинации и
+    онкологии в задаче о нагрузке стационаров не участвуют, и попадание
+    ста миллионов записей в хранилище «за компанию» исключено правилом,
+    а не внимательностью оператора.
+    """
+
+    REFERRALS = "REFERRALS"
+    WAITING = "WAITING"
+    REFUSALS = "REFUSALS"
+    TREATED = "TREATED"
+
+
+class SourceSystem(StrEnum):
+    """Информационная система, из которой пришла выгрузка."""
+
+    IS_BG = "ИС БГ"
+    ERSB = "ЭРСБ"
+
+
+class MappingStatus(StrEnum):
+    """Состояние сопоставления значения источника со справочником."""
+
+    UNMAPPED = "UNMAPPED"
+    MAPPED = "MAPPED"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
+
+
+class MappingMethod(StrEnum):
+    """Чем подтверждено сопоставление.
+
+    Автоматического подбора по похожести здесь нет и не будет. Склейка
+    двух наименований организаций меняет смысл данных, и основанием
+    для неё может быть только официальный справочник или решение
+    человека.
+    """
+
+    OFFICIAL_REFERENCE = "OFFICIAL_REFERENCE"
+    MANUAL_APPROVED = "MANUAL_APPROVED"
+
+
+class QualitySeverity(StrEnum):
+    """Уровень замечания о качестве загруженных данных."""
+
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"

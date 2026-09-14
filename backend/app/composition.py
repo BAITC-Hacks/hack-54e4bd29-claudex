@@ -14,6 +14,7 @@ from __future__ import annotations
 from app.business.audit.service import AuditService
 from app.business.hospitals.service import HospitalService
 from app.business.incidents.service import IncidentService
+from app.business.ingestion.query import DataImportQueryService
 from app.business.ports import UnitOfWorkFactory
 from app.business.regions.service import RegionService
 from app.business.shared.events import EventDispatcher, get_event_dispatcher
@@ -57,3 +58,14 @@ def build_incident_service() -> IncidentService:
 def build_audit_service() -> AuditService:
     uow, authz, _ = _dependencies()
     return AuditService(uow, authz)
+
+
+def build_data_import_query_service() -> DataImportQueryService:
+    """Чтение истории загрузок.
+
+    Запуск импорта собирается отдельно, в `app.adapters.composition`:
+    он требует библиотеки разбора файлов, которой в образе API нет
+    и быть не должно.
+    """
+    uow, authz, _ = _dependencies()
+    return DataImportQueryService(uow, authz)

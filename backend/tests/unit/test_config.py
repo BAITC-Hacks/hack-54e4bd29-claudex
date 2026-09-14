@@ -23,6 +23,10 @@ PRODUCTION_BASE = {
     "redis_password": "1c8a5d",
     "minio_access_key": "6e4f2b",
     "minio_secret_key": "3d9a7c",
+    # Ключ псевдонимизации обязателен вне локальной среды и проверяется
+    # строже прочих секретов: от его длины зависит, нельзя ли восстановить
+    # код случая перебором.
+    "data_pseudonymization_key": "2f8c6a41d05b39e7c4a81f6d2b7e0935",
     "auth_test_mode": False,
 }
 
@@ -65,6 +69,8 @@ def test_local_environment_requires_app_secret() -> None:
         ({"oidc_algorithms": "none"}, "недопустим"),
         ({"oidc_algorithms": "HS256"}, "недопустим"),
         ({"postgres_password": ""}, "POSTGRES_PASSWORD"),
+        ({"data_pseudonymization_key": ""}, "DATA_PSEUDONYMIZATION_KEY"),
+        ({"data_pseudonymization_key": "коротко"}, "короче"),
     ],
 )
 def test_unsafe_production_configuration_is_rejected(
@@ -83,6 +89,7 @@ def test_unsafe_production_configuration_is_rejected(
         "redis_password",
         "minio_access_key",
         "minio_secret_key",
+        "data_pseudonymization_key",
     ],
 )
 def test_example_secrets_are_rejected_outside_local(field: str) -> None:

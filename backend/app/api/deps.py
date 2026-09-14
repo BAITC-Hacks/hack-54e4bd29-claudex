@@ -15,11 +15,13 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.business.audit.service import AuditService
 from app.business.hospitals.service import HospitalService
 from app.business.incidents.service import IncidentService
+from app.business.ingestion.query import DataImportQueryService
 from app.business.regions.service import RegionService
 from app.business.signals.service import SignalService
 from app.business.system.operations import OperationService
 from app.composition import (
     build_audit_service,
+    build_data_import_query_service,
     build_hospital_service,
     build_incident_service,
     build_region_service,
@@ -101,6 +103,9 @@ HospitalServiceDep = Annotated[HospitalService, Depends(build_hospital_service)]
 SignalServiceDep = Annotated[SignalService, Depends(build_signal_service)]
 IncidentServiceDep = Annotated[IncidentService, Depends(build_incident_service)]
 AuditServiceDep = Annotated[AuditService, Depends(build_audit_service)]
+DataImportServiceDep = Annotated[
+    DataImportQueryService, Depends(build_data_import_query_service)
+]
 AuthorizationDep = Annotated[AuthorizationService, Depends(get_authorization_service)]
 
 

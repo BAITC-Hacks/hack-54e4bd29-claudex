@@ -23,13 +23,15 @@
 | [0004](0004-background-workers-celery.md) | Celery для фоновой обработки | Принят |
 | [0005](0005-ml-separation.md) | Отделение ML от прикладного кода через порт | Принят |
 | [0006](0006-security-architecture.md) | Архитектура безопасности и модель доступа | Принят |
-| [0007](0007-data-audit-before-ml-target.md) | Data Audit до выбора целевой переменной | Принят |
+| [0007](0007-data-audit-before-ml-target.md) | Data Audit до выбора целевой переменной | Заменён 0014 |
 | [0008](0008-signal-engine-three-sources.md) | Три независимых источника Signal Engine | Принят |
 | [0009](0009-keycloak-oidc-authentication.md) | Keycloak и OIDC как единственный механизм аутентификации | Принят, заменяет часть 0006 |
 | [0010](0010-persistent-operation-state.md) | Состояние долгих операций в PostgreSQL | Принят, дополняет 0003 и 0004 |
 | [0011](0011-forecast-port-sync-and-async.md) | ForecastPort поддерживает синхронный и фоновый инференс | Принят, уточняет 0005 |
 | [0012](0012-ports-and-unit-of-work.md) | Порты репозиториев и единица работы | Принят, уточняет 0001 и 0010 |
 | [0013](0013-optimistic-concurrency.md) | Оптимистическая блокировка сигнала | Принят |
+| [0014](0014-forecast-target-deferred-after-audit.md) | Целевая переменная остаётся невыбранной после Data Audit | Принят, заменяет 0007 |
+| [0015](0015-import-publication-boundary.md) | Граница публикации импорта между ClickHouse и PostgreSQL | Принят, уточняет 0002 и 0010 |
 
 ## Когда нужен новый ADR
 

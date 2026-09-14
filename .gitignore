@@ -21,9 +21,10 @@ infrastructure/security/secrets/
 **/service-account*.json
 
 # --- Реальные данные (никогда не коммитим) ---------------------------------
-data/
+data/*
 datasets/
 raw/
+
 /incoming/
 *.csv
 *.tsv
@@ -36,6 +37,15 @@ raw/
 !**/fixtures/**/*.csv
 !**/seeds/**/*.csv
 !**/tests/**/*.csv
+
+# Исключение: результаты Data Audit — производные сводки без значений из
+# исходных выгрузок. Они передаются на review вместо самих datasets, поэтому
+# хранятся в репозитории. Исключения стоят после запретов намеренно: в
+# .gitignore побеждает последнее подходящее правило.
+!data/audit/
+data/audit/*
+!data/audit/*.json
+!data/audit/inventory.csv
 
 # --- ML артефакты ----------------------------------------------------------
 mlruns/

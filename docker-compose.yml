@@ -51,6 +51,10 @@ x-backend-environment: &backend-environment
 
   MLFLOW_TRACKING_URI: http://mlflow:5000
 
+  DATA_SOURCE_DIR: /data/source
+  DATA_BATCH_SIZE: ${DATA_BATCH_SIZE:-50000}
+  DATA_PSEUDONYMIZATION_KEY: ${DATA_PSEUDONYMIZATION_KEY}
+
 services:
   # --------------------------------------------------------------------
   # Граница периметра
@@ -308,7 +312,7 @@ services:
     entrypoint: >
       /bin/sh -c "
       mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
-      for bucket in medsignal-imports medsignal-models medsignal-exports medsignal-reports; do
+      for bucket in medsignal-imports medsignal-models medsignal-exports medsignal-reports medsignal-raw medsignal-quarantine medsignal-quality medsignal-artifacts; do
         mc mb --ignore-existing local/$$bucket;
         mc anonymous set none local/$$bucket;
       done &&
@@ -343,6 +347,36 @@ services:
         condition: service_completed_successfully
     networks:
       - data
+
+  # --------------------------------------------------------------------
+  # Загрузка данных (PHASE 3B)
+  # --------------------------------------------------------------------
+  # Разовый исполнитель, а не постоянный сервис: запускается командой
+  # `docker compose run --rm pipeline ...`. Профиль tools исключает его
+  # из обычного `docker compose up`.
+  #
+  # Каталог с выгрузками монтируется только на чтение. Это не пожелание,
+  # а свойство монтирования: попытка изменить исходный файл отказывается
+  # ядром, независимо от того, что делает код.
+  pipeline:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: infrastructure/pipeline/Dockerfile
+    container_name: medsignal-pipeline
+    environment: *backend-environment
+    volumes:
+      - ${DATA_SOURCE_DIR_HOST:-./data/incoming}:/data/source:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - data
+    restart: "no"
 
 networks:
   # Прикладной контур: доступен обратному прокси.

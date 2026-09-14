@@ -83,11 +83,17 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: backend/requirements-dev.txt
+          cache-dependency-path: |
+            backend/requirements-dev.txt
+            data_pipeline/requirements.txt
 
       - name: Установка зависимостей
-        working-directory: backend
-        run: pip install --requirement requirements-dev.txt
+        # Зависимости конвейера данных нужны здесь потому, что проверка
+        # границ импортирует модули по-настоящему. Без polars и openpyxl
+        # data_pipeline.audit не загрузится, и контракты не проверятся.
+        run: |
+          pip install --requirement backend/requirements-dev.txt
+          pip install --requirement data_pipeline/requirements.txt
 
       - name: Проверка правил зависимостей
         # Границы, зафиксированные в PHASE 0. Нарушение ломает сборку:
@@ -95,6 +101,40 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/backend
         run: lint-imports --config .importlinter
+
+  data-audit:
+    name: Конвейер данных — аудит и загрузка
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            data_pipeline/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Установка зависимостей
+        run: |
+          pip install --requirement data_pipeline/requirements.txt
+          pip install ruff==0.8.* mypy==1.13.*
+
+      - name: Линтер и формат
+        run: |
+          ruff check data_pipeline tests/audit tests/pipeline
+          ruff format --check data_pipeline tests/audit tests/pipeline
+
+      - name: Типы
+        run: mypy data_pipeline
+
+      - name: Тесты
+        # Фикстуры синтетические: реальные медицинские выгрузки в CI
+        # не попадают ни при каких условиях.
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest tests/audit tests/pipeline -q
 
   frontend:
     name: Frontend — линтер, типы, тесты

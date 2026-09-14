@@ -59,3 +59,19 @@ class DataImport(Base):
     # Краткая причина для пользователя. Трассировка остаётся в журнале,
     # связанном по request_id.
     error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # --- Статистика загрузки (PHASE 3B) ------------------------------------
+    # Хранится вместе с импортом, а не считается запросом к аналитическому
+    # хранилищу: расхождение между прочитанным и загруженным нужно уметь
+    # объяснить и через полгода, когда партиции уже могли быть удалены
+    # политикой хранения.
+    rows_read: Mapped[int] = mapped_column(nullable=False, default=0)
+    rows_valid: Mapped[int] = mapped_column(nullable=False, default=0)
+    rows_rejected: Mapped[int] = mapped_column(nullable=False, default=0)
+    rows_loaded: Mapped[int] = mapped_column(nullable=False, default=0)
+    warnings_count: Mapped[int] = mapped_column(nullable=False, default=0)
+
+    # Размер и число обработанных частей: набор поставляется разбитым
+    # на файлы, и «один импорт» соответствует одному файлу.
+    source_size_bytes: Mapped[int] = mapped_column(nullable=False, default=0)
+    duration_seconds: Mapped[float] = mapped_column(nullable=False, default=0.0)

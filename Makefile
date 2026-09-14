@@ -135,3 +135,90 @@ smoke: ## Сквозная проверка запущенного окруже�
 health: ## Показать health и ready
 	@curl -fsS $(API_BASE)/health | python -m json.tool || true
 	@curl -sS $(API_BASE)/ready | python -m json.tool || true
+
+# ---------------------------------------------------------------------------
+# Data Audit (PHASE 3A)
+# ---------------------------------------------------------------------------
+# Каталог с выгрузками задаётся снаружи и нигде не зашит в код.
+# Источник открывается только на чтение: аудит ничего в нём не меняет.
+DATA_DIR ?= $(HOME)/Downloads/data
+AUDIT_OUT ?= ./data/audit
+AUDIT_DOCS ?= ./docs/data
+
+.PHONY: data-audit
+data-audit: ## Разведочный аудит выгрузок: make data-audit DATA_DIR=<каталог>
+	python -m data_pipeline.audit.cli \
+		--source "$(DATA_DIR)" \
+		--output "$(AUDIT_OUT)" \
+		--docs "$(AUDIT_DOCS)"
+
+.PHONY: test-audit
+test-audit: ## Тесты инструментов Data Audit (на синтетических фикстурах)
+	python -m pytest tests/audit -q
+
+.PHONY: lint-audit
+lint-audit: ## Линтер, формат и типы конвейера данных
+	python -m ruff check data_pipeline tests/audit
+	python -m ruff format --check data_pipeline tests/audit
+	python -m mypy data_pipeline
+
+.PHONY: deps-audit
+deps-audit: ## Установить зависимости Data Audit локально
+	python -m pip install --requirement data_pipeline/requirements.txt
+
+# ---------------------------------------------------------------------------
+# Конвейер загрузки данных (PHASE 3B)
+# ---------------------------------------------------------------------------
+# Каталог с выгрузками задаётся снаружи и монтируется только на чтение.
+# PIPELINE_RUN поднимает разовый контейнер: постоянного сервиса загрузки нет.
+PIPELINE_RUN = DATA_SOURCE_DIR_HOST="$(DATA_DIR)" $(COMPOSE) run --rm pipeline
+
+.PHONY: pipeline-build
+pipeline-build: ## Собрать образ исполнителя загрузки
+	$(COMPOSE) build pipeline
+
+.PHONY: clickhouse-migrate
+clickhouse-migrate: ## Применить схемы ClickHouse
+	DATA_SOURCE_DIR_HOST="$(DATA_DIR)" $(COMPOSE) run --rm \
+		--entrypoint python pipeline -m app.cli.clickhouse migrate
+
+.PHONY: clickhouse-status
+clickhouse-status: ## Состояние схем ClickHouse
+	DATA_SOURCE_DIR_HOST="$(DATA_DIR)" $(COMPOSE) run --rm \
+		--entrypoint python pipeline -m app.cli.clickhouse status
+
+.PHONY: data-discover
+data-discover: ## Показать файлы наборов: make data-discover DATA_DIR=<каталог>
+	$(PIPELINE_RUN) discover
+
+.PHONY: data-import-referrals
+data-import-referrals: ## Загрузить направления
+	$(PIPELINE_RUN) import --dataset REFERRALS
+
+.PHONY: data-import-waiting
+data-import-waiting: ## Загрузить очередь
+	$(PIPELINE_RUN) import --dataset WAITING
+
+.PHONY: data-import-refusals
+data-import-refusals: ## Загрузить отказы
+	$(PIPELINE_RUN) import --dataset REFUSALS
+
+.PHONY: data-import-treated
+data-import-treated: ## Загрузить пролеченные случаи
+	$(PIPELINE_RUN) import --dataset TREATED
+
+.PHONY: data-import-core
+data-import-core: ## Загрузить все наборы MedSignal Case 1
+	$(PIPELINE_RUN) import --all-core
+
+.PHONY: data-dry-run
+data-dry-run: ## Холостой прогон по всем наборам, без записи в хранилище
+	$(PIPELINE_RUN) import --all-core --dry-run
+
+.PHONY: data-recover
+data-recover: ## Отменить незавершённый импорт: make data-recover IMPORT_ID=<uuid>
+	$(PIPELINE_RUN) recover --import-id "$(IMPORT_ID)"
+
+.PHONY: test-pipeline
+test-pipeline: ## Тесты конвейера загрузки (синтетические фикстуры)
+	python -m pytest tests/pipeline -q

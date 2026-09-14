@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 from types import TracebackType
 from typing import Any, Protocol
@@ -32,6 +33,8 @@ from app.models.enums import (
     SignalStatus,
 )
 from app.models.incident import Incident
+from app.models.mapping import OrganizationAlias, ProfileAlias, RegionAlias
+from app.models.quality import DataQualityResult, QuarantineBatch
 from app.models.signal import Signal
 from app.models.system import SystemOperation
 from app.security.context import DataScope
@@ -55,6 +58,10 @@ type ScenarioPage = tuple[list[Scenario], int]
 type AuditPage = tuple[list[AuditEvent], int]
 type AuditEventList = list[AuditEvent]
 type OperationList = list[SystemOperation]
+type DataImportPage = tuple[list[DataImport], int]
+type QualityResultList = list[DataQualityResult]
+type QuarantineBatchList = list[QuarantineBatch]
+type AliasList = list[OrganizationAlias] | list[RegionAlias] | list[ProfileAlias]
 
 
 class RegionRepository(Protocol):
@@ -156,6 +163,62 @@ class DataImportRepository(Protocol):
         error_summary: str | None,
         now: datetime,
     ) -> DataImport | None: ...
+
+    def update_statistics(
+        self,
+        import_id: uuid.UUID,
+        *,
+        rows_read: int,
+        rows_valid: int,
+        rows_rejected: int,
+        rows_loaded: int,
+        warnings_count: int,
+        source_size_bytes: int,
+        duration_seconds: float,
+    ) -> DataImport | None: ...
+
+    def list(
+        self, page: PageRequest, dataset_type: str | None = None
+    ) -> DataImportPage: ...
+
+
+class DataQualityRepository(Protocol):
+    """Замечания о качестве загрузки. Только добавление и чтение.
+
+    Отчёт описывает конкретную поставку. Переписанный отчёт перестаёт
+    описывать то, что тогда произошло, поэтому изменения не предусмотрены.
+    """
+
+    def add_many(self, results: Sequence[DataQualityResult]) -> int: ...
+
+    def list_for_import(self, import_id: uuid.UUID) -> QualityResultList: ...
+
+
+class QuarantineRepository(Protocol):
+    """Ссылки на партии, отложенные в карантин."""
+
+    def add_many(self, batches: Sequence[QuarantineBatch]) -> int: ...
+
+    def list_for_import(self, import_id: uuid.UUID) -> QuarantineBatchList: ...
+
+
+class AliasRepository(Protocol):
+    """Сопоставление значений источника со справочником.
+
+    Метода автоматического сопоставления по похожести здесь нет
+    намеренно: склейка двух наименований организаций меняет смысл данных
+    и требует официального справочника или решения человека.
+    """
+
+    def register_many(
+        self,
+        *,
+        source_system: str,
+        values: Iterable[tuple[str, str]],
+        import_id: uuid.UUID | None,
+    ) -> int: ...
+
+    def count_unmapped(self) -> int: ...
 
 
 class AuditRepository(Protocol):
@@ -263,6 +326,21 @@ class UnitOfWork(Protocol):
 
     @property
     def data_imports(self) -> DataImportRepository: ...
+
+    @property
+    def data_quality(self) -> DataQualityRepository: ...
+
+    @property
+    def quarantine(self) -> QuarantineRepository: ...
+
+    @property
+    def organization_aliases(self) -> AliasRepository: ...
+
+    @property
+    def region_aliases(self) -> AliasRepository: ...
+
+    @property
+    def profile_aliases(self) -> AliasRepository: ...
 
     @property
     def audit(self) -> AuditRepository: ...

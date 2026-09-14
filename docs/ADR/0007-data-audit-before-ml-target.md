@@ -1,6 +1,6 @@
 # ADR-0007. Data Audit до выбора целевой переменной
 
-**Статус:** Принят
+**Статус:** Заменён [ADR-0014](0014-forecast-target-deferred-after-audit.md)
 **Дата:** PHASE 0
 
 ## Контекст
