@@ -283,3 +283,20 @@
 | Списки всегда постраничные | Защита от неограниченной выдачи |
 | Тяжёлые операции асинхронны | Соблюдение бюджета HTTP-запроса |
 | Дисклеймеры приходят с сервера | Смысл данных не зависит от клиента |
+
+## 15. Описательная аналитика PHASE 4
+
+| Метод | Путь | Назначение |
+|---|---|---|
+| GET | `/api/v1/analytics/overview` | KPI ситуационного центра |
+| GET | `/api/v1/analytics/referrals/timeseries` | DAY/WEEK динамика направлений |
+| GET | `/api/v1/analytics/refusals/timeseries` | DAY/WEEK динамика отказов |
+| GET | `/api/v1/analytics/waiting/summary` | Возраст очереди в последнем снимке |
+| GET | `/api/v1/analytics/observed-waiting/summary` | Наблюдаемое ожидание завершённых госпитализаций |
+| GET | `/api/v1/analytics/organizations` | Постраничные source/canonical organizations |
+| GET | `/api/v1/analytics/organizations/{organization_ref}` | Карточка identity space организации |
+| GET | `/api/v1/analytics/data-freshness` | Периоды, load date и последний импорт |
+| GET | `/api/v1/analytics/data-quality` | Агрегированные итоги quality rules |
+| GET | `/api/v1/analytics/refusals/breakdown` | Разрешённый разрез с small-cell suppression |
+
+Ответ имеет поля `data` и `meta`. В `meta` входят фактический период, granularity, источники, время генерации, watermark/IDs импортов и ограничения интерпретации. Поддержаны только именованные query parameters `date_from`, `date_to`, `granularity`, `region`, `organization`, `profile`; произвольные сортировка, SQL и выбор столбцов отсутствуют.

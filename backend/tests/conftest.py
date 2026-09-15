@@ -44,6 +44,11 @@ TEST_ENVIRONMENT = {
 # сам. Иначе результат зависит от переменных, унаследованных от сервиса или
 # от оболочки разработчика, и тесты проходят не везде одинаково.
 for _key, _value in TEST_ENVIRONMENT.items():
+    # Явно включённые ClickHouse integration tests должны использовать
+    # credentials контейнерного окружения. Обычный pytest по-прежнему
+    # полностью изолирован тестовыми значениями.
+    if os.getenv("RUN_CLICKHOUSE_INTEGRATION") == "1" and _key.startswith("CLICKHOUSE_"):
+        continue
     os.environ[_key] = _value
 
 

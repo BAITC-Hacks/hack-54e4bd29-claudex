@@ -54,6 +54,9 @@ x-backend-environment: &backend-environment
   DATA_SOURCE_DIR: /data/source
   DATA_BATCH_SIZE: ${DATA_BATCH_SIZE:-50000}
   DATA_PSEUDONYMIZATION_KEY: ${DATA_PSEUDONYMIZATION_KEY}
+  ANALYTICS_MIN_CELL_SIZE: ${ANALYTICS_MIN_CELL_SIZE:-10}
+  ANALYTICS_CACHE_TTL_SECONDS: ${ANALYTICS_CACHE_TTL_SECONDS:-60}
+  ANALYTICS_MAX_DATE_RANGE_DAYS: ${ANALYTICS_MAX_DATE_RANGE_DAYS:-366}
 
 services:
   # --------------------------------------------------------------------

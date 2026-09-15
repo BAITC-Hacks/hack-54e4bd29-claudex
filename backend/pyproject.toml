@@ -46,6 +46,9 @@ ignore = [
 # значит расходиться с тем, что выдаст следующая генерация.
 "alembic/versions/*" = ["E501", "I001"]
 "alembic/**" = ["I001"]
+  # Запросы собираются из закрытых таблиц/колонок и явных allowlist;
+  # пользовательские значения передаются только параметрами ClickHouse.
+  "app/repositories/clickhouse_analytics.py" = ["S608"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

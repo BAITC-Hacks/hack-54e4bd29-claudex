@@ -112,6 +112,11 @@ class Settings(BaseSettings):
     redis_db_ratelimit: int = 3
     redis_socket_timeout_s: int = 3
 
+    # --- Описательная аналитика (PHASE 4) ---
+    analytics_min_cell_size: int = Field(default=10, ge=2, le=1000)
+    analytics_cache_ttl_seconds: int = Field(default=60, ge=1, le=3600)
+    analytics_max_date_range_days: int = Field(default=366, ge=1, le=3660)
+
     # --- MinIO ---
     minio_endpoint: str = "minio:9000"
     minio_access_key: str = ""

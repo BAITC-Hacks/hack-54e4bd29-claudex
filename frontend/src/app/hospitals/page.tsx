@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { AuthGate } from "@/features/auth/auth-gate";
 import { useAuth } from "@/features/auth/auth-context";
 import { useHospitals } from "@/hooks/use-domain";
@@ -41,7 +43,12 @@ export default function HospitalsPage() {
                 key={hospital.id}
                 className="flex items-center justify-between px-4 py-3"
               >
-                <span className="text-sm font-medium">{hospital.name}</span>
+                <Link
+                  className="text-sm font-medium text-primary hover:underline"
+                  href={`/hospitals/${hospital.id}`}
+                >
+                  {hospital.name}
+                </Link>
                 <span className="text-xs text-muted-foreground">
                   {hospital.code}
                 </span>

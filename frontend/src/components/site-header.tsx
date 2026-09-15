@@ -9,7 +9,7 @@ import { useAuth } from "@/features/auth/auth-context";
 import { cn } from "@/utils/cn";
 
 const NAVIGATION = [
-  { href: "/", label: "Состояние" },
+  { href: "/dashboard", label: "Ситуационный центр" },
   { href: "/signals", label: "Сигналы" },
   { href: "/hospitals", label: "Организации" },
   { href: "/regions", label: "Регионы" },

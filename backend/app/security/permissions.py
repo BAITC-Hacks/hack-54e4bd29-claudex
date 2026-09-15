@@ -32,6 +32,7 @@ class Permission(StrEnum):
     ACTION_CREATE = "action.create"
 
     FORECAST_READ = "forecast.read"
+    ANALYTICS_READ = "analytics.read"
 
     SCENARIO_READ = "scenario.read"
     SCENARIO_CREATE = "scenario.create"
@@ -51,6 +52,7 @@ _OBSERVER: frozenset[Permission] = frozenset(
         Permission.SIGNAL_READ,
         Permission.INCIDENT_READ,
         Permission.FORECAST_READ,
+        Permission.ANALYTICS_READ,
         Permission.SCENARIO_READ,
         Permission.SCENARIO_CREATE,
     }
