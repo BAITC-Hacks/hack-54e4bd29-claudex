@@ -88,7 +88,11 @@ migrate-down: ## Откатить последнюю миграцию
 # ---------------------------------------------------------------------------
 
 .PHONY: test
-test: test-backend test-frontend ## Все тесты
+test: test-backend test-ml test-frontend ## Все тесты
+
+.PHONY: test-ml
+test-ml: ## Тесты short-horizon forecasting
+	docker compose run --rm --no-deps ml-runner python -m pytest /opt/medsignal/ml/tests -q
 
 .PHONY: test-backend
 test-backend: ## Тесты backend
@@ -218,6 +222,18 @@ data-dry-run: ## Холостой прогон по всем наборам, б�
 .PHONY: data-recover
 data-recover: ## Отменить незавершённый импорт: make data-recover IMPORT_ID=<uuid>
 	$(PIPELINE_RUN) recover --import-id "$(IMPORT_ID)"
+
+# ---------------------------------------------------------------------------
+# Short-horizon referral forecasting (PHASE 5A)
+# ---------------------------------------------------------------------------
+
+.PHONY: ml-build
+ml-build: ## Собрать ML worker/runner image
+	$(COMPOSE) build worker ml-runner
+
+.PHONY: ml-train-referrals
+ml-train-referrals: ## Обучить кандидатов и сохранить 7-дневный прогноз
+	$(COMPOSE) run --rm ml-runner
 
 .PHONY: test-pipeline
 test-pipeline: ## Тесты конвейера загрузки (синтетические фикстуры)

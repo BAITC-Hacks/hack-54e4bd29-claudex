@@ -103,10 +103,14 @@ erDiagram
 | Таблица | Назначение | Ключевые поля |
 |---|---|---|
 | `model_versions` | Версии моделей | `id`, `target`, `algorithm`, `mlflow_run_id`, `feature_set_version`, `trained_at`, `training_period`, `metrics`, `baseline_metrics`, `status` |
-| `forecast_runs` | Запуски прогнозирования | `id`, `model_version_id`, `scope`, `started_at`, `finished_at`, `status`, `hospitals_covered`, `hospitals_skipped` |
-| `forecast_summaries` | Ссылка на актуальный прогноз | `hospital_id`, `target`, `forecast_run_id`, `is_valid`, `invalidity_reason`, `generated_at` |
+| `model_versions` | Версия выбранного ML/baseline-кандидата и provenance | `target`, `algorithm`, `version`, `mlflow_run_id`, периоды, метрики, validation config, watermark |
+| `forecasts` | Append-only запуск прогноза | scope, target, horizon, model version, метрики, периоды, watermark, limitations |
+| `forecast_points` | Семь дат одного прогноза | `forecast_id`, `forecast_date`, `predicted_value`, `baseline_value` |
 
-Точки прогноза хранятся в ClickHouse; PostgreSQL хранит метаданные и указатель на актуальный прогноз. Это разделение соответствует характеру данных: метаданные изменяются, точки — нет.
+Точки короткого прогноза PHASE 5A хранятся в PostgreSQL вместе с metadata,
+поскольку один запуск содержит только семь строк и должен фиксироваться одной
+транзакцией. Исторические факты и ежедневные входные агрегаты остаются в
+ClickHouse. Новый запуск добавляет строки и не перезаписывает предыдущий.
 
 ### 3.5 Сценарии и симуляции
 
@@ -165,7 +169,6 @@ erDiagram
 | `referrals_daily` | Направления по дням | MergeTree | `(hospital_id, observed_at)` |
 | `refusals_daily` | Отказы по дням | MergeTree | `(hospital_id, observed_at)` |
 | `treated_cases_daily` | Пролеченные случаи по дням | MergeTree | `(hospital_id, observed_at)` |
-| `forecast_points` | Точки прогнозов | MergeTree | `(hospital_id, target, forecast_date, model_version)` |
 | `feature_store` | Признаки для обучения и инференса | MergeTree | `(hospital_id, observed_at, feature_set_version)` |
 | `metric_daily_agg` | Предагрегаты по дням | AggregatingMergeTree | `(hospital_id, metric_code, observed_date)` |
 | `region_daily_agg` | Предагрегаты по регионам | AggregatingMergeTree | `(region_id, metric_code, observed_date)` |
@@ -179,6 +182,8 @@ erDiagram
 | Предагрегаты для дашборда | Situation Center не сканирует детальный слой |
 | Каждая запись хранит `import_id` и `contract_version` | Прослеживаемость |
 | TTL на детальный слой при необходимости | Управление объёмом при сохранении агрегатов |
+
+Точки опубликованного прогноза Phase 5A хранятся в PostgreSQL (`forecast_points`), потому что это малый версионируемый бизнес-результат из семи точек. ClickHouse остаётся источником агрегированной истории для обучения.
 | Ссылочная целостность не обеспечивается СУБД | Проверяется конвейером до загрузки |
 
 Последний пункт важен: в ClickHouse нет внешних ключей. Соответствие организаций и справочников проверяется на этапе валидации, а не после загрузки.

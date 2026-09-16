@@ -15,6 +15,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from app.core.config import load_settings_or_exit
+from app.database.clickhouse import get_client
 from data_pipeline.loading.clickhouse_migrations import (
     MIGRATIONS_TABLE,
     applied_versions,
@@ -22,9 +24,6 @@ from data_pipeline.loading.clickhouse_migrations import (
     ensure_migrations_table,
     load_migrations,
 )
-
-from app.core.config import load_settings_or_exit
-from app.database.clickhouse import get_client
 
 DEFAULT_DIRECTORY = Path("/opt/medsignal/database/clickhouse/migrations")
 EXIT_OK = 0

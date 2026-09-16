@@ -32,8 +32,10 @@ from app.models.enums import (
     DataImportStatus,
     SignalStatus,
 )
+from app.models.forecast_point import ForecastPoint
 from app.models.incident import Incident
 from app.models.mapping import OrganizationAlias, ProfileAlias, RegionAlias
+from app.models.model_version import ModelVersion
 from app.models.quality import DataQualityResult, QuarantineBatch
 from app.models.signal import Signal
 from app.models.system import SystemOperation
@@ -138,6 +140,16 @@ class ForecastRepository(Protocol):
     ) -> Forecast | None: ...
 
     def add(self, forecast: Forecast) -> Forecast: ...
+
+    def add_points(self, points: Sequence[ForecastPoint]) -> int: ...
+
+    def latest_global(self, target: str) -> Forecast | None: ...
+
+    def points_for(self, forecast_id: uuid.UUID) -> Sequence[ForecastPoint]: ...
+
+
+class ModelVersionRepository(Protocol):
+    def add(self, model_version: ModelVersion) -> ModelVersion: ...
 
 
 class ScenarioRepository(Protocol):
@@ -320,6 +332,9 @@ class UnitOfWork(Protocol):
 
     @property
     def forecasts(self) -> ForecastRepository: ...
+
+    @property
+    def model_versions(self) -> ModelVersionRepository: ...
 
     @property
     def scenarios(self) -> ScenarioRepository: ...

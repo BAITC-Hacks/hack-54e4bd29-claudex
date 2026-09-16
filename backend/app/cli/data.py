@@ -24,14 +24,13 @@ import uuid
 from collections.abc import Sequence
 from pathlib import Path
 
-from data_pipeline.contracts import ALLOWED_DATASETS
-
 from app.adapters.composition import build_import_service
 from app.business.ingestion.results import DatasetImportReport
 from app.core.config import load_settings_or_exit
 from app.core.logging import configure_logging
 from app.models.enums import DatasetType
 from app.security.context import DataScope, Role, SecurityContext
+from data_pipeline.contracts import ALLOWED_DATASETS
 
 EXIT_OK = 0
 EXIT_FAILED = 1

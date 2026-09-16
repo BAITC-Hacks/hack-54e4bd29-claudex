@@ -17,6 +17,8 @@ from app.models.analytics import Forecast, Scenario
 from app.models.data_import import DataImport
 from app.models.directory import Hospital
 from app.models.enums import DataImportStatus, ForecastStatus
+from app.models.forecast_point import ForecastPoint
+from app.models.model_version import ModelVersion
 from app.repositories.directory import apply_sort, count_of
 from app.repositories.scope import hospital_clause
 from app.security.context import DataScope
@@ -66,6 +68,43 @@ class SqlAlchemyForecastRepository:
         self._session.add(forecast)
         self._session.flush()
         return forecast
+
+    def add_points(self, points: list[ForecastPoint] | tuple[ForecastPoint, ...]) -> int:
+        self._session.add_all(points)
+        self._session.flush()
+        return len(points)
+
+    def latest_global(self, target: str) -> Forecast | None:
+        statement = (
+            select(Forecast)
+            .where(
+                Forecast.scope_type == "GLOBAL",
+                Forecast.target == target,
+                Forecast.status == ForecastStatus.VALID,
+            )
+            .order_by(Forecast.generated_at.desc(), Forecast.id.desc())
+            .limit(1)
+        )
+        return self._session.scalars(statement).first()
+
+    def points_for(self, forecast_id: uuid.UUID) -> list[ForecastPoint]:
+        return list(
+            self._session.scalars(
+                select(ForecastPoint)
+                .where(ForecastPoint.forecast_id == forecast_id)
+                .order_by(ForecastPoint.forecast_date)
+            ).all()
+        )
+
+
+class SqlAlchemyModelVersionRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, model_version: ModelVersion) -> ModelVersion:
+        self._session.add(model_version)
+        self._session.flush()
+        return model_version
 
 
 class SqlAlchemyScenarioRepository:

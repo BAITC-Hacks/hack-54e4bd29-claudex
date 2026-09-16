@@ -16,6 +16,8 @@ import { WaitingAgeSummary } from "@/features/analytics/components/waiting-age-s
 import { formatDate, formatPeriod } from "@/features/analytics/format";
 import { useSituationCenter } from "@/features/analytics/hooks";
 import type { AnalyticsQuery } from "@/features/analytics/types";
+import { ReferralForecastCard } from "@/features/forecasting/components/referral-forecast-card";
+import { useLatestReferralForecast } from "@/features/forecasting/hooks";
 
 const INITIAL_QUERY: AnalyticsQuery = {
   dateFrom: "2025-01-01T00:00:00Z",
@@ -27,6 +29,7 @@ export default function DashboardPage() {
   const { isAuthenticated } = useAuth();
   const [query, setQuery] = useState(INITIAL_QUERY);
   const analytics = useSituationCenter(isAuthenticated, query);
+  const referralForecast = useLatestReferralForecast(isAuthenticated);
   const overview = analytics.overview.data;
   const referrals = analytics.referrals.data;
   const refusals = analytics.refusals.data;
@@ -88,6 +91,11 @@ export default function DashboardPage() {
                 <EmptyState />
               )}
             </div>
+            <ReferralForecastCard
+              forecast={referralForecast.data}
+              isLoading={referralForecast.isPending}
+              error={referralForecast.error}
+            />
             <WaitingAgeSummary summary={waiting} />
             <section className="rounded-lg border bg-card p-5">
               <h2 className="font-semibold">Наблюдаемое время ожидания</h2>

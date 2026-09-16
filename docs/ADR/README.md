@@ -32,6 +32,7 @@
 | [0013](0013-optimistic-concurrency.md) | Оптимистическая блокировка сигнала | Принят |
 | [0014](0014-forecast-target-deferred-after-audit.md) | Целевая переменная остаётся невыбранной после Data Audit | Принят, заменяет 0007 |
 | [0015](0015-import-publication-boundary.md) | Граница публикации импорта между ClickHouse и PostgreSQL | Принят, уточняет 0002 и 0010 |
+| [0016](0016-experimental-short-horizon-referral-forecast.md) | Экспериментальный 7-дневный прогноз потока направлений | Принят, частично заменяет 0014 |
 
 ## Когда нужен новый ADR
 

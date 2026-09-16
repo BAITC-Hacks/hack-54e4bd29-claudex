@@ -33,11 +33,15 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: backend/requirements-dev.txt
+          cache-dependency-path: |
+            backend/requirements-dev.txt
+            ml/requirements.txt
 
       - name: Установка зависимостей
         working-directory: backend
-        run: pip install --requirement requirements-dev.txt
+        run: |
+          pip install --requirement requirements-dev.txt
+          pip install --requirement ../ml/requirements.txt
 
       - name: Ruff — проверка
         working-directory: backend
@@ -65,7 +69,9 @@ jobs:
 
       - name: Установка зависимостей
         working-directory: backend
-        run: pip install --requirement requirements-dev.txt
+        run: |
+          pip install --requirement requirements-dev.txt
+          pip install --requirement ../ml/requirements.txt
 
       - name: Pytest
         working-directory: backend
@@ -86,6 +92,7 @@ jobs:
           cache-dependency-path: |
             backend/requirements-dev.txt
             data_pipeline/requirements.txt
+            ml/requirements.txt
 
       - name: Установка зависимостей
         # Зависимости конвейера данных нужны здесь потому, что проверка
@@ -94,6 +101,7 @@ jobs:
         run: |
           pip install --requirement backend/requirements-dev.txt
           pip install --requirement data_pipeline/requirements.txt
+          pip install --requirement ml/requirements.txt
 
       - name: Проверка правил зависимостей
         # Границы, зафиксированные в PHASE 0. Нарушение ломает сборку:
@@ -101,6 +109,36 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/backend
         run: lint-imports --config .importlinter
+
+  ml:
+    name: ML — линтер, типы и тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements-dev.txt
+            ml/requirements.txt
+
+      - name: Установка зависимостей
+        run: |
+          pip install --requirement backend/requirements-dev.txt
+          pip install --requirement ml/requirements.txt
+
+      - name: Ruff и mypy
+        run: |
+          ruff check ml --config backend/pyproject.toml
+          ruff format --check ml --config backend/pyproject.toml
+          mypy ml --config-file backend/pyproject.toml
+
+      - name: Pytest
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest ml/tests -q
 
   data-audit:
     name: Конвейер данных — аудит и загрузка

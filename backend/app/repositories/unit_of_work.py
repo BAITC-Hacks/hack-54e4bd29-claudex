@@ -20,6 +20,7 @@ from app.repositories.access import SqlAlchemyUserRepository
 from app.repositories.analytics import (
     SqlAlchemyDataImportRepository,
     SqlAlchemyForecastRepository,
+    SqlAlchemyModelVersionRepository,
     SqlAlchemyScenarioRepository,
 )
 from app.repositories.audit import SqlAlchemyAuditRepository
@@ -55,6 +56,7 @@ class SqlAlchemyUnitOfWork:
     incidents: SqlAlchemyIncidentRepository
     actions: SqlAlchemyActionRepository
     forecasts: SqlAlchemyForecastRepository
+    model_versions: SqlAlchemyModelVersionRepository
     scenarios: SqlAlchemyScenarioRepository
     data_imports: SqlAlchemyDataImportRepository
     data_quality: SqlAlchemyDataQualityRepository
@@ -86,6 +88,7 @@ class SqlAlchemyUnitOfWork:
         self.incidents = SqlAlchemyIncidentRepository(session)
         self.actions = SqlAlchemyActionRepository(session)
         self.forecasts = SqlAlchemyForecastRepository(session)
+        self.model_versions = SqlAlchemyModelVersionRepository(session)
         self.scenarios = SqlAlchemyScenarioRepository(session)
         self.data_imports = SqlAlchemyDataImportRepository(session)
         self.data_quality = SqlAlchemyDataQualityRepository(session)

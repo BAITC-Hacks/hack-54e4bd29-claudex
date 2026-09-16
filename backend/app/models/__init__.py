@@ -24,6 +24,7 @@ from app.models.enums import (
     IncidentStatus,
     MappingMethod,
     MappingStatus,
+    ModelVersionStatus,
     QualitySeverity,
     ScenarioStatus,
     ScenarioType,
@@ -33,8 +34,10 @@ from app.models.enums import (
     SignalType,
     SourceSystem,
 )
+from app.models.forecast_point import ForecastPoint
 from app.models.incident import Incident
 from app.models.mapping import OrganizationAlias, ProfileAlias, RegionAlias
+from app.models.model_version import ModelVersion
 from app.models.quality import DataQualityResult, QuarantineBatch
 from app.models.signal import Signal, SignalExplanation
 from app.models.system import OperationStatus, SystemOperation
@@ -54,12 +57,15 @@ __all__ = [
     "ExplanationGenerator",
     "FactorDirection",
     "Forecast",
+    "ForecastPoint",
     "ForecastStatus",
     "Hospital",
     "Incident",
     "IncidentStatus",
     "MappingMethod",
     "MappingStatus",
+    "ModelVersion",
+    "ModelVersionStatus",
     "OperationStatus",
     "OrganizationAlias",
     "ProfileAlias",

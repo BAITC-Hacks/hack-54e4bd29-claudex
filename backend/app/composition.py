@@ -16,6 +16,7 @@ from typing import cast
 from app.adapters.analytics_cache import RedisAnalyticsCache, RedisLike
 from app.business.analytics.service import AnalyticsService
 from app.business.audit.service import AuditService
+from app.business.forecasting.service import ForecastQueryService
 from app.business.hospitals.service import HospitalService
 from app.business.incidents.service import IncidentService
 from app.business.ingestion.query import DataImportQueryService
@@ -32,12 +33,18 @@ from app.repositories.clickhouse_analytics import (
     ClickHouseAnalyticsRepository,
     ClickHouseQueryClient,
 )
+from app.repositories.clickhouse_forecasting import (
+    ClickHouseQueryClient as ForecastClickHouseQueryClient,
+)
+from app.repositories.clickhouse_forecasting import (
+    ClickHouseReferralHistoryRepository,
+)
 from app.repositories.unit_of_work import create_unit_of_work
 from app.security.authorization import AuthorizationService, get_authorization_service
 
 
 def get_unit_of_work_factory() -> UnitOfWorkFactory:
-    return create_unit_of_work
+    return cast(UnitOfWorkFactory, create_unit_of_work)
 
 
 def _dependencies() -> tuple[UnitOfWorkFactory, AuthorizationService, EventDispatcher]:
@@ -96,4 +103,14 @@ def build_analytics_service() -> AnalyticsService:
         min_cell_size=settings.analytics_min_cell_size,
         cache_ttl_seconds=settings.analytics_cache_ttl_seconds,
         max_date_range_days=settings.analytics_max_date_range_days,
+    )
+
+
+def build_forecast_query_service() -> ForecastQueryService:
+    return ForecastQueryService(
+        uow_factory=get_unit_of_work_factory(),
+        history_repository=ClickHouseReferralHistoryRepository(
+            cast(ForecastClickHouseQueryClient, get_clickhouse_client())
+        ),
+        authorization=get_authorization_service(),
     )

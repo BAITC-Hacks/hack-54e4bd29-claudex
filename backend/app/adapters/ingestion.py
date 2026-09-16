@@ -14,6 +14,13 @@ import uuid
 from collections.abc import Callable
 from pathlib import Path
 
+from app.business.ingestion.results import (
+    PipelineFileResult,
+    QualityFinding,
+    QuarantineReference,
+)
+from app.core.config import Settings
+from app.core.logging import get_logger
 from data_pipeline.contracts import get_contract
 from data_pipeline.ingestion.discovery import SourceFile, discover, fingerprint
 from data_pipeline.loading.clickhouse_writer import (
@@ -34,14 +41,6 @@ from data_pipeline.pipeline import (
     process_file,
 )
 from data_pipeline.privacy.pseudonymization import Pseudonymizer
-
-from app.business.ingestion.results import (
-    PipelineFileResult,
-    QualityFinding,
-    QuarantineReference,
-)
-from app.core.config import Settings
-from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 

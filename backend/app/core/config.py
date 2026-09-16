@@ -117,6 +117,14 @@ class Settings(BaseSettings):
     analytics_cache_ttl_seconds: int = Field(default=60, ge=1, le=3600)
     analytics_max_date_range_days: int = Field(default=366, ge=1, le=3660)
 
+    # --- Experimental short-horizon forecasting (PHASE 5A) ---
+    mlflow_tracking_uri: str = "http://mlflow:5000"
+    mlflow_experiment_name: str = "medsignal-referral-forecast"
+    mlflow_registered_model_name: str = "medsignal-referral-flow"
+    forecast_horizon_days: int = Field(default=7, ge=1, le=14)
+    forecast_min_train_days: int = Field(default=42, ge=21, le=365)
+    forecast_min_relative_improvement: float = Field(default=0.02, ge=0, le=1)
+
     # --- MinIO ---
     minio_endpoint: str = "minio:9000"
     minio_access_key: str = ""

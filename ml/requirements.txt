@@ -1,0 +1,6 @@
+# Dependencies used only by ML training/inference workers.
+# The FastAPI image intentionally does not install this file (ADR-0005).
+numpy==2.1.*
+scikit-learn==1.5.*
+mlflow==2.19.*
+

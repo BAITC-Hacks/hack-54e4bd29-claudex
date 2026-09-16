@@ -1,25 +1,21 @@
-"""Метаданные прогноза и сценария.
+"""Версионированные результаты прогнозов и метаданные сценариев.
 
-На этом этапе это контракты хранения, а не реализация. Модель
-не обучается и не вызывается: целевая переменная не выбрана до
-завершения Data Audit (ADR-0007), а расчёт сценария относится к PHASE 7.
-
-Состав полей задан так, чтобы подключение реального прогнозирования
-не требовало менять схему.
+Phase 5A сохраняет только краткосрочный глобальный прогноз числа
+направлений. Сценарии остаются контрактом хранения до отдельной фазы.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, utcnow
-from app.models.enums import ForecastStatus, ScenarioStatus, ScenarioType
+from app.models.enums import DataScopeType, ForecastStatus, ScenarioStatus, ScenarioType
 
 
 class Forecast(Base):
@@ -43,7 +39,15 @@ class Forecast(Base):
     hospital_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hospitals.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
+    )
+    region_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("regions.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    scope_type: Mapped[DataScopeType] = mapped_column(
+        String(16), nullable=False, default=DataScopeType.HOSPITAL
     )
 
     # Целевая переменная не зафиксирована архитектурно: она выбирается
@@ -80,6 +84,34 @@ class Forecast(Base):
     # не удаляется: он сохраняется с признаком и объяснением.
     invalidity_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     assumptions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    model_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("model_versions.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    selected_model: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="legacy"
+    )
+    baseline_model: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="legacy"
+    )
+    feature_schema_version: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="legacy_v0"
+    )
+    dataset_watermark: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    validation_metrics: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    baseline_metrics: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    validation_folds: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    forecast_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    forecast_end: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
 class Scenario(Base):

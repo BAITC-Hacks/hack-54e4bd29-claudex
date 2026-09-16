@@ -102,6 +102,14 @@ class ForecastStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class ModelVersionStatus(StrEnum):
+    """Lifecycle of a registered forecasting candidate."""
+
+    SELECTED = "SELECTED"
+    ARCHIVED = "ARCHIVED"
+    FAILED = "FAILED"
+
+
 class ScenarioType(StrEnum):
     INCOMING_FLOW_CHANGE = "INCOMING_FLOW_CHANGE"
     FLOW_REDISTRIBUTION = "FLOW_REDISTRIBUTION"

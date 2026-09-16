@@ -50,6 +50,11 @@ x-backend-environment: &backend-environment
   AUTH_TEST_MODE: ${AUTH_TEST_MODE:-false}
 
   MLFLOW_TRACKING_URI: http://mlflow:5000
+  MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-medsignal-referral-forecast}
+  MLFLOW_REGISTERED_MODEL_NAME: ${MLFLOW_REGISTERED_MODEL_NAME:-medsignal-referral-flow}
+  FORECAST_HORIZON_DAYS: ${FORECAST_HORIZON_DAYS:-7}
+  FORECAST_MIN_TRAIN_DAYS: ${FORECAST_MIN_TRAIN_DAYS:-42}
+  FORECAST_MIN_RELATIVE_IMPROVEMENT: ${FORECAST_MIN_RELATIVE_IMPROVEMENT:-0.02}
 
   DATA_SOURCE_DIR: /data/source
   DATA_BATCH_SIZE: ${DATA_BATCH_SIZE:-50000}
@@ -137,19 +142,21 @@ services:
 
   worker:
     build:
-      context: ./backend
+      context: .
+      dockerfile: infrastructure/ml/Dockerfile
       target: development
     container_name: medsignal-worker
     restart: unless-stopped
-    # Тот же образ, что и у API: бизнес-правила синхронного и фонового
-    # пути обязаны быть идентичны (ADR-0004).
+    # Отдельный ML-образ включает sklearn/MLflow. API остаётся лёгким,
+    # а worker вызывает тот же business service через ForecastEnginePort.
     command:
       ["celery", "-A", "app.workers.celery_app:celery_app", "worker",
        "--loglevel=info", "--queues=default,ingestion,ml,simulation",
        "--concurrency=${CELERY_WORKER_CONCURRENCY:-2}"]
     environment: *backend-environment
     volumes:
-      - ./backend:/app
+      - ./backend:/opt/medsignal/backend
+      - ./ml:/opt/medsignal/ml
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -169,6 +176,29 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  ml-runner:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: infrastructure/ml/Dockerfile
+      target: development
+    container_name: medsignal-ml-runner
+    environment: *backend-environment
+    command: ["python", "-m", "app.cli.ml", "train-referrals"]
+    volumes:
+      - ./backend:/opt/medsignal/backend
+      - ./ml:/opt/medsignal/ml
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      clickhouse:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    networks:
+      - data
+    restart: "no"
 
   # Одноразовая задача: миграции применяются до старта приложения,
   # отдельным шагом, а не в точке входа контейнера (DEPLOYMENT.md).

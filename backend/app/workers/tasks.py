@@ -1,6 +1,6 @@
 """Задачи воркера.
 
-PHASE 1 содержит одну техническую задачу, проверяющую сквозной путь:
+Содержит техническую ping-задачу и фоновые прикладные оркестраторы:
 API регистрирует операцию → ставит задачу → воркер обновляет состояние
 транзакционно (ADR-0010). Прикладных задач здесь нет намеренно.
 
@@ -11,10 +11,11 @@ API регистрирует операцию → ставит задачу → 
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from celery import Task
 
+from app.business.ports import UnitOfWorkFactory
 from app.business.system.operations import OperationService
 from app.core.logging import get_logger
 from app.repositories.unit_of_work import create_unit_of_work
@@ -26,7 +27,7 @@ PING_OPERATION_TYPE = "system.ping"
 
 
 def _operation_service() -> OperationService:
-    return OperationService(create_unit_of_work)
+    return OperationService(cast(UnitOfWorkFactory, create_unit_of_work))
 
 
 @celery_app.task(
@@ -70,3 +71,18 @@ def enqueue_ping(operation_id: uuid.UUID, request_id: str | None) -> str | None:
     async_result = ping.apply_async(args=(str(operation_id),), headers=headers)
     task_id: str | None = async_result.id
     return task_id
+
+
+@celery_app.task(
+    name="ml.train_referral_forecast",
+    acks_late=True,
+    soft_time_limit=600,
+    time_limit=900,
+)
+def train_referral_forecast() -> dict[str, str]:
+    """Train/evaluate candidates and persist one versioned seven-day forecast."""
+    # Lazy import keeps ML dependencies out of the API process and image.
+    from app.adapters.forecasting import build_forecast_training_service
+
+    forecast_id = build_forecast_training_service().run_referral_forecast()
+    return {"forecast_id": str(forecast_id)}
