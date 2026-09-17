@@ -235,6 +235,14 @@ ml-build: ## Собрать ML worker/runner image
 ml-train-referrals: ## Обучить кандидатов и сохранить 7-дневный прогноз
 	$(COMPOSE) run --rm ml-runner
 
+# ---------------------------------------------------------------------------
+# Signal Engine (PHASE 6)
+# ---------------------------------------------------------------------------
+
+.PHONY: signal-evaluate
+signal-evaluate: ## Выполнить все Signal evaluators и вывести JSON-отчёт
+	$(COMPOSE) run --rm backend python -m app.cli.signals evaluate
+
 .PHONY: test-pipeline
 test-pipeline: ## Тесты конвейера загрузки (синтетические фикстуры)
 	python -m pytest tests/pipeline -q

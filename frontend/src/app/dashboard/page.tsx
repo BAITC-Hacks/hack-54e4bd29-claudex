@@ -1,6 +1,7 @@
 "use client";
 
-import { Activity, Ban, Building2, ClipboardList } from "lucide-react";
+import { Activity, AlertTriangle, Ban, Building2, ClipboardList } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { AuthGate } from "@/features/auth/auth-gate";
@@ -18,6 +19,8 @@ import { useSituationCenter } from "@/features/analytics/hooks";
 import type { AnalyticsQuery } from "@/features/analytics/types";
 import { ReferralForecastCard } from "@/features/forecasting/components/referral-forecast-card";
 import { useLatestReferralForecast } from "@/features/forecasting/hooks";
+import { SignalTable } from "@/features/signals/signal-table";
+import { useSignals } from "@/hooks/use-domain";
 
 const INITIAL_QUERY: AnalyticsQuery = {
   dateFrom: "2025-01-01T00:00:00Z",
@@ -30,6 +33,7 @@ export default function DashboardPage() {
   const [query, setQuery] = useState(INITIAL_QUERY);
   const analytics = useSituationCenter(isAuthenticated, query);
   const referralForecast = useLatestReferralForecast(isAuthenticated);
+  const signals = useSignals(isAuthenticated, { page: 1, pageSize: 5 });
   const overview = analytics.overview.data;
   const referrals = analytics.referrals.data;
   const refusals = analytics.refusals.data;
@@ -96,6 +100,34 @@ export default function DashboardPage() {
               isLoading={referralForecast.isPending}
               error={referralForecast.error}
             />
+            <section className="rounded-lg border bg-card p-5">
+              <h2 className="font-semibold">Расчётный сценарий</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Сравните исторический объём направлений с фиксированным гипотетическим изменением потока.
+              </p>
+              <Link className="mt-3 inline-block text-sm text-primary hover:underline" href="/scenarios">
+                Открыть Scenario Analysis
+              </Link>
+            </section>
+            <section className="space-y-3">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-primary" aria-hidden="true" />
+                    <h2 className="font-semibold">Сигналы контроля</h2>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Правила обнаруживают измеримые отклонения. Решение принимает сотрудник.
+                  </p>
+                </div>
+                <Link className="text-sm text-primary hover:underline" href="/signals">
+                  Все сигналы
+                </Link>
+              </div>
+              {signals.isPending && <LoadingState />}
+              {signals.isError && <ErrorState message={signals.error.message} />}
+              {signals.data && <SignalTable items={signals.data.items} />}
+            </section>
             <WaitingAgeSummary summary={waiting} />
             <section className="rounded-lg border bg-card p-5">
               <h2 className="font-semibold">Наблюдаемое время ожидания</h2>

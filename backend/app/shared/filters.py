@@ -12,7 +12,9 @@ from datetime import datetime
 
 from app.core.exceptions import ValidationError
 from app.models.enums import (
+    DataScopeType,
     IncidentStatus,
+    ScenarioType,
     SignalSeverity,
     SignalStatus,
     SignalType,
@@ -31,6 +33,7 @@ class SignalFilter:
     date_from: datetime | None = None
     date_to: datetime | None = None
     assigned_user_id: uuid.UUID | None = None
+    scope_type: DataScopeType | None = None
 
     def validate(self) -> None:
         if (
@@ -58,6 +61,14 @@ class IncidentFilter:
     hospital_id: uuid.UUID | None = None
     region_id: uuid.UUID | None = None
     status: IncidentStatus | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioFilter:
+    scenario_type: ScenarioType | None = None
+    scope_type: DataScopeType | None = None
+    source_signal_id: uuid.UUID | None = None
+    source_incident_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

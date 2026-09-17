@@ -22,6 +22,7 @@ from app.business.incidents.service import (
 )
 from app.business.signals.service import SIGNAL_DEFAULT_SORT, SIGNAL_SORT_FIELDS
 from app.models.enums import (
+    DataScopeType,
     IncidentStatus,
     SignalSeverity,
     SignalStatus,
@@ -29,9 +30,13 @@ from app.models.enums import (
 )
 from app.schemas.common import ERROR_RESPONSES, Page
 from app.schemas.domain import (
+    IncidentAssignRequest,
+    IncidentCreateFromSignalRequest,
     IncidentListItem,
     IncidentResponse,
+    IncidentStatusUpdateRequest,
     SignalAssignRequest,
+    SignalDecisionRequest,
     SignalListItem,
     SignalResponse,
     SignalStatusUpdateRequest,
@@ -70,6 +75,7 @@ def list_signals(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     assigned_user_id: uuid.UUID | None = None,
+    scope_type: DataScopeType | None = None,
     page: PageNumber = 1,
     page_size: PageSize = DEFAULT_PAGE_SIZE,
     sort_by: str | None = None,
@@ -92,6 +98,7 @@ def list_signals(
         date_from=date_from,
         date_to=date_to,
         assigned_user_id=assigned_user_id,
+        scope_type=scope_type,
     )
     result = service.list_signals(context, filters, request)
     return Page[SignalListItem](
@@ -139,6 +146,92 @@ def update_signal_status(
         reason=payload.reason,
     )
     return signal_response(detail)
+
+
+@router.post(
+    "/signals/{signal_id}/acknowledge",
+    response_model=SignalResponse,
+    summary="Принять сигнал в работу",
+)
+def acknowledge_signal(
+    signal_id: uuid.UUID,
+    payload: SignalDecisionRequest,
+    context: CurrentUser,
+    service: SignalServiceDep,
+) -> SignalResponse:
+    return signal_response(
+        service.acknowledge(
+            context,
+            signal_id,
+            expected_version=payload.version,
+            reason=payload.reason,
+        )
+    )
+
+
+@router.post(
+    "/signals/{signal_id}/resolve",
+    response_model=SignalResponse,
+    summary="Закрыть сигнал как обработанный",
+)
+def resolve_signal(
+    signal_id: uuid.UUID,
+    payload: SignalDecisionRequest,
+    context: CurrentUser,
+    service: SignalServiceDep,
+) -> SignalResponse:
+    return signal_response(
+        service.resolve(
+            context,
+            signal_id,
+            expected_version=payload.version,
+            reason=payload.reason,
+        )
+    )
+
+
+@router.post(
+    "/signals/{signal_id}/dismiss",
+    response_model=SignalResponse,
+    summary="Закрыть сигнал как не требующий обработки",
+)
+def dismiss_signal(
+    signal_id: uuid.UUID,
+    payload: SignalDecisionRequest,
+    context: CurrentUser,
+    service: SignalServiceDep,
+) -> SignalResponse:
+    return signal_response(
+        service.dismiss(
+            context,
+            signal_id,
+            expected_version=payload.version,
+            reason=payload.reason,
+        )
+    )
+
+
+@router.post(
+    "/signals/{signal_id}/incidents",
+    response_model=IncidentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Создать инцидент из сигнала",
+)
+def create_incident_from_signal(
+    signal_id: uuid.UUID,
+    payload: IncidentCreateFromSignalRequest,
+    context: CurrentUser,
+    service: IncidentServiceDep,
+) -> IncidentResponse:
+    return incident_response(
+        service.create_from_signal(
+            context,
+            signal_id,
+            expected_signal_version=payload.signal_version,
+            title=payload.title,
+            description=payload.description,
+        )
+    )
 
 
 @router.post(
@@ -223,3 +316,46 @@ def get_incident(
     incident_id: uuid.UUID, context: CurrentUser, service: IncidentServiceDep
 ) -> IncidentResponse:
     return incident_response(service.get_incident(context, incident_id))
+
+
+@router.post(
+    "/incidents/{incident_id}/assign",
+    response_model=IncidentResponse,
+    summary="Назначить ответственного за инцидент",
+)
+def assign_incident(
+    incident_id: uuid.UUID,
+    payload: IncidentAssignRequest,
+    context: CurrentUser,
+    service: IncidentServiceDep,
+) -> IncidentResponse:
+    return incident_response(
+        service.assign(
+            context,
+            incident_id,
+            assignee_id=payload.assignee_id,
+            expected_version=payload.version,
+        )
+    )
+
+
+@router.patch(
+    "/incidents/{incident_id}/status",
+    response_model=IncidentResponse,
+    summary="Изменить статус инцидента",
+)
+def update_incident_status(
+    incident_id: uuid.UUID,
+    payload: IncidentStatusUpdateRequest,
+    context: CurrentUser,
+    service: IncidentServiceDep,
+) -> IncidentResponse:
+    return incident_response(
+        service.change_status(
+            context,
+            incident_id,
+            target_status=payload.status,
+            expected_version=payload.version,
+            reason=payload.reason,
+        )
+    )

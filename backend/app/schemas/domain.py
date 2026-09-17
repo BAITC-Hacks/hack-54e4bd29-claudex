@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,7 +21,9 @@ from app.models.enums import (
     ActionType,
     AuditAction,
     AuditEntityType,
+    DataScopeType,
     IncidentStatus,
+    SignalClosureDisposition,
     SignalSeverity,
     SignalSourceType,
     SignalStatus,
@@ -83,14 +85,19 @@ class SignalListItem(BaseModel):
     model_config = _RESPONSE
 
     id: uuid.UUID
-    hospital_id: uuid.UUID
+    scope_type: DataScopeType
+    region_id: uuid.UUID | None = None
+    hospital_id: uuid.UUID | None = None
     hospital_name: str | None = None
     type: SignalType
     severity: SignalSeverity
     status: SignalStatus
     source_type: SignalSourceType
     title: str
+    summary: str
     detected_at: datetime
+    evaluation_period_start: date | None = None
+    evaluation_period_end: date | None = None
     assigned_user_id: uuid.UUID | None = None
     version: int
 
@@ -100,10 +107,15 @@ class ExplanationFactor(BaseModel):
 
     model_config = _RESPONSE
 
-    metric_code: str
-    direction: str
+    metric_code: str = ""
+    direction: str = ""
     change_pct: float | None = None
     comparison_period: str | None = None
+    rule_code: str | None = None
+    actual_value: float | None = None
+    baseline_value: float | None = None
+    delta_absolute: float | None = None
+    delta_percent: float | None = None
 
 
 class SignalExplanationResponse(BaseModel):
@@ -157,7 +169,8 @@ class SignalResponse(BaseModel):
     model_config = _RESPONSE
 
     id: uuid.UUID
-    hospital_id: uuid.UUID
+    scope_type: DataScopeType
+    hospital_id: uuid.UUID | None = None
     hospital_name: str | None = None
     region_id: uuid.UUID | None = None
     type: SignalType
@@ -174,7 +187,23 @@ class SignalResponse(BaseModel):
     assigned_user_id: uuid.UUID | None = None
     closed_reason: str | None = None
     closed_at: datetime | None = None
+    closure_disposition: SignalClosureDisposition | None = None
     version: int
+    evaluation_period_start: date | None = None
+    evaluation_period_end: date | None = None
+    reference_period_start: date | None = None
+    reference_period_end: date | None = None
+    actual_value: float | None = None
+    baseline_value: float | None = None
+    delta_absolute: float | None = None
+    delta_percent: float | None = None
+    rule_code: str
+    rule_version: str
+    rule_config: dict[str, Any]
+    evidence: dict[str, Any]
+    source: str
+    data_watermark: dict[str, Any]
+    data_current: bool
 
     # Перечень переходов вычисляет сервер с учётом роли: решать это
     # на стороне клиента нельзя (BUSINESS_LOGIC.md, раздел 4.5).
@@ -211,6 +240,21 @@ class SignalUnassignRequest(BaseModel):
     version: int = Field(ge=1)
 
 
+class SignalDecisionRequest(BaseModel):
+    model_config = _REQUEST
+
+    version: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class IncidentCreateFromSignalRequest(BaseModel):
+    model_config = _REQUEST
+
+    signal_version: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=2000)
+
+
 # --- Инциденты --------------------------------------------------------------
 
 
@@ -218,9 +262,13 @@ class IncidentListItem(BaseModel):
     model_config = _RESPONSE
 
     id: uuid.UUID
-    hospital_id: uuid.UUID
+    scope_type: DataScopeType
+    region_id: uuid.UUID | None = None
+    hospital_id: uuid.UUID | None = None
     title: str
     status: IncidentStatus
+    assigned_user_id: uuid.UUID | None = None
+    version: int
     created_at: datetime
 
 
@@ -230,3 +278,19 @@ class IncidentResponse(IncidentListItem):
     description: str | None = None
     updated_at: datetime
     signals: list[SignalListItem] = Field(default_factory=list)
+    actions: list[ActionResponse] = Field(default_factory=list)
+
+
+class IncidentAssignRequest(BaseModel):
+    model_config = _REQUEST
+
+    assignee_id: uuid.UUID
+    version: int = Field(ge=1)
+
+
+class IncidentStatusUpdateRequest(BaseModel):
+    model_config = _REQUEST
+
+    status: IncidentStatus
+    version: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=1000)

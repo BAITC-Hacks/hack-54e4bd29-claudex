@@ -51,6 +51,7 @@ def create_celery_app() -> Celery:
             "ingestion.*": {"queue": "ingestion"},
             "ml.*": {"queue": "ml"},
             "simulation.*": {"queue": "simulation"},
+            "signals.*": {"queue": "default"},
         },
     )
 

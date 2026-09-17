@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Select, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.analytics import Forecast, Scenario
@@ -20,11 +21,12 @@ from app.models.enums import DataImportStatus, ForecastStatus
 from app.models.forecast_point import ForecastPoint
 from app.models.model_version import ModelVersion
 from app.repositories.directory import apply_sort, count_of
-from app.repositories.scope import hospital_clause
+from app.repositories.scope import scoped_entity_clause
 from app.security.context import DataScope
+from app.shared.filters import ScenarioFilter
 from app.shared.pagination import PageRequest
 
-SCENARIO_SORT_COLUMNS = {"created_at": Scenario.created_at, "status": Scenario.status}
+SCENARIO_SORT_COLUMNS = {"created_at": Scenario.created_at}
 
 type ScenarioPage = tuple[list[Scenario], int]
 
@@ -36,8 +38,15 @@ class SqlAlchemyForecastRepository:
     def _scoped(self, scope: DataScope) -> Select[tuple[Forecast]]:
         return (
             select(Forecast)
-            .join(Hospital, Forecast.hospital_id == Hospital.id)
-            .where(hospital_clause(scope))
+            .outerjoin(Hospital, Forecast.hospital_id == Hospital.id)
+            .where(
+                scoped_entity_clause(
+                    scope,
+                    scope_type=Forecast.scope_type,
+                    region_id=Forecast.region_id,
+                    hospital_id=Forecast.hospital_id,
+                )
+            )
         )
 
     def get(self, forecast_id: uuid.UUID, scope: DataScope) -> Forecast | None:
@@ -114,21 +123,61 @@ class SqlAlchemyScenarioRepository:
     def _scoped(self, scope: DataScope) -> Select[tuple[Scenario]]:
         return (
             select(Scenario)
-            .join(Hospital, Scenario.hospital_id == Hospital.id)
-            .where(hospital_clause(scope))
+            .outerjoin(Hospital, Scenario.hospital_id == Hospital.id)
+            .where(
+                scoped_entity_clause(
+                    scope,
+                    scope_type=Scenario.scope_type,
+                    region_id=Scenario.region_id,
+                    hospital_id=Scenario.hospital_id,
+                )
+            )
         )
 
     def get(self, scenario_id: uuid.UUID, scope: DataScope) -> Scenario | None:
         statement = self._scoped(scope).where(Scenario.id == scenario_id)
         return self._session.scalars(statement).unique().first()
 
-    def add(self, scenario: Scenario) -> Scenario:
-        self._session.add(scenario)
-        self._session.flush()
-        return scenario
+    def add_if_absent(self, scenario: Scenario) -> tuple[Scenario, bool]:
+        try:
+            with self._session.begin_nested():
+                self._session.add(scenario)
+                self._session.flush()
+        except IntegrityError:
+            existing = self.find_by_request(
+                scenario.created_by, scenario.client_request_id
+            )
+            if existing is None:
+                raise
+            return existing, False
+        return scenario, True
 
-    def list(self, scope: DataScope, page: PageRequest) -> ScenarioPage:
+    def find_by_request(
+        self, created_by: uuid.UUID, client_request_id: uuid.UUID
+    ) -> Scenario | None:
+        return self._session.scalar(
+            select(Scenario).where(
+                Scenario.created_by == created_by,
+                Scenario.client_request_id == client_request_id,
+            )
+        )
+
+    def list(
+        self, scope: DataScope, filters: ScenarioFilter, page: PageRequest
+    ) -> ScenarioPage:
         statement = self._scoped(scope)
+        if filters.scenario_type is not None:
+            statement = statement.where(Scenario.scenario_type == filters.scenario_type)
+        if filters.scope_type is not None:
+            statement = statement.where(Scenario.scope_type == filters.scope_type)
+        if filters.source_signal_id is not None:
+            statement = statement.where(
+                Scenario.source_signal_id == filters.source_signal_id
+            )
+        if filters.source_incident_id is not None:
+            statement = statement.where(
+                Scenario.source_incident_id == filters.source_incident_id
+            )
         total = count_of(self._session, statement)
         statement = apply_sort(statement, page, SCENARIO_SORT_COLUMNS)
         rows = (

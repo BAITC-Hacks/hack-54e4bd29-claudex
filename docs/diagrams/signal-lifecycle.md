@@ -13,41 +13,42 @@ flowchart TB
     VALID{"Прогноз<br/>валиден?"}
 
     DUR{"Условие удерживается<br/>минимальное число<br/>наблюдений?"}
-    DEDUP{"Активный сигнал<br/>того же типа<br/>существует?"}
-    UPD["Обновить сигнал<br/>счётчик · метрики · время"]
+    DEDUP{"Точный dedup key<br/>уже существует?"}
+    SKIPDEDUP["SKIP_IDEMPOTENT<br/>без изменения Signal"]
     NEW["Создать сигнал<br/>статус NEW"]
     SEV["Назначить severity<br/>по правилу и Risk Score"]
     EXP["Сформировать объяснение"]
     OUT["Сигнал готов"]
 
     IN --> R --> CONF
-    CONF -->|нет| STALE["DATA_STALE<br/>+ флаг достоверности<br/>для остальных источников"]
+    CONF -->|нет| STALE["DATA_STALE<br/>operational evaluators<br/>SUPPRESSED"]
     CONF -->|да| S
     IN --> S
     IN --> M --> VALID
     VALID -->|нет| SKIP["ML-источник пропущен<br/>причина сохранена"]
     VALID -->|да| DUR
     S --> DUR
-    STALE --> DUR
+    STALE --> DEDUP
 
     DUR -->|нет| NOSIG["Сигнал не создаётся"]
     DUR -->|да| DEDUP
-    DEDUP -->|да| UPD --> SEV
+    DEDUP -->|да| SKIPDEDUP
     DEDUP -->|нет| NEW --> SEV
     SEV --> EXP --> OUT
 
     style STALE fill:#fdf0e6,stroke:#c47a3d
     style NOSIG fill:#eeeeee,stroke:#888888
+    style SKIPDEDUP fill:#eeeeee,stroke:#888888
 ```
 
-Порядок источников не случаен: правила выполняются первыми, потому что устаревшие данные меняют доверие к статистическим и прогнозным сигналам. Обоснование — [ADR-0008](../ADR/0008-signal-engine-three-sources.md).
+Порядок источников не случаен: правила выполняются первыми, потому что устаревшие данные создают `DATA_STALE` и подавляют statistical/ML operational signals. Дедупликация immutable evidence определена в [ADR-0017](../ADR/0017-signal-evaluation-and-deduplication.md).
 
 ## Жизненный цикл
 
 ```mermaid
 stateDiagram-v2
     [*] --> NEW : Signal Engine обнаружил условие
-    NEW --> NEW : повторное срабатывание<br/>обновляет сигнал
+    NEW --> NEW : exact replay<br/>SKIP_IDEMPOTENT
     NEW --> IN_PROGRESS : взят в работу<br/>требуется ответственный
     NEW --> CLOSED : закрыт без работы<br/>требуется причина
     IN_PROGRESS --> CLOSED : закрыт<br/>требуется причина

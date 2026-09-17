@@ -125,6 +125,23 @@ class Settings(BaseSettings):
     forecast_min_train_days: int = Field(default=42, ge=21, le=365)
     forecast_min_relative_improvement: float = Field(default=0.02, ge=0, le=1)
 
+    # --- Signal Engine (PHASE 6) ---
+    signal_rule_version: str = "v1"
+    signal_referrals_max_age_hours: int = Field(default=72, ge=1, le=8760)
+    signal_refusals_max_age_hours: int = Field(default=72, ge=1, le=8760)
+    signal_waiting_max_age_hours: int = Field(default=168, ge=1, le=8760)
+    signal_treated_max_age_hours: int | None = Field(default=None, ge=1, le=8760)
+    signal_spike_window_days: int = Field(default=7, ge=2, le=31)
+    signal_spike_reference_windows: int = Field(default=8, ge=2, le=52)
+    signal_warning_percent: float = Field(default=20.0, gt=0, le=1000)
+    signal_high_percent: float = Field(default=35.0, gt=0, le=1000)
+    signal_critical_percent: float = Field(default=50.0, gt=0, le=1000)
+    signal_quality_warning_percent: float = Field(default=1.0, gt=0, le=100)
+    signal_quality_high_percent: float = Field(default=5.0, gt=0, le=100)
+    signal_quality_critical_percent: float = Field(default=10.0, gt=0, le=100)
+    signal_freshness_high_multiplier: float = Field(default=2.0, gt=1, le=100)
+    signal_freshness_critical_multiplier: float = Field(default=4.0, gt=1, le=100)
+
     # --- MinIO ---
     minio_endpoint: str = "minio:9000"
     minio_access_key: str = ""
@@ -255,6 +272,24 @@ class Settings(BaseSettings):
         намеренно использует значения из .env.example.
         """
         problems: list[str] = []
+
+        if not (
+            self.signal_warning_percent
+            < self.signal_high_percent
+            < self.signal_critical_percent
+        ):
+            problems.append("SIGNAL spike пороги должны строго возрастать")
+        if not (
+            self.signal_quality_warning_percent
+            < self.signal_quality_high_percent
+            < self.signal_quality_critical_percent
+        ):
+            problems.append("SIGNAL quality пороги должны строго возрастать")
+        if not (
+            self.signal_freshness_high_multiplier
+            < self.signal_freshness_critical_multiplier
+        ):
+            problems.append("SIGNAL freshness пороги должны строго возрастать")
 
         if self.app_env.is_local:
             self._check_local_completeness(problems)

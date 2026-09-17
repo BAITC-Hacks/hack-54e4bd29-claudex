@@ -40,6 +40,8 @@ from app.models.enums import (
     ActionType,
     AuditAction,
     AuditEntityType,
+    DataScopeType,
+    SignalClosureDisposition,
     SignalStatus,
 )
 from app.models.signal import Signal
@@ -151,6 +153,85 @@ class SignalService:
         expected_version: int,
         reason: str | None,
     ) -> SignalDetail:
+        return self._change_status(
+            context,
+            signal_id,
+            target_status=target_status,
+            expected_version=expected_version,
+            reason=reason,
+            disposition=(
+                SignalClosureDisposition.RESOLVED
+                if target_status is SignalStatus.CLOSED
+                else None
+            ),
+            audit_action=AuditAction.SIGNAL_STATUS_CHANGED,
+        )
+
+    def acknowledge(
+        self,
+        context: SecurityContext,
+        signal_id: uuid.UUID,
+        *,
+        expected_version: int,
+        reason: str,
+    ) -> SignalDetail:
+        return self._change_status(
+            context,
+            signal_id,
+            target_status=SignalStatus.IN_PROGRESS,
+            expected_version=expected_version,
+            reason=reason,
+            disposition=None,
+            audit_action=AuditAction.SIGNAL_ACKNOWLEDGED,
+        )
+
+    def resolve(
+        self,
+        context: SecurityContext,
+        signal_id: uuid.UUID,
+        *,
+        expected_version: int,
+        reason: str,
+    ) -> SignalDetail:
+        return self._change_status(
+            context,
+            signal_id,
+            target_status=SignalStatus.CLOSED,
+            expected_version=expected_version,
+            reason=reason,
+            disposition=SignalClosureDisposition.RESOLVED,
+            audit_action=AuditAction.SIGNAL_RESOLVED,
+        )
+
+    def dismiss(
+        self,
+        context: SecurityContext,
+        signal_id: uuid.UUID,
+        *,
+        expected_version: int,
+        reason: str,
+    ) -> SignalDetail:
+        return self._change_status(
+            context,
+            signal_id,
+            target_status=SignalStatus.CLOSED,
+            expected_version=expected_version,
+            reason=reason,
+            disposition=SignalClosureDisposition.DISMISSED,
+            audit_action=AuditAction.SIGNAL_DISMISSED,
+        )
+
+    def _change_status(
+        self,
+        context: SecurityContext,
+        signal_id: uuid.UUID,
+        *,
+        target_status: SignalStatus,
+        expected_version: int,
+        reason: str | None,
+        disposition: SignalClosureDisposition | None,
+        audit_action: AuditAction,
+    ) -> SignalDetail:
         self._authz.require_permission(context, Permission.SIGNAL_UPDATE_STATUS)
         events = EventCollector()
 
@@ -172,6 +253,7 @@ class SignalService:
                 new_status=target_status,
                 closed_reason=normalized_reason if closing else None,
                 closed_at=now if closing else None,
+                closure_disposition=disposition if closing else None,
                 now=now,
             )
             if updated is None:
@@ -193,7 +275,7 @@ class SignalService:
             )
             uow.audit.append(
                 actor_user_id=context.actor_id,
-                action=AuditAction.SIGNAL_STATUS_CHANGED,
+                action=audit_action,
                 entity_type=AuditEntityType.SIGNAL,
                 entity_id=signal_id,
                 request_id=get_request_id(),
@@ -201,6 +283,7 @@ class SignalService:
                     "from": current.value,
                     "to": target_status.value,
                     "reason": normalized_reason,
+                    "disposition": disposition.value if disposition else None,
                 },
             )
             uow.commit()
@@ -252,8 +335,17 @@ class SignalService:
             # Ответственный обязан видеть сигнал. Назначение того, кто
             # не имеет доступа к организации, создаёт задачу, которую
             # невозможно выполнить.
-            assignee_scope = uow.users.resolve_scope(assignee)
-            if not self._scope_covers_hospital(assignee_scope, signal):
+            # The current actor's effective scope already includes OIDC role
+            # semantics (ADMIN => GLOBAL). Roles are intentionally not copied
+            # to PostgreSQL, so resolving only user_data_scopes would reject a
+            # valid self-assignment. Other users remain fail-closed because
+            # their live OIDC roles are unavailable in this request.
+            assignee_scope = (
+                context.scope
+                if assignee.id == context.actor_id
+                else uow.users.resolve_scope(assignee)
+            )
+            if not self._scope_covers_signal(assignee_scope, signal):
                 raise ValidationError(
                     "Ответственный не имеет доступа к организации этого сигнала"
                 )
@@ -355,13 +447,23 @@ class SignalService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _scope_covers_hospital(scope: DataScope, signal: Signal) -> bool:
-        """Покрывает ли область данных организацию сигнала."""
+    def _scope_covers_signal(scope: DataScope, signal: Signal) -> bool:
+        """Покрывает ли область данных explicit scope сигнала."""
         if scope.is_global:
             return True
         if not scope.resolved:
             return False
-        if str(signal.hospital_id) in scope.hospital_ids:
+        scope_type = DataScopeType(signal.scope_type)
+        if scope_type is DataScopeType.GLOBAL:
+            return False
+        if scope_type is DataScopeType.REGION:
+            return (
+                signal.region_id is not None and str(signal.region_id) in scope.region_ids
+            )
+        if (
+            signal.hospital_id is not None
+            and str(signal.hospital_id) in scope.hospital_ids
+        ):
             return True
         region_id = getattr(signal.hospital, "region_id", None)
         return region_id is not None and str(region_id) in scope.region_ids

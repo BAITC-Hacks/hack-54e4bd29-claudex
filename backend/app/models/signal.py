@@ -3,24 +3,30 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, utcnow
 from app.models.enums import (
+    DataScopeType,
     ExplanationGenerator,
+    SignalClosureDisposition,
     SignalSeverity,
     SignalSourceType,
     SignalStatus,
@@ -33,6 +39,14 @@ class Signal(Base):
 
     __tablename__ = "signals"
     __table_args__ = (
+        CheckConstraint(
+            "(scope_type = 'GLOBAL' AND hospital_id IS NULL AND region_id IS NULL) OR "
+            "(scope_type = 'REGION' AND hospital_id IS NULL "
+            "AND region_id IS NOT NULL) OR "
+            "(scope_type = 'HOSPITAL' AND hospital_id IS NOT NULL AND region_id IS NULL)",
+            name="scope_target",
+        ),
+        UniqueConstraint("dedup_key", name="uq_signals_dedup_key"),
         # Лента предупреждений: фильтр по статусу и важности, сортировка
         # по времени обнаружения.
         Index(
@@ -45,6 +59,14 @@ class Signal(Base):
         Index("ix_signals_assigned_user_id_status", "assigned_user_id", "status"),
         Index("ix_signals_type", "type"),
         Index("ix_signals_incident_id", "incident_id"),
+        Index(
+            "ix_signals_scope_status_detected_at",
+            "scope_type",
+            "region_id",
+            "hospital_id",
+            "status",
+            "detected_at",
+        ),
         # Версия начинается с единицы и только растёт: она защищает
         # от потерянного обновления.
         CheckConstraint("version >= 1", name="ck_signals_version_positive"),
@@ -53,10 +75,16 @@ class Signal(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    hospital_id: Mapped[uuid.UUID] = mapped_column(
+    scope_type: Mapped[DataScopeType] = mapped_column(
+        String(16), nullable=False, default=DataScopeType.HOSPITAL
+    )
+    region_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("regions.id", ondelete="RESTRICT"), nullable=True
+    )
+    hospital_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hospitals.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
     )
 
     type: Mapped[SignalType] = mapped_column(String(32), nullable=False)
@@ -68,6 +96,28 @@ class Signal(Base):
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
+
+    evaluation_period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    evaluation_period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    reference_period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    reference_period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    actual_value: Mapped[float | None] = mapped_column(Numeric(20, 4), nullable=True)
+    baseline_value: Mapped[float | None] = mapped_column(Numeric(20, 4), nullable=True)
+    delta_absolute: Mapped[float | None] = mapped_column(Numeric(20, 4), nullable=True)
+    delta_percent: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
+
+    rule_code: Mapped[str] = mapped_column(String(96), nullable=False)
+    rule_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    rule_config: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    data_watermark: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    data_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    dedup_key: Mapped[str] = mapped_column(String(64), nullable=False)
 
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -98,8 +148,14 @@ class Signal(Base):
     closed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    closure_disposition: Mapped[SignalClosureDisposition | None] = mapped_column(
+        String(16), nullable=True
+    )
 
-    hospital: Mapped[object] = relationship("Hospital", lazy="joined", viewonly=True)
+    hospital: Mapped[object | None] = relationship(
+        "Hospital", lazy="joined", viewonly=True
+    )
+    region: Mapped[object | None] = relationship("Region", lazy="joined", viewonly=True)
     explanation: Mapped[SignalExplanation | None] = relationship(
         back_populates="signal", lazy="selectin", cascade="all, delete-orphan"
     )

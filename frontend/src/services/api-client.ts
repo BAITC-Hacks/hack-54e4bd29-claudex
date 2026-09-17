@@ -84,7 +84,7 @@ async function parseError(response: Response): Promise<ApiError> {
  */
 export async function apiRequest<T>(
   path: string,
-  schema: z.ZodType<T>,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
   options: RequestOptions = {},
 ): Promise<T> {
   const token = tokenProvider();

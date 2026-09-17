@@ -16,8 +16,10 @@ from typing import Any, cast
 from celery import Task
 
 from app.business.ports import UnitOfWorkFactory
+from app.business.signals.evaluation import SignalEvaluationService
 from app.business.system.operations import OperationService
 from app.core.logging import get_logger
+from app.core.request_context import get_request_id
 from app.repositories.unit_of_work import create_unit_of_work
 from app.workers.celery_app import REQUEST_ID_TASK_HEADER, celery_app
 
@@ -28,6 +30,12 @@ PING_OPERATION_TYPE = "system.ping"
 
 def _operation_service() -> OperationService:
     return OperationService(cast(UnitOfWorkFactory, create_unit_of_work))
+
+
+def _signal_evaluation_service() -> SignalEvaluationService:
+    from app.composition import build_signal_evaluation_service
+
+    return build_signal_evaluation_service()
 
 
 @celery_app.task(
@@ -86,3 +94,35 @@ def train_referral_forecast() -> dict[str, str]:
 
     forecast_id = build_forecast_training_service().run_referral_forecast()
     return {"forecast_id": str(forecast_id)}
+
+
+@celery_app.task(
+    name="signals.evaluate",
+    bind=True,
+    acks_late=True,
+    soft_time_limit=600,
+    time_limit=900,
+)
+def evaluate_signals(self: Task, operation_id: str | None = None) -> dict[str, Any]:
+    """Evaluate all enabled rules with persistent operation status."""
+    operations = _operation_service()
+    parsed_id = (
+        uuid.UUID(operation_id)
+        if operation_id is not None
+        else operations.register(
+            operation_type="signals.evaluate", request_id=get_request_id()
+        )
+    )
+    operations.mark_running(parsed_id, celery_task_id=self.request.id)
+    try:
+        report = _signal_evaluation_service().evaluate_all().as_dict()
+        operations.mark_completed(parsed_id, result=report)
+        return {"operation_id": str(parsed_id), "report": report}
+    except Exception as exc:
+        logger.error(
+            "Оценка Signal Engine прервана",
+            extra={"operation_id": str(parsed_id)},
+            exc_info=exc,
+        )
+        operations.mark_failed(parsed_id, reason="Signal Engine не завершил оценку")
+        raise

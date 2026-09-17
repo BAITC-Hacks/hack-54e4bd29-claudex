@@ -1,8 +1,8 @@
 # API — контракты REST API
 
 > **Статус.** Справочники, сигналы, инциденты, аудит, импорт, аналитика и
-> глобальный краткосрочный прогноз направлений реализованы. Симуляции и Signal
-> Engine остаются контрактами будущих фаз. Источник истины — OpenAPI по
+> глобальный краткосрочный прогноз направлений и Signal Engine реализованы.
+> Симуляции остаются контрактом будущей фазы. Источник истины — OpenAPI по
 > `/api/v1/docs`.
 
 ## Краткосрочный прогноз направлений
@@ -153,6 +153,10 @@ baseline, `model_version`, dataset watermark, периоды, ограничен
 | GET | `/api/v1/signals` | Лента предупреждений с фильтрами | Реализовано |
 | GET | `/api/v1/signals/{id}` | Карточка ситуации | Реализовано |
 | PATCH | `/api/v1/signals/{id}/status` | Смена статуса | Реализовано |
+| POST | `/api/v1/signals/{id}/acknowledge` | Принять сигнал в работу человеком | Реализовано |
+| POST | `/api/v1/signals/{id}/resolve` | Закрыть как обработанный | Реализовано |
+| POST | `/api/v1/signals/{id}/dismiss` | Закрыть как не требующий обработки | Реализовано |
+| POST | `/api/v1/signals/{id}/incidents` | Создать инцидент из сигнала | Реализовано |
 | POST | `/api/v1/signals/{id}/assign` | Назначение ответственного | Реализовано |
 | DELETE | `/api/v1/signals/{id}/assign` | Снятие ответственного | Реализовано |
 
@@ -203,6 +207,8 @@ baseline, `model_version`, dataset watermark, периоды, ограничен
 |---|---|---|
 | GET | `/api/v1/incidents` | Список инцидентов |
 | GET | `/api/v1/incidents/{id}` | Инцидент со связанными сигналами |
+| POST | `/api/v1/incidents/{id}/assign` | Назначить ответственного, с optimistic version |
+| PATCH | `/api/v1/incidents/{id}/status` | Изменить статус человеком, с причиной |
 
 Связанные сигналы тоже ограничены областью данных: инцидент не должен становиться обходным путём к сигналам чужих организаций.
 
@@ -214,31 +220,35 @@ baseline, `model_version`, dataset watermark, периоды, ограничен
 | GET | `/api/v1/forecasts/{id}` | Прогноз с объяснением и метриками качества |
 | GET | `/api/v1/forecasts/{id}/explanation` | Человекочитаемое объяснение |
 
-## 9. Симуляции
+## 9. Расчётные сценарии
 
 | Метод | Путь | Назначение |
 |---|---|---|
-| POST | `/api/v1/simulations` | Запуск расчёта сценария, `202 Accepted` |
-| GET | `/api/v1/simulations/{id}` | Статус и результат |
-| GET | `/api/v1/simulations` | История сценариев пользователя |
+| POST | `/api/v1/scenarios/preview` | Синхронный preview без persistence/audit |
+| POST | `/api/v1/scenarios` | Серверный пересчёт и сохранение, `201 Created` |
+| GET | `/api/v1/scenarios/{id}` | Неизменяемый Scenario с provenance |
+| GET | `/api/v1/scenarios` | Scoped история с pagination и allowlisted filters |
 
 ### 9.1 Запрос
 
 ```json
 {
-  "scenario_type": "INCOMING_FLOW_CHANGE",
-  "hospital_id": "...",
-  "parameters": {"flow_change_pct": -15},
-  "horizon_days": 14,
-  "signal_id": "..."
+  "scenario_type": "REFERRAL_INFLOW_CHANGE",
+  "scope_type": "GLOBAL",
+  "baseline_type": "OBSERVED",
+  "assumption_value": "0.20",
+  "period_start": "2025-01-01",
+  "period_end": "2025-03-31",
+  "historical_analysis": true,
+  "source_signal_id": null
 }
 ```
 
-Для переноса потока — `scenario_type: "FLOW_REDISTRIBUTION"` с полями `source_hospital_id`, `target_hospital_id` и `share_pct`. Запрос отклоняется с `400`, если организации несопоставимы, с указанием причины.
+Save добавляет `client_request_id`. Для `FORECAST` вместо периода передаётся только `forecast_id`; stale Forecast требует `historical_analysis=true`. Authoritative baseline/result клиент не передаёт.
 
 ### 9.2 Ответ
 
-Содержит базовый прогноз и расчётный сценарий, а при переносе — обе организации отдельно. Обязательные поля: `assumptions`, `limitations`, `result_label` со значением «Расчётный сценарий» и `disclaimer`. Формулировка «рекомендация» в контракте отсутствует.
+Ответ содержит baseline, период, assumption, calculated value, delta, watermark, optional Forecast provenance, отдельные `forecast_status` и `baseline_freshness_status`, versioned limitations и historical marker. Поддерживаются только −20%, −10%, +10%, +20%.
 
 ## 10. Действия и аудит
 

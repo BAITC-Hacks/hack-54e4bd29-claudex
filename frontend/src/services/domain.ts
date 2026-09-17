@@ -1,10 +1,12 @@
 import { apiRequest } from "@/services/api-client";
 import {
   hospitalPageSchema,
+  incidentSchema,
   regionPageSchema,
   signalDetailSchema,
   signalPageSchema,
   type Hospital,
+  type Incident,
   type Page,
   type Region,
   type SignalDetail,
@@ -78,6 +80,40 @@ export function changeSignalStatus(params: {
       status: params.status,
       version: params.version,
       reason: params.reason,
+    },
+  });
+}
+
+export type SignalDecision = "acknowledge" | "resolve" | "dismiss";
+
+export function decideSignal(params: {
+  id: string;
+  decision: SignalDecision;
+  version: number;
+  reason: string;
+}): Promise<SignalDetail> {
+  return apiRequest(
+    `/signals/${params.id}/${params.decision}`,
+    signalDetailSchema,
+    {
+      method: "POST",
+      body: { version: params.version, reason: params.reason },
+    },
+  );
+}
+
+export function createIncidentFromSignal(params: {
+  signalId: string;
+  signalVersion: number;
+  title: string;
+  description?: string;
+}): Promise<Incident> {
+  return apiRequest(`/signals/${params.signalId}/incidents`, incidentSchema, {
+    method: "POST",
+    body: {
+      signal_version: params.signalVersion,
+      title: params.title,
+      description: params.description || null,
     },
   });
 }

@@ -19,7 +19,15 @@ from app.core.exceptions import (
     NotFoundError,
     ValidationError,
 )
-from app.models.enums import AuditAction, SignalStatus
+from app.models.enums import (
+    AuditAction,
+    DataScopeType,
+    SignalSeverity,
+    SignalSourceType,
+    SignalStatus,
+    SignalType,
+)
+from app.models.signal import Signal
 from app.security.authorization import AuthorizationService
 from app.security.context import DataScope, Role
 from app.shared.filters import SignalFilter
@@ -508,3 +516,46 @@ def test_invalid_period_is_rejected(service: SignalService, store: FakeStore) ->
     )
     with pytest.raises(ValidationError):
         service.list_signals(context, filters, PAGE)
+
+
+def test_global_signal_is_visible_only_to_global_scope(
+    service: SignalService, store: FakeStore
+) -> None:
+    from datetime import UTC, datetime
+
+    now = datetime.now(tz=UTC)
+    signal = store.add_signal(
+        Signal(
+            id=uuid.uuid4(),
+            scope_type=DataScopeType.GLOBAL,
+            region_id=None,
+            hospital_id=None,
+            type=SignalType.DATA_STALE,
+            severity=SignalSeverity.WARNING,
+            status=SignalStatus.NEW,
+            source_type=SignalSourceType.RULE_BASED,
+            title="Global data signal",
+            summary="Synthetic scope test",
+            detected_at=now,
+            created_at=now,
+            updated_at=now,
+            version=1,
+            source="ИС БГ",
+            rule_code="DATA_STALE_REFERRALS",
+            rule_version="v1",
+            rule_config={},
+            evidence={},
+            data_watermark={},
+            data_current=False,
+            dedup_key="a" * 64,
+        )
+    )
+    global_context = make_context(roles={Role.ADMIN}, scope=DataScope.global_scope())
+    regional_context = make_context(
+        roles={Role.REGIONAL_ANALYST},
+        scope=DataScope(region_ids=frozenset({str(uuid.uuid4())}), resolved=True),
+    )
+
+    assert service.get_signal(global_context, signal.id).signal.id == signal.id
+    with pytest.raises(NotFoundError):
+        service.get_signal(regional_context, signal.id)

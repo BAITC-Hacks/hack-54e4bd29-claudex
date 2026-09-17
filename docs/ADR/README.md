@@ -24,7 +24,7 @@
 | [0005](0005-ml-separation.md) | Отделение ML от прикладного кода через порт | Принят |
 | [0006](0006-security-architecture.md) | Архитектура безопасности и модель доступа | Принят |
 | [0007](0007-data-audit-before-ml-target.md) | Data Audit до выбора целевой переменной | Заменён 0014 |
-| [0008](0008-signal-engine-three-sources.md) | Три независимых источника Signal Engine | Принят |
+| [0008](0008-signal-engine-three-sources.md) | Три независимых источника Signal Engine | Принят, dedup/freshness уточнены 0017 |
 | [0009](0009-keycloak-oidc-authentication.md) | Keycloak и OIDC как единственный механизм аутентификации | Принят, заменяет часть 0006 |
 | [0010](0010-persistent-operation-state.md) | Состояние долгих операций в PostgreSQL | Принят, дополняет 0003 и 0004 |
 | [0011](0011-forecast-port-sync-and-async.md) | ForecastPort поддерживает синхронный и фоновый инференс | Принят, уточняет 0005 |
@@ -33,6 +33,8 @@
 | [0014](0014-forecast-target-deferred-after-audit.md) | Целевая переменная остаётся невыбранной после Data Audit | Принят, заменяет 0007 |
 | [0015](0015-import-publication-boundary.md) | Граница публикации импорта между ClickHouse и PostgreSQL | Принят, уточняет 0002 и 0010 |
 | [0016](0016-experimental-short-horizon-referral-forecast.md) | Экспериментальный 7-дневный прогноз потока направлений | Принят, частично заменяет 0014 |
+| [0017](0017-signal-evaluation-and-deduplication.md) | Окна оценки, GLOBAL scope и replay-safe deduplication Signal Engine | Принят, уточняет 0008 |
+| [0018](0018-immutable-scenario-provenance.md) | Неизменяемый Scenario snapshot и retry idempotency | Принят |
 
 ## Когда нужен новый ADR
 

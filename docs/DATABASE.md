@@ -1,6 +1,8 @@
 # DATABASE — модель данных
 
-> **Статус.** Доменные таблицы PostgreSQL созданы миграцией `0002_domain_foundation` (PHASE 2). Таблицы временных рядов в ClickHouse не создаются: их схема зависит от фактической структуры выгрузок и определяется после Data Audit ([ADR-0007](ADR/0007-data-audit-before-ml-target.md)).
+> **Статус.** Доменные таблицы PostgreSQL созданы миграциями Phase 2–6.
+> ClickHouse fact tables созданы конвейером Phase 3B; Signal Engine читает
+> только ограниченные агрегаты и хранит decision-state в PostgreSQL.
 
 ## 1. Разделение хранилищ
 
@@ -21,8 +23,10 @@
 ```mermaid
 erDiagram
     REGIONS ||--o{ HOSPITALS : "содержит"
-    HOSPITALS ||--o{ SIGNALS : "порождает"
-    HOSPITALS ||--o{ INCIDENTS : "порождает"
+    HOSPITALS o|--o{ SIGNALS : "необязательный HOSPITAL scope"
+    REGIONS o|--o{ SIGNALS : "необязательный REGION scope"
+    HOSPITALS o|--o{ INCIDENTS : "необязательный HOSPITAL scope"
+    REGIONS o|--o{ INCIDENTS : "необязательный REGION scope"
     HOSPITALS ||--o{ FORECASTS : "прогнозируется"
     HOSPITALS ||--o{ SCENARIOS : "проверяется"
 
@@ -85,18 +89,24 @@ erDiagram
 
 | Таблица | Назначение | Ключевые поля |
 |---|---|---|
-| `signals` | Сигналы | `id`, `hospital_id`, `type`, `severity`, `status`, `source_type`, `title`, `summary`, `detected_at`, `forecast_id`, `incident_id`, `assigned_user_id`, `version`, `closed_reason`, `closed_at` |
+| `signals` | Неизменяемое evidence с жизненным циклом человека | `id`, explicit scope, nullable `region_id`/`hospital_id`, type/severity/status, evaluation/reference periods, actual/baseline/deltas, rule code/version/config, evidence, source watermark, `dedup_key`, assignment, version, closure disposition |
 | `signal_explanations` | Объяснения с происхождением | `signal_id`, `summary`, `factors`, `caveats`, `generator`, `generator_version`, `model_version`, `input_period_start`, `input_period_end`, `generated_at` |
-| `incidents` | Группы сигналов | `id`, `hospital_id`, `title`, `description`, `status` |
+| `incidents` | Созданные человеком группы сигналов | `id`, explicit scope, nullable `region_id`/`hospital_id`, `title`, `description`, `status`, `assigned_user_id`, `created_by`, `version` |
 | `actions` | Действия человека | `id`, `signal_id`, `incident_id`, `created_by`, `action_type`, `description`, `created_at` |
 
 `version` — оптимистическая блокировка. Изменение выполняется условием `WHERE id = ? AND version = ?`, и расхождение версии даёт конфликт вместо молчаливой перезаписи чужого решения. Ограничение `ck_signals_version_positive` не позволяет версии опуститься ниже единицы.
+
+`dedup_key` имеет уникальное ограничение. Оно защищает от конкурентного
+создания одного и того же результата оценки; идентичный последовательный
+повтор обнаруживается до вставки. Ключ включает тип, scope, окно оценки,
+правило/версию и watermark источника ([ADR-0017](ADR/0017-signal-evaluation-and-deduplication.md)).
 
 Поля происхождения в `signal_explanations` обязательны: объяснение без источника невозможно перепроверить. Свободный текст языковой модели здесь не хранится.
 
 `actions.created_by` не допускает пустого значения: действие без автора не является решением человека. Ограничение `ck_actions_target_present` требует, чтобы действие относилось хотя бы к сигналу или к инциденту.
 
-Появляются позже: счётчик повторных срабатываний и признак активности условия для дедупликации, значения метрик на момент сигнала, история статусов отдельной таблицей.
+История решений представлена append-only `actions` и `audit_events`; evidence
+Signal не переписывается повторным evaluator run.
 
 ### 3.4 Прогнозы и модели
 
@@ -116,7 +126,7 @@ ClickHouse. Новый запуск добавляет строки и не пе
 
 | Таблица | Назначение | Ключевые поля |
 |---|---|---|
-| `scenarios` | Заданные сценарии | `id`, `created_by`, `signal_id`, `scenario_type`, `parameters`, `horizon_days`, `status`, `created_at` |
+| `scenarios` | Неизменяемые расчётные сценарии | `scope_type`, `created_by`, optional source IDs, baseline/result, watermark, optional Forecast provenance, freshness, formula/limitations versions, `client_request_id`, `created_at` |
 | `simulation_results` | Результаты | `scenario_id`, `baseline_forecast`, `simulated_forecast`, `affected_hospitals`, `assumptions`, `limitations`, `computed_at` |
 
 `assumptions` хранится вместе с результатом, а не восстанавливается при показе. Допущения зависят от состояния данных и модели на момент расчёта и позже невоспроизводимы.

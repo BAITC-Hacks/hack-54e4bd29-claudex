@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -22,9 +23,10 @@ import {
   TYPE_LABELS,
   formatDateTime,
 } from "@/features/signals/labels";
-import { useChangeSignalStatus, useSignal } from "@/hooks/use-domain";
+import { SignalEvidence } from "@/features/signals/signal-evidence";
+import { useCreateIncident, useSignal, useSignalDecision } from "@/hooks/use-domain";
 import { ApiError } from "@/services/api-client";
-import type { SignalDetail, SignalStatus } from "@/types/domain";
+import type { SignalDetail } from "@/types/domain";
 
 export default function SignalDetailPage() {
   const params = useParams<{ id: string }>();
@@ -78,7 +80,9 @@ function SignalCard({ detail }: { detail: SignalDetail }) {
             <dl className="space-y-2 text-sm">
               <Row label="Тип">{TYPE_LABELS[detail.type]}</Row>
               <Row label="Организация">
-                {detail.hospital_name ?? detail.hospital_id}
+                {detail.scope_type === "GLOBAL"
+                  ? "Вся система"
+                  : detail.hospital_name ?? detail.hospital_id ?? "—"}
               </Row>
               <Row label="Обнаружен">{formatDateTime(detail.detected_at)}</Row>
               <Row label="Ответственный">
@@ -95,7 +99,25 @@ function SignalCard({ detail }: { detail: SignalDetail }) {
         <ExplanationCard detail={detail} />
       </div>
 
+      <SignalEvidence detail={detail} />
+      <Card>
+        <CardHeader>
+          <CardTitle>Расчётный сценарий</CardTitle>
+          <CardDescription>
+            Проверьте гипотетическое изменение потока отдельно от evidence сигнала.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link
+            className="inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent"
+            href={`/scenarios?signal_id=${detail.id}`}
+          >
+            Анализировать сценарий
+          </Link>
+        </CardContent>
+      </Card>
       <TransitionCard detail={detail} />
+      <IncidentCard detail={detail} />
       <HistoryCard detail={detail} />
     </div>
   );
@@ -161,7 +183,7 @@ function ExplanationCard({ detail }: { detail: SignalDetail }) {
 
 function TransitionCard({ detail }: { detail: SignalDetail }) {
   const [reason, setReason] = useState("");
-  const mutation = useChangeSignalStatus(detail.id);
+  const mutation = useSignalDecision(detail.id);
 
   const conflict =
     mutation.error instanceof ApiError && mutation.error.code === "CONFLICT";
@@ -201,22 +223,33 @@ function TransitionCard({ detail }: { detail: SignalDetail }) {
           placeholder="Кратко опишите основание решения"
         />
         <div className="flex flex-wrap gap-2">
-          {detail.available_transitions.map((status: SignalStatus) => (
+          {detail.status === "NEW" && detail.available_transitions.includes("IN_PROGRESS") && (
             <Button
-              key={status}
               variant="outline"
               disabled={mutation.isPending || reason.trim().length < 3}
-              onClick={() =>
-                mutation.mutate({
-                  status,
-                  version: detail.version,
-                  reason: reason.trim(),
-                })
-              }
+              onClick={() => mutation.mutate({ decision: "acknowledge", version: detail.version, reason: reason.trim() })}
             >
-              Перевести в «{STATUS_LABELS[status]}»
+              Принять в работу
             </Button>
-          ))}
+          )}
+          {detail.available_transitions.includes("CLOSED") && (
+            <>
+              <Button
+                variant="outline"
+                disabled={mutation.isPending || reason.trim().length < 3}
+                onClick={() => mutation.mutate({ decision: "resolve", version: detail.version, reason: reason.trim() })}
+              >
+                Закрыть как обработанный
+              </Button>
+              <Button
+                variant="outline"
+                disabled={mutation.isPending || reason.trim().length < 3}
+                onClick={() => mutation.mutate({ decision: "dismiss", version: detail.version, reason: reason.trim() })}
+              >
+                Отклонить
+              </Button>
+            </>
+          )}
         </div>
         {conflict && (
           <p className="text-sm text-destructive">
@@ -224,6 +257,68 @@ function TransitionCard({ detail }: { detail: SignalDetail }) {
           </p>
         )}
         {mutation.isError && !conflict && (
+          <p className="text-sm text-destructive">{mutation.error.message}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function IncidentCard({ detail }: { detail: SignalDetail }) {
+  const [title, setTitle] = useState(detail.title);
+  const [description, setDescription] = useState("");
+  const mutation = useCreateIncident(detail.id);
+
+  if (detail.incident_id) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Инцидент</CardTitle>
+          <CardDescription>
+            Сигнал связан с инцидентом {detail.incident_id}.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Создать инцидент</CardTitle>
+        <CardDescription>
+          Инцидент создаёт сотрудник после анализа сигнала. Автоматическое
+          управленческое решение не принимается.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <label className="block text-sm" htmlFor="incident-title">Название</label>
+        <input
+          id="incident-title"
+          className="h-9 w-full max-w-xl rounded-md border border-border bg-background px-3 text-sm"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+        />
+        <label className="block text-sm" htmlFor="incident-description">Описание</label>
+        <textarea
+          id="incident-description"
+          className="min-h-20 w-full max-w-xl rounded-md border border-border bg-background p-3 text-sm"
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+        />
+        <Button
+          variant="outline"
+          disabled={mutation.isPending || title.trim().length < 1}
+          onClick={() => mutation.mutate({ signalVersion: detail.version, title: title.trim(), description: description.trim() })}
+        >
+          Создать инцидент
+        </Button>
+        {mutation.isSuccess && (
+          <p className="text-sm text-muted-foreground">
+            Инцидент создан: {mutation.data.id}
+          </p>
+        )}
+        {mutation.isError && (
           <p className="text-sm text-destructive">{mutation.error.message}</p>
         )}
       </CardContent>

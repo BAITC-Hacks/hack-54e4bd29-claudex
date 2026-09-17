@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   SEVERITY_LABELS,
   SEVERITY_VARIANTS,
+  SCOPE_LABELS,
   STATUS_LABELS,
   TYPE_LABELS,
   formatDateTime,
@@ -59,7 +60,9 @@ export function SignalTable({ items }: { items: SignalListItem[] }) {
                 </Link>
               </td>
               <td className="px-4 py-3 text-muted-foreground">
-                {signal.hospital_name ?? signal.hospital_id}
+                {signal.scope_type === "GLOBAL"
+                  ? SCOPE_LABELS.GLOBAL
+                  : signal.hospital_name ?? signal.hospital_id ?? SCOPE_LABELS[signal.scope_type]}
               </td>
               <td className="px-4 py-3 text-muted-foreground">
                 {formatDateTime(signal.detected_at)}

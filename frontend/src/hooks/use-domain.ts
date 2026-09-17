@@ -10,14 +10,18 @@ import {
 
 import {
   changeSignalStatus,
+  createIncidentFromSignal,
+  decideSignal,
   fetchHospitals,
   fetchRegions,
   fetchSignal,
   fetchSignals,
+  type SignalDecision,
   type SignalQuery,
 } from "@/services/domain";
 import type {
   Hospital,
+  Incident,
   Page,
   Region,
   SignalDetail,
@@ -42,6 +46,15 @@ export function useRegions(
     queryFn: ({ signal }) => fetchRegions(signal),
     enabled,
   });
+}
+
+function refreshSignals(
+  queryClient: ReturnType<typeof useQueryClient>,
+  id: string,
+  detail: SignalDetail,
+): void {
+  queryClient.setQueryData(domainKeys.signal(id), detail);
+  void queryClient.invalidateQueries({ queryKey: ["signals"] });
 }
 
 export function useHospitals(
@@ -90,7 +103,38 @@ export function useChangeSignalStatus(
     onSuccess: (detail) => {
       // Ответ уже содержит актуальную карточку вместе с новой версией:
       // повторный запрос не нужен.
-      queryClient.setQueryData(domainKeys.signal(id), detail);
+      refreshSignals(queryClient, id, detail);
+    },
+  });
+}
+
+
+export function useSignalDecision(
+  id: string,
+): UseMutationResult<
+  SignalDetail,
+  Error,
+  { decision: SignalDecision; version: number; reason: string }
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input) => decideSignal({ id, ...input }),
+    onSuccess: (detail) => refreshSignals(queryClient, id, detail),
+  });
+}
+
+export function useCreateIncident(
+  signalId: string,
+): UseMutationResult<
+  Incident,
+  Error,
+  { signalVersion: number; title: string; description?: string }
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input) => createIncidentFromSignal({ signalId, ...input }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: domainKeys.signal(signalId) });
       void queryClient.invalidateQueries({ queryKey: ["signals"] });
     },
   });

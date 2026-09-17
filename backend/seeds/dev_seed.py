@@ -17,6 +17,7 @@ from __future__ import annotations
 import sys
 import uuid
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 
 from app.core.config import AppEnv, get_settings
 from app.database.postgres import session_scope
@@ -56,6 +57,7 @@ HOSPITALS = [
 # Субъекты соответствуют служебному клиенту области разработки Keycloak.
 # Паролей здесь нет: MedSignal их не хранит (ADR-0009).
 USERS = [
+    ("e4b2e840-7e8c-4bf0-a15d-85f956c86001", "Администратор (admin)", DataScopeType.GLOBAL, None),
     ("dev-admin", "Администратор (dev)", DataScopeType.GLOBAL, None),
     ("dev-region-a", "Аналитик региона А (dev)", DataScopeType.REGION, "R-A"),
     ("dev-hospital-a1", "Руководитель A1 (dev)", DataScopeType.HOSPITAL, "H-A1"),
@@ -204,6 +206,7 @@ def seed() -> None:
         for hospital_code, signal_type, severity, status, days_ago in SIGNALS:
             signal = Signal(
                 id=uuid.uuid4(),
+                scope_type=DataScopeType.HOSPITAL,
                 hospital_id=hospitals[hospital_code].id,
                 type=signal_type,
                 severity=severity,
@@ -215,6 +218,16 @@ def seed() -> None:
                     "Реальных наблюдений за ним нет."
                 ),
                 detected_at=_now() - timedelta(days=days_ago),
+                rule_code=f"SYNTHETIC_{signal_type.value}",
+                rule_version="seed-0.1",
+                rule_config={"synthetic": True},
+                evidence={"synthetic": True},
+                source="SYNTHETIC_DEV_SEED",
+                data_watermark={"synthetic": True},
+                data_current=False,
+                dedup_key=sha256(
+                    f"seed:{hospital_code}:{signal_type.value}".encode()
+                ).hexdigest(),
                 version=1,
             )
             session.add(signal)

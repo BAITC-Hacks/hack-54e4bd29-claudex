@@ -18,6 +18,10 @@ class SignalType(StrEnum):
     OVERLOAD_FORECAST = "OVERLOAD_FORECAST"
     DATA_STALE = "DATA_STALE"
     ANOMALY_DETECTED = "ANOMALY_DETECTED"
+    DATA_QUALITY_DEGRADED = "DATA_QUALITY_DEGRADED"
+    REFERRAL_SPIKE = "REFERRAL_SPIKE"
+    REFUSAL_SPIKE = "REFUSAL_SPIKE"
+    FORECAST_INFLOW_GROWTH = "FORECAST_INFLOW_GROWTH"
 
 
 class SignalSourceType(StrEnum):
@@ -48,6 +52,13 @@ class SignalStatus(StrEnum):
     @property
     def is_terminal(self) -> bool:
         return self is SignalStatus.CLOSED
+
+
+class SignalClosureDisposition(StrEnum):
+    """Human interpretation of a closed Signal."""
+
+    RESOLVED = "RESOLVED"
+    DISMISSED = "DISMISSED"
 
 
 class IncidentStatus(StrEnum):
@@ -111,8 +122,19 @@ class ModelVersionStatus(StrEnum):
 
 
 class ScenarioType(StrEnum):
-    INCOMING_FLOW_CHANGE = "INCOMING_FLOW_CHANGE"
-    FLOW_REDISTRIBUTION = "FLOW_REDISTRIBUTION"
+    REFERRAL_INFLOW_CHANGE = "REFERRAL_INFLOW_CHANGE"
+
+
+class ScenarioBaselineType(StrEnum):
+    OBSERVED = "OBSERVED"
+    FORECAST = "FORECAST"
+
+
+class BaselineFreshnessStatus(StrEnum):
+    """Временная актуальность baseline, не валидность Forecast."""
+
+    CURRENT = "CURRENT"
+    STALE = "STALE"
 
 
 class ScenarioStatus(StrEnum):
@@ -153,6 +175,13 @@ class AuditAction(StrEnum):
     SIGNAL_STATUS_CHANGED = "SIGNAL_STATUS_CHANGED"
     SIGNAL_ASSIGNED = "SIGNAL_ASSIGNED"
     SIGNAL_UNASSIGNED = "SIGNAL_UNASSIGNED"
+    SIGNAL_CREATED = "SIGNAL_CREATED"
+    SIGNAL_ACKNOWLEDGED = "SIGNAL_ACKNOWLEDGED"
+    SIGNAL_RESOLVED = "SIGNAL_RESOLVED"
+    SIGNAL_DISMISSED = "SIGNAL_DISMISSED"
+    INCIDENT_CREATED_FROM_SIGNAL = "INCIDENT_CREATED_FROM_SIGNAL"
+    INCIDENT_ASSIGNED = "INCIDENT_ASSIGNED"
+    INCIDENT_STATUS_CHANGED = "INCIDENT_STATUS_CHANGED"
     INCIDENT_CHANGED = "INCIDENT_CHANGED"
     SCENARIO_CREATED = "SCENARIO_CREATED"
     ACTION_RECORDED = "ACTION_RECORDED"

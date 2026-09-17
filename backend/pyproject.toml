@@ -49,6 +49,7 @@ ignore = [
   # Запросы собираются из закрытых таблиц/колонок и явных allowlist;
   # пользовательские значения передаются только параметрами ClickHouse.
   "app/repositories/clickhouse_analytics.py" = ["S608"]
+  "app/repositories/signal_inputs.py" = ["S608"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

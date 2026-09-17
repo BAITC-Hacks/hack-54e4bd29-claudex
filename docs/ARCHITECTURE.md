@@ -233,7 +233,7 @@ sequenceDiagram
     W->>SE: evaluate(scope)
     SE->>SE: RULE_BASED → STATISTICAL → ML_BASED
     SE->>PG: создать или обновить Signal + Explanation
-    Note over SE,PG: Дедупликация: повторное срабатывание<br/>обновляет существующий сигнал
+    Note over SE,PG: Дедупликация: exact replay пропускается;<br/>новый watermark создаёт новую evidence record
 ```
 
 ## 5. Границы модулей
@@ -403,3 +403,4 @@ flowchart LR
 - [ADR/0006 — архитектура безопасности](ADR/0006-security-architecture.md)
 - [ADR/0007 — Data Audit до выбора цели ML](ADR/0007-data-audit-before-ml-target.md)
 - [ADR/0008 — три источника Signal Engine](ADR/0008-signal-engine-three-sources.md)
+- [ADR/0017 — окна оценки, GLOBAL scope и deduplication](ADR/0017-signal-evaluation-and-deduplication.md)

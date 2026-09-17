@@ -289,6 +289,84 @@ def test_status_change_succeeds(client: TestClient, world) -> None:
     assert len(body["audit_history"]) == 1
 
 
+def test_explicit_acknowledge_and_resolve_endpoints(client: TestClient, world) -> None:
+    acknowledged = client.post(
+        f"{API}/signals/{world.signal_a1.id}/acknowledge",
+        headers=auth("hospital-manager"),
+        json={"version": 1, "reason": "Проверка начата"},
+    )
+    assert acknowledged.status_code == 200
+    assert acknowledged.json()["status"] == "IN_PROGRESS"
+    assert acknowledged.json()["audit_history"][0]["action"] == "SIGNAL_ACKNOWLEDGED"
+
+    resolved = client.post(
+        f"{API}/signals/{world.signal_a1.id}/resolve",
+        headers=auth("hospital-manager"),
+        json={"version": 2, "reason": "Ситуация проверена"},
+    )
+    assert resolved.status_code == 200
+    assert resolved.json()["closure_disposition"] == "RESOLVED"
+
+
+def test_explicit_dismiss_endpoint(client: TestClient, world) -> None:
+    response = client.post(
+        f"{API}/signals/{world.signal_a1.id}/dismiss",
+        headers=auth("hospital-manager"),
+        json={"version": 1, "reason": "Не требует обработки"},
+    )
+    assert response.status_code == 200
+    assert response.json()["closure_disposition"] == "DISMISSED"
+
+
+def test_create_incident_from_signal_and_manage_it(client: TestClient, world) -> None:
+    created = client.post(
+        f"{API}/signals/{world.signal_a1.id}/incidents",
+        headers=auth("hospital-manager"),
+        json={
+            "signal_version": 1,
+            "title": "Проверка сигнала",
+            "description": "Синтетический API test",
+        },
+    )
+    assert created.status_code == 201
+    body = created.json()
+    assert body["scope_type"] == "HOSPITAL"
+    assert body["signals"][0]["id"] == str(world.signal_a1.id)
+
+    incident_id = body["id"]
+    assigned = client.post(
+        f"{API}/incidents/{incident_id}/assign",
+        headers=auth("hospital-manager"),
+        json={"assignee_id": str(world.manager.id), "version": 1},
+    )
+    assert assigned.status_code == 200
+    assert assigned.json()["assigned_user_id"] == str(world.manager.id)
+
+    closed = client.patch(
+        f"{API}/incidents/{incident_id}/status",
+        headers=auth("hospital-manager"),
+        json={"status": "CLOSED", "version": 2, "reason": "Контроль завершён"},
+    )
+    assert closed.status_code == 200
+    assert closed.json()["status"] == "CLOSED"
+
+
+def test_create_incident_is_idempotent(client: TestClient, world) -> None:
+    payload = {"signal_version": 1, "title": "Инцидент", "description": None}
+    first = client.post(
+        f"{API}/signals/{world.signal_a1.id}/incidents",
+        headers=auth("hospital-manager"),
+        json=payload,
+    )
+    second = client.post(
+        f"{API}/signals/{world.signal_a1.id}/incidents",
+        headers=auth("hospital-manager"),
+        json={**payload, "signal_version": 2},
+    )
+    assert first.status_code == second.status_code == 201
+    assert first.json()["id"] == second.json()["id"]
+
+
 def test_stale_version_returns_409(client: TestClient, world) -> None:
     client.patch(
         f"{API}/signals/{world.signal_a1.id}/status",

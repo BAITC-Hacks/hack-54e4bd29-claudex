@@ -17,6 +17,7 @@ from typing import Any
 
 from app.models.access import User
 from app.models.action import Action
+from app.models.analytics import Forecast, Scenario
 from app.models.audit import AuditEvent
 from app.models.data_import import DataImport
 from app.models.directory import Hospital, Region
@@ -24,6 +25,9 @@ from app.models.enums import (
     AuditAction,
     AuditEntityType,
     DataImportStatus,
+    DataScopeType,
+    IncidentStatus,
+    SignalClosureDisposition,
     SignalSeverity,
     SignalSourceType,
     SignalStatus,
@@ -33,7 +37,13 @@ from app.models.incident import Incident
 from app.models.quality import DataQualityResult, QuarantineBatch
 from app.models.signal import Signal
 from app.security.context import DataScope, Role, SecurityContext
-from app.shared.filters import AuditFilter, HospitalFilter, IncidentFilter, SignalFilter
+from app.shared.filters import (
+    AuditFilter,
+    HospitalFilter,
+    IncidentFilter,
+    ScenarioFilter,
+    SignalFilter,
+)
 from app.shared.pagination import PageRequest
 
 
@@ -86,6 +96,8 @@ def make_signal(
 ) -> Signal:
     signal = Signal(
         id=uuid.uuid4(),
+        scope_type=DataScopeType.HOSPITAL,
+        region_id=None,
         hospital_id=hospital.id,
         type=signal_type,
         severity=severity,
@@ -98,6 +110,14 @@ def make_signal(
         updated_at=_now(),
         version=version,
         assigned_user_id=assigned_user_id,
+        source="SYNTHETIC",
+        rule_code="SYNTHETIC_TEST",
+        rule_version="test_v1",
+        rule_config={},
+        evidence={},
+        data_watermark={},
+        data_current=True,
+        dedup_key=uuid.uuid4().hex + uuid.uuid4().hex,
     )
     signal.hospital = hospital
     signal.explanation = None
@@ -144,6 +164,8 @@ class FakeStore:
         self.hospitals: dict[uuid.UUID, Hospital] = {}
         self.signals: dict[uuid.UUID, Signal] = {}
         self.incidents: dict[uuid.UUID, Incident] = {}
+        self.forecasts: dict[uuid.UUID, Forecast] = {}
+        self.scenarios: dict[uuid.UUID, Scenario] = {}
         self.actions: list[Action] = []
         self.audit: list[AuditEvent] = []
         self.users: dict[uuid.UUID, User] = {}
@@ -183,6 +205,24 @@ def _visible_hospital(scope: DataScope, hospital: Hospital | None) -> bool:
     if str(hospital.id) in scope.hospital_ids:
         return True
     return str(hospital.region_id) in scope.region_ids
+
+
+def _visible_scoped_entity(
+    scope: DataScope,
+    *,
+    scope_type: DataScopeType | str,
+    region_id: uuid.UUID | None,
+    hospital_id: uuid.UUID | None,
+    hospitals: dict[uuid.UUID, Hospital],
+) -> bool:
+    if scope.is_global:
+        return True
+    if not scope.resolved or scope_type == DataScopeType.GLOBAL:
+        return False
+    if scope_type == DataScopeType.REGION:
+        return region_id is not None and str(region_id) in scope.region_ids
+    hospital = hospitals.get(hospital_id) if hospital_id is not None else None
+    return _visible_hospital(scope, hospital)
 
 
 def _paginate[T](items: list[T], page: PageRequest) -> tuple[list[T], int]:
@@ -244,7 +284,13 @@ class FakeSignalRepository:
         return [
             s
             for s in self._store.signals.values()
-            if _visible_hospital(scope, self._store.hospitals.get(s.hospital_id))
+            if _visible_scoped_entity(
+                scope,
+                scope_type=s.scope_type,
+                region_id=s.region_id,
+                hospital_id=s.hospital_id,
+                hospitals=self._store.hospitals,
+            )
         ]
 
     def get(self, signal_id: uuid.UUID, scope: DataScope) -> Signal | None:
@@ -260,7 +306,12 @@ class FakeSignalRepository:
             items = [
                 s
                 for s in items
-                if self._store.hospitals[s.hospital_id].region_id == filters.region_id
+                if s.region_id == filters.region_id
+                or (
+                    s.hospital_id is not None
+                    and self._store.hospitals[s.hospital_id].region_id
+                    == filters.region_id
+                )
             ]
         if filters.status is not None:
             items = [s for s in items if s.status == filters.status]
@@ -274,6 +325,8 @@ class FakeSignalRepository:
             items = [s for s in items if s.detected_at <= filters.date_to]
         if filters.assigned_user_id is not None:
             items = [s for s in items if s.assigned_user_id == filters.assigned_user_id]
+        if filters.scope_type is not None:
+            items = [s for s in items if s.scope_type == filters.scope_type]
         items = sorted(items, key=lambda s: s.detected_at, reverse=page.sort_desc)
         return _paginate(items, page)
 
@@ -293,6 +346,7 @@ class FakeSignalRepository:
         new_status: SignalStatus,
         closed_reason: str | None,
         closed_at: datetime | None,
+        closure_disposition: SignalClosureDisposition | None,
         now: datetime,
     ) -> Signal | None:
         signal = self._versioned(signal_id, expected_version)
@@ -301,6 +355,7 @@ class FakeSignalRepository:
         signal.status = new_status
         signal.closed_reason = closed_reason
         signal.closed_at = closed_at
+        signal.closure_disposition = closure_disposition
         signal.updated_at = now
         return signal
 
@@ -319,8 +374,43 @@ class FakeSignalRepository:
         signal.updated_at = now
         return signal
 
-    def add(self, signal: Signal) -> Signal:
+    def add_if_absent(self, signal: Signal) -> tuple[Signal, bool]:
+        existing = next(
+            (
+                item
+                for item in self._store.signals.values()
+                if item.dedup_key == signal.dedup_key
+            ),
+            None,
+        )
+        if existing is not None:
+            return existing, False
         self._store.signals[signal.id] = signal
+        return signal, True
+
+    def find_by_dedup_key(self, dedup_key: str) -> Signal | None:
+        return next(
+            (
+                item
+                for item in self._store.signals.values()
+                if item.dedup_key == dedup_key
+            ),
+            None,
+        )
+
+    def link_incident(
+        self,
+        signal_id: uuid.UUID,
+        *,
+        expected_version: int,
+        incident_id: uuid.UUID,
+        now: datetime,
+    ) -> Signal | None:
+        signal = self._versioned(signal_id, expected_version)
+        if signal is None:
+            return None
+        signal.incident_id = incident_id
+        signal.updated_at = now
         return signal
 
 
@@ -332,7 +422,13 @@ class FakeIncidentRepository:
         return [
             i
             for i in self._store.incidents.values()
-            if _visible_hospital(scope, self._store.hospitals.get(i.hospital_id))
+            if _visible_scoped_entity(
+                scope,
+                scope_type=i.scope_type,
+                region_id=i.region_id,
+                hospital_id=i.hospital_id,
+                hospitals=self._store.hospitals,
+            )
         ]
 
     def get(self, incident_id: uuid.UUID, scope: DataScope) -> Incident | None:
@@ -344,6 +440,17 @@ class FakeIncidentRepository:
         items = self._visible(scope)
         if filters.hospital_id is not None:
             items = [i for i in items if i.hospital_id == filters.hospital_id]
+        if filters.region_id is not None:
+            items = [
+                i
+                for i in items
+                if i.region_id == filters.region_id
+                or (
+                    i.hospital_id is not None
+                    and self._store.hospitals[i.hospital_id].region_id
+                    == filters.region_id
+                )
+            ]
         if filters.status is not None:
             items = [i for i in items if i.status == filters.status]
         return _paginate(items, page)
@@ -353,8 +460,177 @@ class FakeIncidentRepository:
             s
             for s in self._store.signals.values()
             if s.incident_id == incident_id
-            and _visible_hospital(scope, self._store.hospitals.get(s.hospital_id))
+            and _visible_scoped_entity(
+                scope,
+                scope_type=s.scope_type,
+                region_id=s.region_id,
+                hospital_id=s.hospital_id,
+                hospitals=self._store.hospitals,
+            )
         ]
+
+    def add(self, incident: Incident) -> Incident:
+        self._store.incidents[incident.id] = incident
+        return incident
+
+    def _versioned(
+        self, incident_id: uuid.UUID, expected_version: int
+    ) -> Incident | None:
+        incident = self._store.incidents.get(incident_id)
+        if incident is None or incident.version != expected_version:
+            return None
+        incident.version += 1
+        return incident
+
+    def update_assignment(
+        self,
+        incident_id: uuid.UUID,
+        *,
+        expected_version: int,
+        assigned_user_id: uuid.UUID | None,
+        now: datetime,
+    ) -> Incident | None:
+        incident = self._versioned(incident_id, expected_version)
+        if incident is None:
+            return None
+        incident.assigned_user_id = assigned_user_id
+        incident.updated_at = now
+        return incident
+
+    def update_status(
+        self,
+        incident_id: uuid.UUID,
+        *,
+        expected_version: int,
+        status: IncidentStatus,
+        now: datetime,
+    ) -> Incident | None:
+        incident = self._versioned(incident_id, expected_version)
+        if incident is None:
+            return None
+        incident.status = status
+        incident.updated_at = now
+        return incident
+
+
+class FakeForecastRepository:
+    def __init__(self, store: FakeStore) -> None:
+        self._store = store
+
+    def get(self, forecast_id: uuid.UUID, scope: DataScope) -> Forecast | None:
+        item = self._store.forecasts.get(forecast_id)
+        if item is None:
+            return None
+        if not _visible_scoped_entity(
+            scope,
+            scope_type=item.scope_type,
+            region_id=item.region_id,
+            hospital_id=item.hospital_id,
+            hospitals=self._store.hospitals,
+        ):
+            return None
+        return item
+
+    def latest_for_hospital(
+        self, hospital_id: uuid.UUID, target: str, scope: DataScope
+    ) -> Forecast | None:
+        return next(
+            (
+                item
+                for item in self._store.forecasts.values()
+                if item.hospital_id == hospital_id
+                and item.target == target
+                and self.get(item.id, scope) is not None
+            ),
+            None,
+        )
+
+    def add(self, forecast: Forecast) -> Forecast:
+        self._store.forecasts[forecast.id] = forecast
+        return forecast
+
+    def add_points(self, points) -> int:
+        return len(points)
+
+    def latest_global(self, target: str) -> Forecast | None:
+        items = [
+            item
+            for item in self._store.forecasts.values()
+            if item.scope_type == DataScopeType.GLOBAL and item.target == target
+        ]
+        return max(items, key=lambda item: item.generated_at, default=None)
+
+    def points_for(self, forecast_id: uuid.UUID):
+        _ = forecast_id
+        return []
+
+
+class FakeScenarioRepository:
+    def __init__(self, store: FakeStore) -> None:
+        self._store = store
+
+    def _visible(self, scope: DataScope) -> list[Scenario]:
+        return [
+            item
+            for item in self._store.scenarios.values()
+            if _visible_scoped_entity(
+                scope,
+                scope_type=item.scope_type,
+                region_id=item.region_id,
+                hospital_id=item.hospital_id,
+                hospitals=self._store.hospitals,
+            )
+        ]
+
+    def get(self, scenario_id: uuid.UUID, scope: DataScope) -> Scenario | None:
+        return next(
+            (item for item in self._visible(scope) if item.id == scenario_id), None
+        )
+
+    def add_if_absent(self, scenario: Scenario) -> tuple[Scenario, bool]:
+        existing = self.find_by_request(scenario.created_by, scenario.client_request_id)
+        if existing is not None:
+            return existing, False
+        self._store.scenarios[scenario.id] = scenario
+        return scenario, True
+
+    def find_by_request(
+        self, created_by: uuid.UUID, client_request_id: uuid.UUID
+    ) -> Scenario | None:
+        return next(
+            (
+                item
+                for item in self._store.scenarios.values()
+                if item.created_by == created_by
+                and item.client_request_id == client_request_id
+            ),
+            None,
+        )
+
+    def list(
+        self, scope: DataScope, filters: ScenarioFilter, page: PageRequest
+    ) -> tuple[list[Scenario], int]:
+        items = self._visible(scope)
+        if filters.scenario_type is not None:
+            items = [
+                item for item in items if item.scenario_type == filters.scenario_type
+            ]
+        if filters.scope_type is not None:
+            items = [item for item in items if item.scope_type == filters.scope_type]
+        if filters.source_signal_id is not None:
+            items = [
+                item
+                for item in items
+                if item.source_signal_id == filters.source_signal_id
+            ]
+        if filters.source_incident_id is not None:
+            items = [
+                item
+                for item in items
+                if item.source_incident_id == filters.source_incident_id
+            ]
+        items.sort(key=lambda item: item.created_at, reverse=page.sort_desc)
+        return _paginate(items, page)
 
 
 class FakeActionRepository:
@@ -370,6 +646,9 @@ class FakeActionRepository:
 
     def list_for_signal(self, signal_id: uuid.UUID) -> list[Action]:
         return [a for a in self._store.actions if a.signal_id == signal_id]
+
+    def list_for_incident(self, incident_id: uuid.UUID) -> list[Action]:
+        return [a for a in self._store.actions if a.incident_id == incident_id]
 
 
 class FakeAuditRepository:
@@ -405,7 +684,24 @@ class FakeAuditRepository:
         visible_signals = {
             s.id
             for s in self._store.signals.values()
-            if _visible_hospital(scope, self._store.hospitals.get(s.hospital_id))
+            if _visible_scoped_entity(
+                scope,
+                scope_type=s.scope_type,
+                region_id=s.region_id,
+                hospital_id=s.hospital_id,
+                hospitals=self._store.hospitals,
+            )
+        }
+        visible_scenarios = {
+            s.id
+            for s in self._store.scenarios.values()
+            if _visible_scoped_entity(
+                scope,
+                scope_type=s.scope_type,
+                region_id=s.region_id,
+                hospital_id=s.hospital_id,
+                hospitals=self._store.hospitals,
+            )
         }
         items = [
             e
@@ -413,6 +709,10 @@ class FakeAuditRepository:
             if scope.is_global
             or (
                 e.entity_type == AuditEntityType.SIGNAL and e.entity_id in visible_signals
+            )
+            or (
+                e.entity_type == AuditEntityType.SCENARIO
+                and e.entity_id in visible_scenarios
             )
         ]
         if filters.entity_id is not None:
@@ -597,6 +897,8 @@ class FakeUnitOfWork:
         self.signals = FakeSignalRepository(store)
         self.incidents = FakeIncidentRepository(store)
         self.actions = FakeActionRepository(store)
+        self.forecasts = FakeForecastRepository(store)
+        self.scenarios = FakeScenarioRepository(store)
         self.audit = FakeAuditRepository(store)
         self.users = FakeUserRepository(store)
         self.data_imports = FakeDataImportRepository(store)

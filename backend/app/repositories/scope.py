@@ -15,8 +15,10 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
-from sqlalchemy import ColumnElement, false, or_, select, true
+from sqlalchemy import ColumnElement, and_, false, or_, select, true
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.models.directory import Hospital, Region
 from app.security.context import DataScope
@@ -82,3 +84,29 @@ def region_clause(scope: DataScope) -> ColumnElement[bool]:
             Region.id.in_(select(Hospital.region_id).where(Hospital.id.in_(hospital_ids)))
         )
     return or_(*conditions)
+
+
+def scoped_entity_clause(
+    scope: DataScope,
+    *,
+    scope_type: InstrumentedAttribute[Any],
+    region_id: InstrumentedAttribute[Any],
+    hospital_id: InstrumentedAttribute[Any],
+) -> ColumnElement[bool]:
+    """Visibility for entities with explicit GLOBAL/REGION/HOSPITAL scope."""
+    if scope.is_global:
+        return true()
+    if not scope.resolved:
+        return false()
+
+    hospital_ids = _as_uuids(scope.hospital_ids)
+    region_ids = _as_uuids(scope.region_ids)
+    conditions: list[ColumnElement[bool]] = []
+    if region_ids:
+        conditions.append(and_(scope_type == "REGION", region_id.in_(region_ids)))
+        conditions.append(
+            and_(scope_type == "HOSPITAL", Hospital.region_id.in_(region_ids))
+        )
+    if hospital_ids:
+        conditions.append(and_(scope_type == "HOSPITAL", hospital_id.in_(hospital_ids)))
+    return or_(*conditions) if conditions else false()

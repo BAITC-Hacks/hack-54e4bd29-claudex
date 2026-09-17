@@ -11,6 +11,7 @@ import { cn } from "@/utils/cn";
 const NAVIGATION = [
   { href: "/dashboard", label: "Ситуационный центр" },
   { href: "/signals", label: "Сигналы" },
+  { href: "/scenarios", label: "Сценарии" },
   { href: "/hospitals", label: "Организации" },
   { href: "/regions", label: "Регионы" },
 ];

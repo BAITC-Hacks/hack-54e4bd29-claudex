@@ -20,6 +20,7 @@ from app.business.incidents.service import IncidentService
 from app.business.ingestion.query import DataImportQueryService
 from app.business.regions.service import RegionService
 from app.business.signals.service import SignalService
+from app.business.simulation.service import ScenarioService
 from app.business.system.operations import OperationService
 from app.composition import (
     build_analytics_service,
@@ -29,6 +30,7 @@ from app.composition import (
     build_hospital_service,
     build_incident_service,
     build_region_service,
+    build_scenario_service,
     build_signal_service,
     get_unit_of_work_factory,
 )
@@ -115,6 +117,7 @@ AnalyticsServiceDep = Annotated[AnalyticsService, Depends(build_analytics_servic
 ForecastQueryServiceDep = Annotated[
     ForecastQueryService, Depends(build_forecast_query_service)
 ]
+ScenarioServiceDep = Annotated[ScenarioService, Depends(build_scenario_service)]
 
 
 def get_operation_service() -> OperationService:

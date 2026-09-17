@@ -11,6 +11,7 @@ from app.api.v1 import (
     directory,
     forecasts,
     health,
+    scenarios,
     signals,
     system,
 )
@@ -24,3 +25,4 @@ api_router.include_router(audit.router)
 api_router.include_router(data_imports.router)
 api_router.include_router(analytics.router)
 api_router.include_router(forecasts.router)
+api_router.include_router(scenarios.router)

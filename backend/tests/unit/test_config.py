@@ -125,3 +125,17 @@ def test_redis_databases_are_separated() -> None:
 def test_invalid_log_level_is_rejected() -> None:
     with pytest.raises(ValueError, match="LOG_LEVEL"):
         Settings(app_env="local", app_secret="x", log_level="TRACE")
+
+
+def test_signal_engine_initial_policy_is_explicit_and_validated() -> None:
+    settings = build()
+    assert settings.signal_referrals_max_age_hours == 72
+    assert settings.signal_waiting_max_age_hours == 168
+    assert (
+        settings.signal_warning_percent,
+        settings.signal_high_percent,
+        settings.signal_critical_percent,
+    ) == (20.0, 35.0, 50.0)
+
+    with pytest.raises(ValueError, match="SIGNAL.*порог"):
+        build(signal_warning_percent=40, signal_high_percent=35)

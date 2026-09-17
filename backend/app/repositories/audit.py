@@ -18,13 +18,14 @@ from typing import Any
 from sqlalchemy import ColumnElement, and_, false, or_, select, true
 from sqlalchemy.orm import Session
 
+from app.models.analytics import Scenario
 from app.models.audit import AuditEvent
 from app.models.directory import Hospital
 from app.models.enums import AuditAction, AuditEntityType
 from app.models.incident import Incident
 from app.models.signal import Signal
 from app.repositories.directory import apply_sort, count_of
-from app.repositories.scope import hospital_clause
+from app.repositories.scope import scoped_entity_clause
 from app.security.context import DataScope
 from app.shared.filters import AuditFilter
 from app.shared.pagination import PageRequest
@@ -44,13 +45,39 @@ def audit_scope_clause(scope: DataScope) -> ColumnElement[bool]:
 
     visible_signals = (
         select(Signal.id)
-        .join(Hospital, Signal.hospital_id == Hospital.id)
-        .where(hospital_clause(scope))
+        .outerjoin(Hospital, Signal.hospital_id == Hospital.id)
+        .where(
+            scoped_entity_clause(
+                scope,
+                scope_type=Signal.scope_type,
+                region_id=Signal.region_id,
+                hospital_id=Signal.hospital_id,
+            )
+        )
     )
     visible_incidents = (
         select(Incident.id)
-        .join(Hospital, Incident.hospital_id == Hospital.id)
-        .where(hospital_clause(scope))
+        .outerjoin(Hospital, Incident.hospital_id == Hospital.id)
+        .where(
+            scoped_entity_clause(
+                scope,
+                scope_type=Incident.scope_type,
+                region_id=Incident.region_id,
+                hospital_id=Incident.hospital_id,
+            )
+        )
+    )
+    visible_scenarios = (
+        select(Scenario.id)
+        .outerjoin(Hospital, Scenario.hospital_id == Hospital.id)
+        .where(
+            scoped_entity_clause(
+                scope,
+                scope_type=Scenario.scope_type,
+                region_id=Scenario.region_id,
+                hospital_id=Scenario.hospital_id,
+            )
+        )
     )
 
     return or_(
@@ -61,6 +88,10 @@ def audit_scope_clause(scope: DataScope) -> ColumnElement[bool]:
         and_(
             AuditEvent.entity_type == AuditEntityType.INCIDENT,
             AuditEvent.entity_id.in_(visible_incidents),
+        ),
+        and_(
+            AuditEvent.entity_type == AuditEntityType.SCENARIO,
+            AuditEvent.entity_id.in_(visible_scenarios),
         ),
     )
 

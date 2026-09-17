@@ -31,6 +31,16 @@ export const TYPE_LABELS: Record<SignalType, string> = {
   OVERLOAD_FORECAST: "прогноз перегрузки",
   DATA_STALE: "данные устарели",
   ANOMALY_DETECTED: "обнаружена аномалия",
+  DATA_QUALITY_DEGRADED: "ухудшение качества данных",
+  REFERRAL_SPIKE: "всплеск направлений",
+  REFUSAL_SPIKE: "всплеск отказов",
+  FORECAST_INFLOW_GROWTH: "ожидаемый рост входящего потока",
+};
+
+export const SCOPE_LABELS: Record<string, string> = {
+  GLOBAL: "Вся система",
+  REGION: "Регион",
+  HOSPITAL: "Организация",
 };
 
 export const SOURCE_LABELS: Record<string, string> = {

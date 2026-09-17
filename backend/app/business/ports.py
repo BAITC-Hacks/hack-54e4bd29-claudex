@@ -30,6 +30,8 @@ from app.models.enums import (
     AuditAction,
     AuditEntityType,
     DataImportStatus,
+    IncidentStatus,
+    SignalClosureDisposition,
     SignalStatus,
 )
 from app.models.forecast_point import ForecastPoint
@@ -44,6 +46,7 @@ from app.shared.filters import (
     AuditFilter,
     HospitalFilter,
     IncidentFilter,
+    ScenarioFilter,
     SignalFilter,
 )
 from app.shared.pagination import PageRequest
@@ -95,6 +98,7 @@ class SignalRepository(Protocol):
         new_status: SignalStatus,
         closed_reason: str | None,
         closed_at: datetime | None,
+        closure_disposition: SignalClosureDisposition | None,
         now: datetime,
     ) -> Signal | None:
         """Сменить статус при совпадении версии.
@@ -113,7 +117,25 @@ class SignalRepository(Protocol):
         now: datetime,
     ) -> Signal | None: ...
 
-    def add(self, signal: Signal) -> Signal: ...
+    def add_if_absent(self, signal: Signal) -> tuple[Signal, bool]:
+        """Atomically insert by dedup key.
+
+        Returns the persisted signal and whether this call created it. The
+        implementation must turn a concurrent unique-key race into an
+        idempotent replay rather than leaking a storage error.
+        """
+        ...
+
+    def find_by_dedup_key(self, dedup_key: str) -> Signal | None: ...
+
+    def link_incident(
+        self,
+        signal_id: uuid.UUID,
+        *,
+        expected_version: int,
+        incident_id: uuid.UUID,
+        now: datetime,
+    ) -> Signal | None: ...
 
 
 class IncidentRepository(Protocol):
@@ -125,11 +147,33 @@ class IncidentRepository(Protocol):
 
     def signals_of(self, incident_id: uuid.UUID, scope: DataScope) -> SignalList: ...
 
+    def add(self, incident: Incident) -> Incident: ...
+
+    def update_assignment(
+        self,
+        incident_id: uuid.UUID,
+        *,
+        expected_version: int,
+        assigned_user_id: uuid.UUID | None,
+        now: datetime,
+    ) -> Incident | None: ...
+
+    def update_status(
+        self,
+        incident_id: uuid.UUID,
+        *,
+        expected_version: int,
+        status: IncidentStatus,
+        now: datetime,
+    ) -> Incident | None: ...
+
 
 class ActionRepository(Protocol):
     def add(self, action: Action) -> Action: ...
 
     def list_for_signal(self, signal_id: uuid.UUID) -> ActionList: ...
+
+    def list_for_incident(self, incident_id: uuid.UUID) -> ActionList: ...
 
 
 class ForecastRepository(Protocol):
@@ -155,9 +199,15 @@ class ModelVersionRepository(Protocol):
 class ScenarioRepository(Protocol):
     def get(self, scenario_id: uuid.UUID, scope: DataScope) -> Scenario | None: ...
 
-    def add(self, scenario: Scenario) -> Scenario: ...
+    def add_if_absent(self, scenario: Scenario) -> tuple[Scenario, bool]: ...
 
-    def list(self, scope: DataScope, page: PageRequest) -> tuple[list[Scenario], int]: ...
+    def find_by_request(
+        self, created_by: uuid.UUID, client_request_id: uuid.UUID
+    ) -> Scenario | None: ...
+
+    def list(
+        self, scope: DataScope, filters: ScenarioFilter, page: PageRequest
+    ) -> tuple[list[Scenario], int]: ...
 
 
 class DataImportRepository(Protocol):

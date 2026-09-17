@@ -23,7 +23,11 @@ from app.business.ingestion.query import DataImportQueryService
 from app.business.ports import UnitOfWorkFactory
 from app.business.regions.service import RegionService
 from app.business.shared.events import EventDispatcher, get_event_dispatcher
+from app.business.signals.evaluation import SignalEvaluationService
+from app.business.signals.policy import SignalPolicy
+from app.business.signals.ports import SignalInputRepository
 from app.business.signals.service import SignalService
+from app.business.simulation.service import ScenarioService
 from app.core.config import get_settings
 from app.database.clickhouse import get_client as get_clickhouse_client
 from app.database.postgres import get_session_factory
@@ -39,6 +43,10 @@ from app.repositories.clickhouse_forecasting import (
 from app.repositories.clickhouse_forecasting import (
     ClickHouseReferralHistoryRepository,
 )
+from app.repositories.signal_inputs import (
+    ClickHouseQueryClient as SignalClickHouseQueryClient,
+)
+from app.repositories.signal_inputs import SqlClickHouseSignalInputRepository
 from app.repositories.unit_of_work import create_unit_of_work
 from app.security.authorization import AuthorizationService, get_authorization_service
 
@@ -68,6 +76,38 @@ def build_hospital_service() -> HospitalService:
 def build_signal_service() -> SignalService:
     uow, authz, dispatcher = _dependencies()
     return SignalService(uow, authz, dispatcher)
+
+
+def build_signal_evaluation_service() -> SignalEvaluationService:
+    settings = get_settings()
+    policy = SignalPolicy(
+        rule_version=settings.signal_rule_version,
+        freshness_max_age_hours={
+            "REFERRALS": settings.signal_referrals_max_age_hours,
+            "REFUSALS": settings.signal_refusals_max_age_hours,
+            "WAITING": settings.signal_waiting_max_age_hours,
+            "TREATED": settings.signal_treated_max_age_hours,
+        },
+        spike_window_days=settings.signal_spike_window_days,
+        spike_reference_windows=settings.signal_spike_reference_windows,
+        warning_percent=settings.signal_warning_percent,
+        high_percent=settings.signal_high_percent,
+        critical_percent=settings.signal_critical_percent,
+        quality_warning_percent=settings.signal_quality_warning_percent,
+        quality_high_percent=settings.signal_quality_high_percent,
+        quality_critical_percent=settings.signal_quality_critical_percent,
+        freshness_high_multiplier=settings.signal_freshness_high_multiplier,
+        freshness_critical_multiplier=settings.signal_freshness_critical_multiplier,
+    )
+    inputs = SqlClickHouseSignalInputRepository(
+        cast(SignalClickHouseQueryClient, get_clickhouse_client()),
+        get_session_factory(),
+    )
+    return SignalEvaluationService(
+        uow_factory=get_unit_of_work_factory(),
+        inputs=cast(SignalInputRepository, inputs),
+        policy=policy,
+    )
 
 
 def build_incident_service() -> IncidentService:
@@ -112,5 +152,13 @@ def build_forecast_query_service() -> ForecastQueryService:
         history_repository=ClickHouseReferralHistoryRepository(
             cast(ForecastClickHouseQueryClient, get_clickhouse_client())
         ),
+        authorization=get_authorization_service(),
+    )
+
+
+def build_scenario_service() -> ScenarioService:
+    return ScenarioService(
+        uow_factory=get_unit_of_work_factory(),
+        analytics=build_analytics_service(),
         authorization=get_authorization_service(),
     )

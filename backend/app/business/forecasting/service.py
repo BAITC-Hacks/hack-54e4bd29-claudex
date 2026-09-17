@@ -24,8 +24,8 @@ from app.models.model_version import ModelVersion
 from app.security.authorization import AuthorizationService
 from app.security.context import SecurityContext
 from app.security.permissions import Permission
+from app.shared.forecasting import REFERRAL_TARGET
 
-REFERRAL_TARGET = "DAILY_REFERRAL_COUNT"
 FORECAST_LIMITATIONS = (
     "Прогноз основан примерно на трёх месяцах доступной истории.",
     "Годовая сезонность не подтверждена.",

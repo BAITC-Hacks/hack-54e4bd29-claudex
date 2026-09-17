@@ -52,7 +52,7 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
       "redirectUris": ["http://localhost/*", "http://localhost:3000/*"],
       "webOrigins": ["http://localhost", "http://localhost:3000"],
@@ -121,6 +121,22 @@
       "username": "service-account-medsignal-dev-cli",
       "enabled": true,
       "serviceAccountClientId": "medsignal-dev-cli",
+      "realmRoles": ["ADMIN"]
+    },
+    {
+      "id": "e4b2e840-7e8c-4bf0-a15d-85f956c86001",
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@medsignal.local",
+      "firstName": "Администратор",
+      "lastName": "Системы",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
       "realmRoles": ["ADMIN"]
     }
   ]

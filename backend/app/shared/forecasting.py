@@ -6,6 +6,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
 
+REFERRAL_TARGET = "DAILY_REFERRAL_COUNT"
+
 
 @dataclass(frozen=True, slots=True)
 class DailyReferralCount:
