@@ -28,6 +28,12 @@ def get_client() -> Client:
         connect_timeout=settings.clickhouse_connect_timeout_s,
         send_receive_timeout=settings.clickhouse_max_execution_time_s,
         client_name=settings.app_name,
+        # Analytics endpoints run in FastAPI's worker thread pool.  A generated
+        # ClickHouse session id serializes one client to a single in-flight
+        # query and fails concurrent requests.  The application does not use
+        # session-scoped temporary tables or settings, so a sessionless shared
+        # HTTP client is the safe concurrency model.
+        autogenerate_session_id=False,
         settings={
             "max_execution_time": settings.clickhouse_max_execution_time_s,
         },
@@ -61,3 +67,4 @@ def check_connection(timeout_s: float) -> None:
 def close_client() -> None:
     if get_client.cache_info().currsize:
         get_client().close()
+        get_client.cache_clear()

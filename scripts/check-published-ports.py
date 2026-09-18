@@ -25,9 +25,7 @@ from typing import Any
 PUBLIC_SERVICE = "nginx"
 
 # Сервисы, публикация которых наружу недопустима ни при каких условиях.
-MUST_STAY_PRIVATE = frozenset(
-    {"postgres", "clickhouse", "redis", "minio", "mlflow"}
-)
+MUST_STAY_PRIVATE = frozenset({"postgres", "clickhouse", "redis", "minio", "mlflow"})
 
 LOOPBACK = {"127.0.0.1", "::1"}
 
@@ -35,9 +33,12 @@ LOOPBACK = {"127.0.0.1", "::1"}
 def iter_published(config: dict[str, Any]):
     for name, spec in sorted((config.get("services") or {}).items()):
         for port in spec.get("ports") or []:
-            yield name, port.get("host_ip") or "0.0.0.0", port.get(
-                "published"
-            ), port.get("target")
+            yield (
+                name,
+                port.get("host_ip") or "0.0.0.0",  # noqa: S104 -- rendered default
+                port.get("published"),
+                port.get("target"),
+            )
 
 
 def main() -> int:

@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import mlflow
+import pytest
 
 from ml.contracts import DailyObservation, DatasetMetadata, ForecastDataset
 from ml.evaluation import run_training
@@ -24,7 +25,11 @@ class ConstantForecaster:
 
 def test_mlflow_records_selection_metrics_and_registered_artifact(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # MLflow 3.16 keeps its filesystem backend in maintenance mode. Production
+    # uses PostgreSQL; this opt-in is restricted to the isolated unit test.
+    monkeypatch.setenv("MLFLOW_ALLOW_FILE_STORE", "true")
     tracking_uri = (tmp_path / "mlruns").as_uri()
     mlflow.set_tracking_uri(tracking_uri)
     start = date(2025, 1, 1)

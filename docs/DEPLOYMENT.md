@@ -167,3 +167,23 @@ flowchart TB
 Kubernetes не требуется для MVP. Архитектура совместима с ним изначально: приложение stateless, конфигурация внешняя, состояние в сервисах данных, компоненты контейнеризованы, есть проверки живости и готовности.
 
 При переходе Compose-сервисы отображаются на Deployment для приложения и воркеров, Service и Ingress вместо nginx, StatefulSet или управляемые сервисы для данных, CronJob для регулярных задач, Secret и ConfigMap для конфигурации. Прикладной код при этом не изменяется — это и есть проверка корректности архитектурных границ.
+
+## 9. Phase 8 production overlay
+
+`docker-compose.production.yml` накладывается на local/demo stack, выбирает
+production build stages, удаляет source mounts и включает non-local
+configuration gate:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.production.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.production.yml build
+```
+
+Development realm не монтируется. До запуска нужны external secrets, HTTPS
+issuer, TLS/DNS, firewall/VPN и provisioned Keycloak/corporate IdP. Эти
+внешние зависимости не симулируются.
+
+Clean acceptance использовал отдельный project `phase8-clean` с новыми
+volumes и подтвердил PostgreSQL `0001–0006`, ClickHouse `001–005`, controlled
+import, analytics и human workflow. Инструкции: [operator
+runbook](runbooks/OPERATOR.md) и [backup/restore](runbooks/BACKUP_RESTORE.md).

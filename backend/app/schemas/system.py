@@ -86,6 +86,7 @@ class SecurityContextResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     user_id: str
+    internal_user_id: uuid.UUID | None = None
     username: str | None = None
     roles: list[str]
     region_ids: list[str] = Field(default_factory=list)

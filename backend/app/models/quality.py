@@ -15,6 +15,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -53,7 +54,9 @@ class DataQualityResult(Base):
     rule_code: Mapped[str] = mapped_column(String(64), nullable=False)
     severity: Mapped[QualitySeverity] = mapped_column(String(16), nullable=False)
     column_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    affected_rows: Mapped[int] = mapped_column(nullable=False, default=0)
+    affected_rows: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
     message: Mapped[str] = mapped_column(Text, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -83,8 +86,12 @@ class QuarantineBatch(Base):
     dataset_type: Mapped[str] = mapped_column(String(64), nullable=False)
     bucket: Mapped[str] = mapped_column(String(128), nullable=False)
     object_key: Mapped[str] = mapped_column(Text, nullable=False)
-    rows: Mapped[int] = mapped_column(nullable=False, default=0)
-    reason_codes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    rows: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    reason_codes: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow

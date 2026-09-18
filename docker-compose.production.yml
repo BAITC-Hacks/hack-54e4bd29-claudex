@@ -1,0 +1,81 @@
+# Production application overlay for the accepted Compose topology.
+#
+# It selects immutable production image stages and removes source-code/dev-realm
+# mounts. TLS, DNS, firewall/VPN and corporate OIDC provisioning remain external
+# deployment dependencies; this file must be used behind that perimeter.
+
+services:
+  frontend:
+    build:
+      target: production
+    environment:
+      NEXT_PUBLIC_APP_ENV: production
+      WATCHPACK_POLLING: null
+    volumes: !reset []
+
+  backend:
+    build:
+      target: production
+    command:
+      ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      FORCE_HTTPS: "true"
+    volumes: !reset []
+
+  worker:
+    build:
+      target: production
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      FORCE_HTTPS: "true"
+    volumes: !reset []
+
+  ml-runner:
+    build:
+      target: production
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      FORCE_HTTPS: "true"
+    volumes: !reset []
+
+  migrate:
+    build:
+      target: production
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      FORCE_HTTPS: "true"
+    volumes: !reset []
+
+  clickhouse-migrate:
+    build:
+      target: production
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      FORCE_HTTPS: "true"
+
+  pipeline:
+    build:
+      target: production
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      FORCE_HTTPS: "true"
+
+  keycloak:
+    # The development realm and fixed demonstration credentials are never
+    # mounted in this overlay. The operator must provision the approved realm
+    # or connect the corporate IdP before production use.
+    command: ["start", "--optimized"]
+    environment:
+      KC_HOSTNAME_STRICT: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_BOOTSTRAP_ADMIN_USERNAME: !reset null
+      KC_BOOTSTRAP_ADMIN_PASSWORD: !reset null
+    volumes: !reset []

@@ -57,10 +57,30 @@ HOSPITALS = [
 # Субъекты соответствуют служебному клиенту области разработки Keycloak.
 # Паролей здесь нет: MedSignal их не хранит (ADR-0009).
 USERS = [
-    ("e4b2e840-7e8c-4bf0-a15d-85f956c86001", "Администратор (admin)", DataScopeType.GLOBAL, None),
-    ("dev-admin", "Администратор (dev)", DataScopeType.GLOBAL, None),
-    ("dev-region-a", "Аналитик региона А (dev)", DataScopeType.REGION, "R-A"),
-    ("dev-hospital-a1", "Руководитель A1 (dev)", DataScopeType.HOSPITAL, "H-A1"),
+    (
+        "e4b2e840-7e8c-4bf0-a15d-85f956c86001",
+        "Администратор (admin)",
+        DataScopeType.GLOBAL,
+        None,
+    ),
+    (
+        "11111111-1111-4111-8111-111111111111",
+        "Управление здравоохранения (dev)",
+        DataScopeType.GLOBAL,
+        None,
+    ),
+    (
+        "22222222-2222-4222-8222-222222222222",
+        "Аналитик региона А (dev)",
+        DataScopeType.REGION,
+        "R-A",
+    ),
+    (
+        "33333333-3333-4333-8333-333333333333",
+        "Руководитель A1 (dev)",
+        DataScopeType.HOSPITAL,
+        "H-A1",
+    ),
 ]
 
 SIGNALS = [

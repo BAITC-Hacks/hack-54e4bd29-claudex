@@ -79,6 +79,50 @@ jobs:
         # подменяются, аутентификация использует подставной адаптер.
         run: python -m pytest --cov=app --cov-report=term-missing
 
+  schema-drift:
+    name: PostgreSQL — migrations and metadata drift
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: phase8_ci
+          POSTGRES_USER: medsignal
+          POSTGRES_PASSWORD: phase8-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medsignal -d phase8_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Установка зависимостей
+        working-directory: backend
+        run: pip install --requirement requirements-dev.txt
+
+      - name: Применение 0001–0006 и проверка drift
+        working-directory: backend
+        env:
+          APP_ENV: local
+          APP_SECRET: phase8-ci-secret
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: phase8_ci
+          POSTGRES_USER: medsignal
+          POSTGRES_PASSWORD: phase8-ci-password
+        run: |
+          alembic upgrade head
+          alembic check
+
   architecture:
     name: Архитектурные границы
     runs-on: ubuntu-latest
@@ -201,6 +245,38 @@ jobs:
       - name: Vitest
         run: npm run test
 
+      - name: Production build
+        run: npm run build
+
+  phase8-contracts:
+    name: Phase 8 — security and operations contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install contract-test dependencies
+        run: pip install pytest pyyaml httpx
+
+      - name: Security, recovery, performance and safe-reset contracts
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/backend
+        run: >-
+          python -m pytest
+          tests/security
+          tests/operations
+          tests/performance
+          tests/e2e
+          -q
+
+      - name: Secret scan without emitting matched values
+        run: python -m scripts.security.scan_secrets --root . --history
+
   compose:
     name: Конфигурация Docker Compose
     runs-on: ubuntu-latest
@@ -211,6 +287,7 @@ jobs:
         run: |
           cp .env.example .env
           docker compose config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.production.yml config --quiet
           docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml config --quiet
 
       - name: Хранилища не публикуются в базовой конфигурации

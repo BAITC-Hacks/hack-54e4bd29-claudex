@@ -15,6 +15,7 @@ WORKDIR /app
 # curl нужен проверке здоровья контейнера. Прочие пакеты не ставим:
 # меньше содержимого — меньше поверхность атаки.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install --no-install-recommends -y curl \
     && rm -rf /var/lib/apt/lists/*
 

@@ -67,7 +67,9 @@ class OrganizationAlias(Base):
         ForeignKey("data_imports.id", ondelete="SET NULL"),
         nullable=True,
     )
-    occurrences: Mapped[int] = mapped_column(nullable=False, default=0)
+    occurrences: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow
@@ -113,7 +115,9 @@ class RegionAlias(Base):
         ForeignKey("data_imports.id", ondelete="SET NULL"),
         nullable=True,
     )
-    occurrences: Mapped[int] = mapped_column(nullable=False, default=0)
+    occurrences: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow
@@ -165,7 +169,9 @@ class ProfileAlias(Base):
         ForeignKey("data_imports.id", ondelete="SET NULL"),
         nullable=True,
     )
-    occurrences: Mapped[int] = mapped_column(nullable=False, default=0)
+    occurrences: Mapped[int] = mapped_column(
+        nullable=False, default=0, server_default="0"
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow

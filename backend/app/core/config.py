@@ -13,6 +13,7 @@ import sys
 from enum import StrEnum
 from functools import lru_cache
 from typing import Annotated, Literal
+from urllib.parse import urlparse
 
 from pydantic import (
     Field,
@@ -328,11 +329,33 @@ class Settings(BaseSettings):
         if not self.cors_origins:
             problems.append("CORS_ALLOWED_ORIGINS должен быть задан явным списком")
 
+        for origin in self.cors_origins:
+            if not origin.startswith("https://"):
+                problems.append(
+                    "CORS_ALLOWED_ORIGINS вне local должен содержать только https origins"
+                )
+
+        if not self.allowed_hosts or "*" in self.allowed_hosts:
+            problems.append(
+                "TRUSTED_HOSTS должен содержать явный список имён без wildcard"
+            )
+
+        if not self.force_https:
+            problems.append("FORCE_HTTPS должен быть true вне local")
+
         if not self.oidc_issuer or not self.oidc_internal_base_url:
             problems.append("OIDC_ISSUER и OIDC_INTERNAL_BASE_URL обязательны")
 
         if self.oidc_issuer.startswith("http://"):
             problems.append("OIDC_ISSUER должен использовать https")
+
+        issuer_host = (urlparse(self.oidc_issuer).hostname or "").lower()
+        if issuer_host in {"localhost", "127.0.0.1", "::1"} or issuer_host.endswith(
+            ".local"
+        ):
+            problems.append(
+                "OIDC_ISSUER не может указывать на локальный development realm"
+            )
 
         for algorithm in self.jwt_algorithms:
             if algorithm.lower() == "none" or algorithm.startswith("HS"):

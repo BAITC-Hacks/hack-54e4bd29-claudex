@@ -11,6 +11,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.error_handlers import register_exception_handlers
 from app.core.config import Settings, load_settings_or_exit
+from app.core.http_metrics import HttpMetricsMiddleware
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestContextMiddleware, SecurityHeadersMiddleware
 from app.core.request_context import REQUEST_ID_HEADER
@@ -94,6 +95,8 @@ def _configure_middleware(app: FastAPI, settings: Settings) -> None:
     # Идентификатор запроса должен существовать до всего остального,
     # иначе записи журнала об отказах останутся без него.
     app.add_middleware(SecurityHeadersMiddleware, force_https=settings.force_https)
+    if settings.metrics_enabled:
+        app.add_middleware(HttpMetricsMiddleware)
 
     if settings.allowed_hosts:
         app.add_middleware(

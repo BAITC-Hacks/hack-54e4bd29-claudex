@@ -8,6 +8,7 @@ SHELL := /bin/bash
 
 COMPOSE      := docker compose
 COMPOSE_DEV  := docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml
+COMPOSE_PROD := docker compose -f docker-compose.yml -f docker-compose.production.yml
 BACKEND_RUN  := $(COMPOSE) run --rm --no-deps backend
 API_BASE     := http://localhost/api/v1
 
@@ -31,6 +32,22 @@ env: ## Создать .env из .env.example, если его ещё нет
 .PHONY: build
 build: ## Собрать образы
 	$(COMPOSE) build
+
+.PHONY: config-production
+config-production: ## Проверить итоговую production overlay configuration
+	$(COMPOSE_PROD) config --quiet
+
+.PHONY: scan-secrets
+scan-secrets: ## Проверить Git history и рабочее дерево на секреты (Gitleaks)
+	docker run --rm -v "$(CURDIR):/repo" -w /repo zricethezav/gitleaks:v8.30.1 \
+		detect --source=/repo --config=/repo/.gitleaks.toml --redact
+	@git diff --binary HEAD | docker run --rm -i \
+		-v "$(CURDIR):/repo:ro" zricethezav/gitleaks:v8.30.1 \
+		detect --pipe --config=/repo/.gitleaks.toml --redact
+	@git ls-files --others --exclude-standard | while IFS= read -r file; do cat "$$file"; done \
+		| docker run --rm -i -v "$(CURDIR):/repo:ro" \
+		zricethezav/gitleaks:v8.30.1 detect --pipe \
+		--config=/repo/.gitleaks.toml --redact
 
 .PHONY: up
 up: env ## Поднять окружение. Наружу публикуется только порт 80
@@ -96,7 +113,8 @@ test-ml: ## Тесты short-horizon forecasting
 
 .PHONY: test-backend
 test-backend: ## Тесты backend
-	$(BACKEND_RUN) python -m pytest
+	$(COMPOSE) run --rm --no-deps ml-runner \
+		python -m pytest /opt/medsignal/backend/tests
 
 .PHONY: test-frontend
 test-frontend: ## Тесты frontend
@@ -190,6 +208,21 @@ clickhouse-migrate: ## Применить схемы ClickHouse
 clickhouse-status: ## Состояние схем ClickHouse
 	DATA_SOURCE_DIR_HOST="$(DATA_DIR)" $(COMPOSE) run --rm \
 		--entrypoint python pipeline -m app.cli.clickhouse status
+
+# ---------------------------------------------------------------------------
+# Operations / Phase 8
+# ---------------------------------------------------------------------------
+
+PHASE8_BACKUP_DIR ?= ./artifacts/phase8-backup
+PHASE8_NAMESPACE ?= phase8-restore
+
+.PHONY: backup
+backup: ## Backup PostgreSQL, ClickHouse and MinIO (Redis is non-authoritative)
+	python -m scripts.operations.backup --output "$(PHASE8_BACKUP_DIR)"
+
+.PHONY: restore-verify
+restore-verify: ## Restore backup only into phase8-* namespaced targets
+	python -m scripts.operations.restore_verify --backup "$(PHASE8_BACKUP_DIR)" --namespace "$(PHASE8_NAMESPACE)"
 
 .PHONY: data-discover
 data-discover: ## Показать файлы наборов: make data-discover DATA_DIR=<каталог>

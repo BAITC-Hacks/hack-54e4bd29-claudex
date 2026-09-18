@@ -6,6 +6,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTHONPATH=/opt/medsignal/backend:/opt/medsignal
 
+# Apply security updates from the selected Debian snapshot before installing
+# Python dependencies. The final image is scanned and recorded by digest.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system --gid 10001 medsignal \
     && useradd --system --uid 10001 --gid medsignal --create-home medsignal
 
@@ -25,6 +31,7 @@ USER medsignal
 
 FROM base AS development
 USER root
+COPY backend/requirements.txt /tmp/requirements.txt
 COPY backend/requirements-dev.txt /tmp/backend-dev-requirements.txt
 RUN pip install --requirement /tmp/backend-dev-requirements.txt
 USER medsignal
