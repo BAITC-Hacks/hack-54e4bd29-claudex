@@ -48,6 +48,13 @@ class Forecast(Base):
         Index(
             "ix_forecasts_hospital_id_target_status", "hospital_id", "target", "status"
         ),
+        Index(
+            "ix_forecasts_scope_target_generated_at",
+            "scope_type",
+            "target",
+            "generated_at",
+        ),
+        Index("ix_forecasts_model_version_id", "model_version_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

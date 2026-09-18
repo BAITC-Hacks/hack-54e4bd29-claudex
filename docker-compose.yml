@@ -83,8 +83,7 @@ services:
   # Граница периметра
   # --------------------------------------------------------------------
   nginx:
-    image: nginx:1.27-alpine
-    container_name: medsignal-nginx
+    image: nginx:1.30.5-alpine@sha256:f2e97a6801f504129e8027ff7d49e27fa59ef4f1ebfd97197dac8b194831cf3d
     restart: unless-stopped
     ports:
       - "${HTTP_PORT:-80}:80"
@@ -110,7 +109,6 @@ services:
     build:
       context: ./frontend
       target: development
-    container_name: medsignal-frontend
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
@@ -131,7 +129,6 @@ services:
     build:
       context: ./backend
       target: development
-    container_name: medsignal-backend
     restart: unless-stopped
     command:
       ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
@@ -140,6 +137,8 @@ services:
       - ./backend:/app
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      clickhouse-migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
@@ -160,7 +159,6 @@ services:
       context: .
       dockerfile: infrastructure/ml/Dockerfile
       target: development
-    container_name: medsignal-worker
     restart: unless-stopped
     # Отдельный ML-образ включает sklearn/MLflow. API остаётся лёгким,
     # а worker вызывает тот же business service через ForecastEnginePort.
@@ -174,6 +172,8 @@ services:
       - ./ml:/opt/medsignal/ml
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      clickhouse-migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
@@ -198,7 +198,6 @@ services:
       context: .
       dockerfile: infrastructure/ml/Dockerfile
       target: development
-    container_name: medsignal-ml-runner
     environment: *backend-environment
     command: ["python", "-m", "app.cli.ml", "train-referrals"]
     volumes:
@@ -209,6 +208,8 @@ services:
         condition: service_completed_successfully
       clickhouse:
         condition: service_healthy
+      clickhouse-migrate:
+        condition: service_completed_successfully
       mlflow:
         condition: service_started
     networks:
@@ -221,7 +222,6 @@ services:
     build:
       context: ./backend
       target: development
-    container_name: medsignal-migrate
     command: ["alembic", "upgrade", "head"]
     environment: *backend-environment
     volumes:
@@ -233,12 +233,28 @@ services:
       - data
     restart: "no"
 
+  # Версионированные аналитические схемы применяются тем же образом,
+  # что и Alembic: отдельный one-shot шаг обязан завершиться до старта
+  # API/worker. Команда идемпотентна и проверяет checksum уже принятых DDL.
+  clickhouse-migrate:
+    build:
+      context: .
+      dockerfile: infrastructure/pipeline/Dockerfile
+      target: production
+    entrypoint: ["python", "-m", "app.cli.clickhouse", "migrate"]
+    environment: *backend-environment
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - data
+    restart: "no"
+
   # --------------------------------------------------------------------
   # Аутентификация
   # --------------------------------------------------------------------
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
-    container_name: medsignal-keycloak
     restart: unless-stopped
     command: ["start-dev", "--import-realm"]
     environment:
@@ -264,7 +280,6 @@ services:
   # --------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
-    container_name: medsignal-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-medsignal}
@@ -286,7 +301,6 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server:24.8-alpine
-    container_name: medsignal-clickhouse
     restart: unless-stopped
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-medsignal_analytics}
@@ -311,7 +325,6 @@ services:
 
   redis:
     image: redis:7.4-alpine
-    container_name: medsignal-redis
     restart: unless-stopped
     # Пароль обязателен даже в приватной сети: скомпрометированный
     # контейнер не должен получать доступ к очереди задач без учётных данных.
@@ -330,7 +343,6 @@ services:
 
   minio:
     image: minio/minio:RELEASE.2024-11-07T00-52-20Z
-    container_name: medsignal-minio
     restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
@@ -350,7 +362,6 @@ services:
   # Одноразовая задача: создание бакетов при первом запуске.
   minio-init:
     image: minio/mc:RELEASE.2024-11-05T11-29-45Z
-    container_name: medsignal-minio-init
     depends_on:
       minio:
         condition: service_healthy
@@ -374,7 +385,6 @@ services:
     build:
       context: ./infrastructure/docker
       dockerfile: mlflow.Dockerfile
-    container_name: medsignal-mlflow
     restart: unless-stopped
     environment:
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
@@ -411,7 +421,6 @@ services:
     build:
       context: .
       dockerfile: infrastructure/pipeline/Dockerfile
-    container_name: medsignal-pipeline
     environment: *backend-environment
     volumes:
       - ${DATA_SOURCE_DIR_HOST:-./data/incoming}:/data/source:ro
@@ -420,6 +429,8 @@ services:
         condition: service_healthy
       clickhouse:
         condition: service_healthy
+      clickhouse-migrate:
+        condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
     networks:

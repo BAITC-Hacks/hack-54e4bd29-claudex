@@ -2,6 +2,21 @@
 
 MedSignal работает в чувствительном контексте здравоохранения. Безопасность закладывается в архитектуру с первого дня, а не добавляется на PHASE 8. Отдельная фаза нужна для проверки и усиления, а не для первоначальной реализации.
 
+Phase 8 фактически проверил signed tokens для GLOBAL/REGION/HOSPITAL, 404 IDOR,
+единственный public nginx port, закрытый public `/metrics`, security headers,
+отсутствие token/header/raw identifier patterns в application logs и
+privacy-at-rest в ClickHouse.
+
+Gitleaks 8.30.1 проверил Git history и 537 release-candidate files. Узкий
+allowlist содержит только точные synthetic test fixtures. Trivy 0.58.2 не
+обнаружил CRITICAL и fixable HIGH; unfixed HIGH зафиксированы в
+[acceptance report](PHASE_8_ACCEPTANCE.md) и требуют periodic rescan.
+
+Application images работают non-root. Vendor defaults: nginx master остаётся
+root, workers непривилегированны; MinIO в проверенной конфигурации работает
+root и требует vendor-supported hardening. Небезопасный override не применялся.
+TLS/DNS/firewall/VPN и corporate SSO остаются внешними зависимостями.
+
 ## 1. Модель угроз
 
 ### 1.1 Защищаемые активы

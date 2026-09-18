@@ -9,7 +9,16 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -65,13 +74,27 @@ class DataImport(Base):
     # хранилищу: расхождение между прочитанным и загруженным нужно уметь
     # объяснить и через полгода, когда партиции уже могли быть удалены
     # политикой хранения.
-    rows_read: Mapped[int] = mapped_column(nullable=False, default=0)
-    rows_valid: Mapped[int] = mapped_column(nullable=False, default=0)
-    rows_rejected: Mapped[int] = mapped_column(nullable=False, default=0)
-    rows_loaded: Mapped[int] = mapped_column(nullable=False, default=0)
-    warnings_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    rows_read: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    rows_valid: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    rows_rejected: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    rows_loaded: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    warnings_count: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
 
     # Размер и число обработанных частей: набор поставляется разбитым
     # на файлы, и «один импорт» соответствует одному файлу.
-    source_size_bytes: Mapped[int] = mapped_column(nullable=False, default=0)
-    duration_seconds: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    source_size_bytes: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    duration_seconds: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0"
+    )

@@ -4,6 +4,14 @@
 
 Тесты пишутся для критических бизнес-сценариев, а не ради процента покрытия. Покрытие — следствие осмысленного тестирования, а не цель. Тест, который повторяет реализацию, создаёт иллюзию защиты и мешает рефакторингу.
 
+Проверенный baseline 18.09.2026: backend 407 tests (405 passed, 2 skipped),
+root data/security/operations 166 tests (165 passed, 1 skipped), ML 18 passed,
+frontend 17 passed. Отдельный real-Keycloak acceptance проверил подписанные
+токены HEALTH_AUTHORITY, REGIONAL_ANALYST и HOSPITAL_MANAGER. Ruff, mypy,
+ESLint, TypeScript, production Next.js build и 12 import-linter contracts
+прошли. Real-data performance details находятся в
+[PRESENTATION_METRICS.md](PRESENTATION_METRICS.md).
+
 Приоритет определяется ценой ошибки:
 
 | Область | Цена ошибки | Приоритет |

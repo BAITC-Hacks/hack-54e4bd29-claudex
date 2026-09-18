@@ -124,13 +124,22 @@ flowchart TB
 | PHASE 4 | Situation Center: описательные KPI, динамика событий, возраст очереди, аналитика организаций | Завершён |
 | PHASE 5A | Экспериментальный 7-дневный прогноз глобального потока направлений | Реализован; ограничен историей Q1 2025 |
 | PHASE 6 | GLOBAL Signal Engine, evidence, human workflow и Incident | Реализован; пороги — первоначальная аналитическая политика |
+| PHASE 7 | Immutable Scenario Analysis: observed/forecast baseline, preview/save, audit | Завершён |
+| PHASE 8 | Compose hardening, clean deployment, recovery, security и real-data acceptance | Завершён с внешними TLS/SSO зависимостями |
 
 Реальные выгрузки загружаются конвейером PHASE 3B; в репозиторий они не
 попадают. Синтетические справочники и сигналы для разработки помечены как
 вымышленные. Реализованы экспериментальный глобальный прогноз потока
 направлений на семь дней и Phase 6 Signal Engine с rule/statistical/forecast
-evaluators. Все реальные Signals пока имеют GLOBAL scope; симуляции ещё не
-реализованы.
+evaluators. Все реальные Signals пока имеют GLOBAL scope. Реализован один
+расчётный сценарий `REFERRAL_INFLOW_CHANGE`; он не является прогнозом
+перегрузки или рекомендацией.
+
+Production readiness evidence: [docs/PHASE_8_ACCEPTANCE.md](docs/PHASE_8_ACCEPTANCE.md).
+Runbooks: [operator](docs/runbooks/OPERATOR.md),
+[administrator](docs/runbooks/ADMINISTRATOR.md),
+[backup/restore](docs/runbooks/BACKUP_RESTORE.md) и
+[demo](docs/runbooks/DEMO.md).
 
 Цель PHASE 5A — ежедневное число направлений на глобальном уровне ([ADR-0016](docs/ADR/0016-experimental-short-horizon-referral-forecast.md)). Три месяца истории не позволяют подтвердить годовую сезонность и прогноз перегрузки; метрики относятся только к walk-forward проверке внутри доступного квартала.
 

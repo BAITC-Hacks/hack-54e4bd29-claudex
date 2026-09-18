@@ -40,6 +40,10 @@ RUN npm run build
 FROM base AS production
 ENV NODE_ENV=production
 
+# The standalone server does not invoke npm. Removing the bundled package
+# manager eliminates its transitive packages from the runtime attack surface.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 # Непривилегированный пользователь. Контейнер не работает от root.
 RUN addgroup --system --gid 1001 medsignal \
     && adduser --system --uid 1001 --ingroup medsignal medsignal

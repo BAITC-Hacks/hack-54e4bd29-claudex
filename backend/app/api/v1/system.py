@@ -43,6 +43,7 @@ router = APIRouter(prefix="/system", tags=["system"], responses=ERROR_RESPONSES)
 def whoami(context: CurrentUser) -> SecurityContextResponse:
     return SecurityContextResponse(
         user_id=context.user_id,
+        internal_user_id=context.internal_user_id,
         username=context.username,
         roles=sorted(role.value for role in context.roles),
         region_ids=sorted(context.scope.region_ids),

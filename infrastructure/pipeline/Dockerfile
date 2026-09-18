@@ -42,3 +42,7 @@ USER medsignal
 
 ENTRYPOINT ["python", "-m", "app.cli.data"]
 CMD ["--help"]
+
+# Явный target нужен production overlay и one-shot мигратору ClickHouse.
+# Он не добавляет пакетов и наследует непривилегированного пользователя.
+FROM base AS production

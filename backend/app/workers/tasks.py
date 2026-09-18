@@ -18,6 +18,7 @@ from celery import Task
 from app.business.ports import UnitOfWorkFactory
 from app.business.signals.evaluation import SignalEvaluationService
 from app.business.system.operations import OperationService
+from app.core.http_metrics import record_background_job
 from app.core.logging import get_logger
 from app.core.request_context import get_request_id
 from app.repositories.unit_of_work import create_unit_of_work
@@ -61,12 +62,14 @@ def ping(self: Task, operation_id: str) -> dict[str, Any]:
             "worker_hostname": self.request.hostname,
         }
         service.mark_completed(parsed_id, result=result)
+        record_background_job("system.ping", "completed")
         return result
     except Exception as exc:
         # Отказ фиксируется как состояние, а не только как исключение:
         # операция, оставшаяся в RUNNING навсегда, — дефект (ADR-0010).
         logger.error("Задача ping прервана", exc_info=exc)
         service.mark_failed(parsed_id, reason="Техническая задача не выполнена")
+        record_background_job("system.ping", "failed")
         raise
 
 
@@ -92,8 +95,13 @@ def train_referral_forecast() -> dict[str, str]:
     # Lazy import keeps ML dependencies out of the API process and image.
     from app.adapters.forecasting import build_forecast_training_service
 
-    forecast_id = build_forecast_training_service().run_referral_forecast()
-    return {"forecast_id": str(forecast_id)}
+    try:
+        forecast_id = build_forecast_training_service().run_referral_forecast()
+        record_background_job("ml.train_referral_forecast", "completed")
+        return {"forecast_id": str(forecast_id)}
+    except Exception:
+        record_background_job("ml.train_referral_forecast", "failed")
+        raise
 
 
 @celery_app.task(
@@ -117,6 +125,7 @@ def evaluate_signals(self: Task, operation_id: str | None = None) -> dict[str, A
     try:
         report = _signal_evaluation_service().evaluate_all().as_dict()
         operations.mark_completed(parsed_id, result=report)
+        record_background_job("signals.evaluate", "completed")
         return {"operation_id": str(parsed_id), "report": report}
     except Exception as exc:
         logger.error(
@@ -125,4 +134,5 @@ def evaluate_signals(self: Task, operation_id: str | None = None) -> dict[str, A
             exc_info=exc,
         )
         operations.mark_failed(parsed_id, reason="Signal Engine не завершил оценку")
+        record_background_job("signals.evaluate", "failed")
         raise
