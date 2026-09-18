@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Protocol
 
 from app.shared.analytics_contracts import (
@@ -31,6 +32,14 @@ class ClickHouseQueryClient(Protocol):
     def query(
         self, query: str, parameters: dict[str, object] | None = None
     ) -> QueryResult: ...
+
+
+def _finite_float(value: Any | None) -> float | None:
+    """Convert ClickHouse numeric aggregates to JSON-safe finite values."""
+    if value is None:
+        return None
+    result = float(value)
+    return result if math.isfinite(result) else None
 
 
 def _scope_sql(column: str, scope: QueryScope) -> tuple[str, dict[str, object]]:
@@ -242,14 +251,17 @@ class ClickHouseAnalyticsRepository:
         if not rows:
             return RawWaitingSummary(None, 0, 0, None, None, None, None)
         row = rows[0]
+        waiting_records = int(row[1])
+        if waiting_records == 0:
+            return RawWaitingSummary(None, 0, int(row[2]), None, None, None, None)
         return RawWaitingSummary(
             snapshot_dt=row[0],
-            waiting_records=int(row[1]),
+            waiting_records=waiting_records,
             excluded_chronology_conflicts=int(row[2]),
-            median_days=float(row[3]) if row[3] is not None else None,
-            p75_days=float(row[4]) if row[4] is not None else None,
-            p90_days=float(row[5]) if row[5] is not None else None,
-            oldest_days=float(row[6]) if row[6] is not None else None,
+            median_days=_finite_float(row[3]),
+            p75_days=_finite_float(row[4]),
+            p90_days=_finite_float(row[5]),
+            oldest_days=_finite_float(row[6]),
         )
 
     def observed_waiting(
@@ -294,13 +306,16 @@ class ClickHouseAnalyticsRepository:
         if not rows:
             return RawObservedWaiting(0, 0, None, None, None, None)
         row = rows[0]
+        observed_records = int(row[0])
+        if observed_records == 0:
+            return RawObservedWaiting(0, int(row[1]), None, None, None, None)
         return RawObservedWaiting(
-            observed_records=int(row[0]),
+            observed_records=observed_records,
             excluded_chronology_conflicts=int(row[1]),
-            mean_days=float(row[2]) if row[2] is not None else None,
-            median_days=float(row[3]) if row[3] is not None else None,
-            p75_days=float(row[4]) if row[4] is not None else None,
-            p90_days=float(row[5]) if row[5] is not None else None,
+            mean_days=_finite_float(row[2]),
+            median_days=_finite_float(row[3]),
+            p75_days=_finite_float(row[4]),
+            p90_days=_finite_float(row[5]),
         )
 
     def overview(self, filters: AnalyticsFilter, scope: QueryScope) -> RawOverview:
@@ -495,9 +510,7 @@ class ClickHouseAnalyticsRepository:
                 referrals_total=int(row[4]),
                 waiting_records=int(row[5]),
                 refusals_total=int(row[6]),
-                observed_waiting_median_days=(
-                    float(row[7]) if row[7] is not None else None
-                ),
+                observed_waiting_median_days=_finite_float(row[7]),
             )
             for row in rows
         )

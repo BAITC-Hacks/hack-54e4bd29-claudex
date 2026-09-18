@@ -99,6 +99,36 @@ def test_waiting_summary_uses_latest_snapshot_and_reports_all_age_quantiles() ->
     assert result.oldest_days == 90.0
 
 
+def test_empty_waiting_summary_converts_nan_and_epoch_sentinel_to_none() -> None:
+    client = RecordingClient(
+        {
+            "analytics:waiting-summary": [
+                (
+                    datetime(1970, 1, 1, tzinfo=UTC),
+                    0,
+                    0,
+                    float("nan"),
+                    float("nan"),
+                    float("nan"),
+                    0.0,
+                )
+            ]
+        }
+    )
+    repository = ClickHouseAnalyticsRepository(client)
+
+    result = repository.waiting_summary(
+        filters(), QueryScope((), all_canonical=True, include_unmapped=True)
+    )
+
+    assert result.snapshot_dt is None
+    assert result.waiting_records == 0
+    assert result.median_days is None
+    assert result.p75_days is None
+    assert result.p90_days is None
+    assert result.oldest_days is None
+
+
 def test_observed_waiting_reports_mean_and_excluded_chronology() -> None:
     client = RecordingClient(
         {"analytics:observed-waiting": [(80, 12, 5.5, 4.0, 7.0, 11.0)]}
@@ -115,6 +145,26 @@ def test_observed_waiting_reports_mean_and_excluded_chronology() -> None:
     assert result.median_days == 4.0
     assert result.p75_days == 7.0
     assert result.p90_days == 11.0
+
+
+def test_empty_observed_waiting_converts_non_finite_aggregates_to_none() -> None:
+    client = RecordingClient(
+        {
+            "analytics:observed-waiting": [
+                (0, 0, 0.0, float("nan"), float("inf"), float("-inf"))
+            ]
+        }
+    )
+    repository = ClickHouseAnalyticsRepository(client)
+
+    result = repository.observed_waiting(
+        filters(), QueryScope((), all_canonical=True, include_unmapped=True)
+    )
+
+    assert result.mean_days is None
+    assert result.median_days is None
+    assert result.p75_days is None
+    assert result.p90_days is None
 
 
 def test_source_organization_filter_uses_digest_parameter_not_raw_sql() -> None:
@@ -137,3 +187,34 @@ def test_source_organization_filter_uses_digest_parameter_not_raw_sql() -> None:
     assert parameters["filter_source_digests"] == [digest]
     assert parameters["filter_identity_space"] == "IS_BG:REFUSALS:INCOMING"
     assert "SHA256" in query
+
+
+def test_organization_list_converts_nan_waiting_median_to_none() -> None:
+    client = RecordingClient(
+        {
+            "analytics:organizations": [
+                (
+                    "IS_BG:REFERRALS:RECEIVING",
+                    "IS_BG",
+                    "safe-source-key",
+                    None,
+                    3,
+                    0,
+                    0,
+                    float("nan"),
+                    1,
+                )
+            ]
+        }
+    )
+    repository = ClickHouseAnalyticsRepository(client)
+
+    organizations, total = repository.organizations(
+        filters(),
+        QueryScope((), all_canonical=True, include_unmapped=True),
+        limit=20,
+        offset=0,
+    )
+
+    assert total == 1
+    assert organizations[0].observed_waiting_median_days is None
