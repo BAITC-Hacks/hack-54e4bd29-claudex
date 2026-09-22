@@ -8,7 +8,10 @@ import { env } from "@/config/env";
 import { useAuth } from "@/features/auth/auth-context";
 import { cn } from "@/utils/cn";
 
-const NAVIGATION = [
+const NAVIGATION = process.env.NEXT_PUBLIC_PILOT_MODE === "true" ? [
+  {href: "/monitor", label: "Предупреждения"},
+  {href: "/monitor/model", label: "Обучение и проверка"},
+] : [
   { href: "/dashboard", label: "Ситуационный центр" },
   { href: "/signals", label: "Сигналы" },
   { href: "/scenarios", label: "Сценарии" },
@@ -45,7 +48,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">{env.appEnv}</span>
-          {isAuthenticated ? (
+          {process.env.NEXT_PUBLIC_PILOT_MODE === "true" ? <span className="text-xs font-medium text-amber-700">Локальный пилот</span> : isAuthenticated ? (
             <Button size="sm" variant="ghost" onClick={logout}>
               Выйти
             </Button>

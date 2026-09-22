@@ -1,0 +1,43 @@
+# Local aggregate-only pilot. Never expose this unauthenticated replay on a public host.
+name: medsignal-pilot
+services:
+  pilot-api:
+    build:
+      context: .
+      dockerfile: pilot/Dockerfile
+    environment:
+      MONITORING_DIR: /app/data/monitoring
+    volumes:
+      - ./data/monitoring:/app/data/monitoring
+      - ./pilot:/app/pilot:ro
+      - ./ml:/app/ml:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/pilot/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  frontend:
+    build:
+      context: ./frontend
+      target: development
+    environment:
+      NEXT_PUBLIC_PILOT_MODE: 'true'
+      NEXT_PUBLIC_APP_ENV: local
+      PILOT_API_URL: http://pilot-api:8000
+      NEXT_TELEMETRY_DISABLED: '1'
+    volumes:
+      - ./frontend/src:/app/src:ro
+    ports:
+      - '127.0.0.1:8088:3000'
+    depends_on:
+      pilot-api:
+        condition: service_healthy
+  train:
+    profiles: [tools]
+    build:
+      context: .
+      dockerfile: pilot/Dockerfile
+    command: ["python", "-m", "ml.monitoring"]
+    volumes:
+      - ./data/incoming:/app/data/incoming:ro
+      - ./data/monitoring:/app/data/monitoring
