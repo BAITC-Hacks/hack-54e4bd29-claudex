@@ -23,14 +23,15 @@ export default function RootLayout({
           <div className="flex min-h-screen flex-col">
             <SiteHeader />
 
-            <main className="container flex-1 py-8">{children}</main>
+            <main className="container flex-1 py-7 lg:py-10">{children}</main>
 
             {env.disclaimerEnabled && (
-              <footer className="border-t border-border bg-card">
-                <div className="container py-4">
-                  <p className="text-xs text-muted-foreground">
+              <footer className="border-t border-slate-200/80 bg-white/70 backdrop-blur">
+                <div className="container flex items-center justify-between gap-5 py-5">
+                  <p className="max-w-4xl text-[11px] leading-5 text-slate-500">
                     {DECISION_SUPPORT_NOTICE}
                   </p>
+                  <span className="hidden text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-700 md:block">MedFlow · 2026</span>
                 </div>
               </footer>
             )}

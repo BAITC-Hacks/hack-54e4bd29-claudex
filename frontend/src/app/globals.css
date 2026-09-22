@@ -1,3 +1,5 @@
+@import "@fontsource-variable/manrope";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,15 +10,15 @@
  */
 @layer base {
   :root {
-    --font-sans: system-ui;
+    --font-sans: "Manrope Variable";
     --font-mono: ui-monospace;
-    --background: 210 20% 98%;
-    --foreground: 222 47% 11%;
+    --background: 202 38% 97%;
+    --foreground: 219 52% 13%;
 
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
 
-    --primary: 221 83% 45%;
+    --primary: 190 91% 28%;
     --primary-foreground: 210 40% 98%;
 
     --secondary: 210 40% 96%;
@@ -37,9 +39,9 @@
     --warning: 35 86% 42%;
     --warning-foreground: 210 40% 98%;
 
-    --border: 214 32% 89%;
-    --input: 214 32% 89%;
-    --ring: 221 83% 45%;
+    --border: 202 24% 87%;
+    --input: 202 24% 87%;
+    --ring: 190 91% 28%;
 
     --radius: 0.5rem;
   }
@@ -85,11 +87,31 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    background-image:
+      radial-gradient(circle at 8% 0%, rgb(12 150 160 / 7%), transparent 30rem),
+      radial-gradient(circle at 94% 14%, rgb(36 88 163 / 6%), transparent 28rem);
+    font-feature-settings: "ss01" 1, "ss02" 1, "cv11" 1;
+    letter-spacing: -0.012em;
+  }
+
+  ::selection {
+    background: rgb(11 143 151 / 22%);
+    color: #0b2639;
+  }
+}
+
+@layer components {
+  .surface-card {
+    @apply border border-white/80 bg-white/90 shadow-[0_14px_40px_-28px_rgba(15,46,68,0.45)] backdrop-blur-sm;
+  }
+
+  .eyebrow {
+    @apply text-[10px] font-extrabold uppercase tracking-[0.18em] text-cyan-700;
   }
 }
 
 /* Карта ситуационного центра. Маркеры показывают только значения backend. */
-.leaflet-container{overflow:hidden;background:#dce7e5;outline-offset:1px}.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow,.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,.leaflet-zoom-box,.leaflet-image-layer,.leaflet-layer{position:absolute;left:0;top:0}.leaflet-container{font-family:inherit;font-size:12px;line-height:1.5}.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow{user-select:none;-webkit-user-drag:none}.leaflet-tile{filter:inherit;visibility:hidden}.leaflet-tile-loaded{visibility:inherit}.leaflet-zoom-animated{transform-origin:0 0}.leaflet-zoom-hide{visibility:hidden}.leaflet-overlay-pane svg{max-width:none!important;max-height:none!important}.leaflet-pane{z-index:400}.leaflet-tile-pane{z-index:200}.leaflet-overlay-pane{z-index:400}.leaflet-shadow-pane{z-index:500}.leaflet-marker-pane{z-index:600}.leaflet-tooltip-pane{z-index:650}.leaflet-popup-pane{z-index:700}.leaflet-map-pane canvas{z-index:100}.leaflet-map-pane svg{z-index:200}.leaflet-control{position:relative;z-index:800;pointer-events:auto;float:left;clear:both}.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none}.leaflet-top{top:0}.leaflet-right{right:0}.leaflet-bottom{bottom:0}.leaflet-left{left:0}.leaflet-control-zoom{margin:0 10px 10px 0;border-radius:7px;overflow:hidden;box-shadow:0 2px 8px rgb(15 23 42 / 18%)}.leaflet-control-zoom a{display:block;width:30px;height:30px;background:white;color:#334155;text-align:center;text-decoration:none;font-size:18px;line-height:30px;border-bottom:1px solid #e2e8f0}.leaflet-control-zoom a:last-child{border-bottom:0}.leaflet-control-attribution{margin:0!important;padding:2px 5px!important;background:rgb(255 255 255 / 80%);color:#64748b}.leaflet-control-attribution a{color:#0f766e}.leaflet-tooltip{position:absolute;white-space:nowrap;pointer-events:none;background:white}.leaflet-tooltip-top:before{position:absolute;pointer-events:none;border:6px solid transparent;border-top-color:white;content:"";left:50%;margin-left:-6px;bottom:-12px}
+.leaflet-container{overflow:hidden;background:#dbe9eb;outline-offset:1px}.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow,.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,.leaflet-zoom-box,.leaflet-image-layer,.leaflet-layer{position:absolute;left:0;top:0}.leaflet-container{font-family:inherit;font-size:12px;line-height:1.5}.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow{user-select:none;-webkit-user-drag:none}.leaflet-tile{filter:saturate(.68) contrast(.92) brightness(1.04);visibility:hidden}.leaflet-tile-loaded{visibility:inherit}.leaflet-zoom-animated{transform-origin:0 0}.leaflet-zoom-hide{visibility:hidden}.leaflet-overlay-pane svg{max-width:none!important;max-height:none!important}.leaflet-pane{z-index:400}.leaflet-tile-pane{z-index:200}.leaflet-overlay-pane{z-index:400}.leaflet-shadow-pane{z-index:500}.leaflet-marker-pane{z-index:600}.leaflet-tooltip-pane{z-index:650}.leaflet-popup-pane{z-index:700}.leaflet-map-pane canvas{z-index:100}.leaflet-map-pane svg{z-index:200}.leaflet-control{position:relative;z-index:800;pointer-events:auto;float:left;clear:both}.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none}.leaflet-top{top:0}.leaflet-right{right:0}.leaflet-bottom{bottom:0}.leaflet-left{left:0}.leaflet-control-zoom{margin:0 16px 16px 0;border:1px solid rgb(255 255 255 / 80%);border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgb(15 46 68 / 18%)}.leaflet-control-zoom a{display:block;width:34px;height:34px;background:rgb(255 255 255 / 94%);color:#17364d;text-align:center;text-decoration:none;font-size:18px;line-height:34px;border-bottom:1px solid #dce7eb}.leaflet-control-zoom a:last-child{border-bottom:0}.leaflet-control-attribution{margin:0!important;padding:2px 5px!important;background:rgb(255 255 255 / 75%);color:#64748b}.leaflet-control-attribution a{color:#087d85}.leaflet-tooltip{position:absolute;white-space:nowrap;pointer-events:none;background:white}.leaflet-tooltip-top:before{position:absolute;pointer-events:none;border:6px solid transparent;border-top-color:white;content:"";left:50%;margin-left:-6px;bottom:-12px}
 .region-marker-shell {
   background: transparent !important;
   border: 0 !important;
@@ -102,10 +124,10 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  border: 2px solid white;
+  border: 3px solid rgb(255 255 255 / 92%);
   border-radius: 999px;
   color: white;
-  box-shadow: 0 5px 15px rgb(15 23 42 / 24%);
+  box-shadow: 0 7px 22px rgb(15 46 68 / 30%);
   font-size: 10px;
   transition: transform 150ms ease, box-shadow 150ms ease;
 }
@@ -113,7 +135,7 @@
 .region-marker:hover,
 .region-marker.selected {
   transform: scale(1.1);
-  box-shadow: 0 0 0 4px rgb(13 148 136 / 22%), 0 7px 18px rgb(15 23 42 / 25%);
+  box-shadow: 0 0 0 5px rgb(16 165 176 / 20%), 0 10px 26px rgb(15 46 68 / 28%);
 }
 
 .region-marker > span {
@@ -123,9 +145,9 @@
   background: currentColor;
 }
 
-.region-marker.normal { background: #0f9f70; }
-.region-marker.warning { background: #d89a23; }
-.region-marker.critical { background: #d34b50; }
+.region-marker.normal { background: #0b9b7d; }
+.region-marker.warning { background: #e3a42d; }
+.region-marker.critical { background: #df4b55; }
 .region-marker.empty { background: #64748b; }
 
 .region-map-tooltip {
