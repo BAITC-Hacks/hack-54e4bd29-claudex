@@ -87,3 +87,70 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
 }
+
+/* Карта ситуационного центра. Маркеры показывают только значения backend. */
+.leaflet-container{overflow:hidden;background:#dce7e5;outline-offset:1px}.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow,.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,.leaflet-zoom-box,.leaflet-image-layer,.leaflet-layer{position:absolute;left:0;top:0}.leaflet-container{font-family:inherit;font-size:12px;line-height:1.5}.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow{user-select:none;-webkit-user-drag:none}.leaflet-tile{filter:inherit;visibility:hidden}.leaflet-tile-loaded{visibility:inherit}.leaflet-zoom-animated{transform-origin:0 0}.leaflet-zoom-hide{visibility:hidden}.leaflet-overlay-pane svg{max-width:none!important;max-height:none!important}.leaflet-pane{z-index:400}.leaflet-tile-pane{z-index:200}.leaflet-overlay-pane{z-index:400}.leaflet-shadow-pane{z-index:500}.leaflet-marker-pane{z-index:600}.leaflet-tooltip-pane{z-index:650}.leaflet-popup-pane{z-index:700}.leaflet-map-pane canvas{z-index:100}.leaflet-map-pane svg{z-index:200}.leaflet-control{position:relative;z-index:800;pointer-events:auto;float:left;clear:both}.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none}.leaflet-top{top:0}.leaflet-right{right:0}.leaflet-bottom{bottom:0}.leaflet-left{left:0}.leaflet-control-zoom{margin:0 10px 10px 0;border-radius:7px;overflow:hidden;box-shadow:0 2px 8px rgb(15 23 42 / 18%)}.leaflet-control-zoom a{display:block;width:30px;height:30px;background:white;color:#334155;text-align:center;text-decoration:none;font-size:18px;line-height:30px;border-bottom:1px solid #e2e8f0}.leaflet-control-zoom a:last-child{border-bottom:0}.leaflet-control-attribution{margin:0!important;padding:2px 5px!important;background:rgb(255 255 255 / 80%);color:#64748b}.leaflet-control-attribution a{color:#0f766e}.leaflet-tooltip{position:absolute;white-space:nowrap;pointer-events:none;background:white}.leaflet-tooltip-top:before{position:absolute;pointer-events:none;border:6px solid transparent;border-top-color:white;content:"";left:50%;margin-left:-6px;bottom:-12px}
+.region-marker-shell {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.region-marker {
+  display: flex;
+  width: 58px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 2px solid white;
+  border-radius: 999px;
+  color: white;
+  box-shadow: 0 5px 15px rgb(15 23 42 / 24%);
+  font-size: 10px;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.region-marker:hover,
+.region-marker.selected {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 4px rgb(13 148 136 / 22%), 0 7px 18px rgb(15 23 42 / 25%);
+}
+
+.region-marker > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.region-marker.normal { background: #0f9f70; }
+.region-marker.warning { background: #d89a23; }
+.region-marker.critical { background: #d34b50; }
+.region-marker.empty { background: #64748b; }
+
+.region-map-tooltip {
+  border: 0 !important;
+  border-radius: 8px !important;
+  padding: 8px 10px !important;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 18%) !important;
+  font-family: inherit !important;
+}
+
+.region-map-tooltip strong,
+.region-map-tooltip span {
+  display: block;
+}
+
+.region-map-tooltip strong {
+  color: #1e293b;
+  font-size: 10px;
+}
+
+.region-map-tooltip span {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 9px;
+}
+
+.region-map-tooltip::before { border-top-color: white !important; }
+.leaflet-control-attribution { font-size: 8px !important; }

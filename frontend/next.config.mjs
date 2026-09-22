@@ -1,8 +1,14 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // standalone: минимальный образ для эксплуатации без node_modules целиком.
   output: "standalone",
   reactStrictMode: true,
+  turbopack: { root: projectRoot },
   async rewrites() {
     return process.env.PILOT_API_URL ? [{source: "/api/pilot/:path*", destination: `${process.env.PILOT_API_URL}/api/pilot/:path*`}] : [];
   },

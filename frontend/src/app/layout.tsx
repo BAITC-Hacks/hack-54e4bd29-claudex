@@ -7,7 +7,7 @@ import { DECISION_SUPPORT_NOTICE, env } from "@/config/env";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
-  title: "MedSignal",
+  title: "MedFlow AI | Минздрав РК",
   description:
     "Система раннего предупреждения о риске перегрузки медицинских организаций",
   robots: { index: false, follow: false },

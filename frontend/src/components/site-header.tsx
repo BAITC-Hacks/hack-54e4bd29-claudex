@@ -12,6 +12,7 @@ const NAVIGATION = process.env.NEXT_PUBLIC_PILOT_MODE === "true" ? [
   {href: "/monitor", label: "Предупреждения"},
   {href: "/monitor/model", label: "Обучение и проверка"},
 ] : [
+  { href: "/command-center", label: "Карта Казахстана" },
   { href: "/dashboard", label: "Ситуационный центр" },
   { href: "/signals", label: "Сигналы" },
   { href: "/scenarios", label: "Сценарии" },
@@ -27,8 +28,9 @@ export function SiteHeader() {
     <header className="border-b border-border bg-card">
       <div className="container flex h-14 items-center justify-between gap-6">
         <div className="flex items-center gap-6">
-          <Link href="/" className="text-sm font-semibold tracking-tight">
-            MedSignal
+          <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-teal-700 text-xs font-bold text-white shadow-sm">M</span>
+            <span>MedFlow <em className="not-italic text-teal-700">AI</em></span>
           </Link>
           <nav className="flex items-center gap-4">
             {NAVIGATION.map((item) => (
