@@ -105,7 +105,15 @@ migrate-down: ## Откатить последнюю миграцию
 # ---------------------------------------------------------------------------
 
 .PHONY: test
-test: test-backend test-ml test-frontend ## Все тесты
+test: test-backend test-ml test-audit test-pipeline test-monitoring test-frontend test-contracts ## Все тесты
+
+.PHONY: test-monitoring
+test-monitoring: ## Синтетические тесты локального monitoring pilot
+	docker compose -f docker-compose.pilot.yml run --rm --no-deps monitoring-tests
+
+.PHONY: test-contracts
+test-contracts: ## Security, operations, performance и E2E contracts
+	PYTHONPATH="$(CURDIR):$(CURDIR)/backend" python -m pytest tests/security tests/operations tests/performance tests/e2e -q
 
 .PHONY: test-ml
 test-ml: ## Тесты short-horizon forecasting

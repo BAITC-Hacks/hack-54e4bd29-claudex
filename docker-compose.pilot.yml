@@ -1,6 +1,13 @@
 # Local aggregate-only pilot. Never expose this unauthenticated replay on a public host.
 name: medsignal-pilot
 services:
+  monitoring-tests:
+    profiles: [tools]
+    build:
+      context: .
+      dockerfile: pilot/Dockerfile
+      target: development
+    command: ["python", "-m", "pytest", "tests/monitoring", "-q"]
   pilot-api:
     build:
       context: .

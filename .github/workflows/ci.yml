@@ -184,6 +184,44 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: python -m pytest ml/tests -q
 
+  monitoring:
+    name: Monitoring pilot — lint and synthetic tests
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            pilot/requirements.txt
+            pilot/requirements-dev.txt
+
+      - name: Install pilot dependencies
+        run: python -m pip install -r pilot/requirements-dev.txt
+
+      - name: Ruff
+        run: |
+          ruff check pilot ml/monitoring.py tests/monitoring --config backend/pyproject.toml
+          ruff format --check pilot ml/monitoring.py tests/monitoring --config backend/pyproject.toml
+
+      - name: Synthetic monitoring tests
+        run: python -m pytest tests/monitoring -q --junitxml=junit-monitoring.xml
+
+      - name: Pilot Compose configuration
+        run: docker compose -f docker-compose.pilot.yml config --quiet
+
+      - name: Monitoring test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-monitoring
+          path: junit-monitoring.xml
+          if-no-files-found: warn
+
   data-audit:
     name: Конвейер данных — аудит и загрузка
     runs-on: ubuntu-latest
