@@ -1038,10 +1038,10 @@
       "key": "queue_size",
       "name": "queue_size(t+n)",
       "definition": "Число пациентов, ожидающих плановую госпитализацию, на организацию и профиль на горизонте n",
-      "status": "AVAILABLE",
-      "reason": "Все требуемые поля найдены в одной таблице",
-      "feasibility": "WEAK",
-      "feasibility_reason": "История покрывает 3 мес.: годовая сезонность не наблюдается ни разу",
+      "status": "NOT AVAILABLE",
+      "reason": "NO_VERIFIED_SNAPSHOT_HISTORY: Не подтверждена история повторных сопоставимых срезов очереди",
+      "feasibility": "NOT FEASIBLE",
+      "feasibility_reason": "NO_VERIFIED_SNAPSHOT_HISTORY",
       "supporting_tables": [
         "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
         "Ожидающие плановую госпитализацию в стационары.Ожидающие плановую госпитализацию в стационары"
@@ -1165,10 +1165,10 @@
       "key": "refusal_rate",
       "name": "refusal_rate",
       "definition": "Доля отказов в плановой госпитализации от числа обращений за период по организации",
-      "status": "AVAILABLE",
-      "reason": "Все требуемые поля найдены в одной таблице",
-      "feasibility": "WEAK",
-      "feasibility_reason": "История покрывает 3 мес.: годовая сезонность не наблюдается ни разу",
+      "status": "NOT AVAILABLE",
+      "reason": "DENOMINATOR_NOT_ALIGNED: Не подтверждена общая популяция числителя и знаменателя",
+      "feasibility": "NOT FEASIBLE",
+      "feasibility_reason": "DENOMINATOR_NOT_ALIGNED",
       "supporting_tables": [
         "Направления на плановую госпитализацию в стационары.Направления на плановую госпитализацию в стационары",
         "Отказы в плановой госпитализации (приёмный покой).Отказы в плановой госпитализации"
@@ -1836,6 +1836,27 @@
         }
       ],
       "notes": []
+    }
+  ],
+  "semantic_corrections": [
+    {
+      "date": "2026-09-23",
+      "scope": "Target semantic conclusions only; source audit not rerun; fingerprints, row/file counts and date measurements unchanged.",
+      "previous_conclusions": {
+        "queue_size": {
+          "status": "AVAILABLE",
+          "reason": "Все требуемые поля найдены в одной таблице",
+          "feasibility": "WEAK",
+          "feasibility_reason": "История покрывает 3 мес.: годовая сезонность не наблюдается ни разу"
+        },
+        "refusal_rate": {
+          "status": "AVAILABLE",
+          "reason": "Все требуемые поля найдены в одной таблице",
+          "feasibility": "WEAK",
+          "feasibility_reason": "История покрывает 3 мес.: годовая сезонность не наблюдается ни разу"
+        }
+      },
+      "reason": "Event date spans are not verified repeated queue snapshots; refusal and denominator populations are not proven aligned."
     }
   ]
 }

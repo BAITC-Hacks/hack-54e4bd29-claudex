@@ -400,7 +400,7 @@ def test_waiting_time_needs_both_dates_in_one_table() -> None:
     assert "queue_end" in candidate.reason
 
 
-def test_requirement_in_another_table_is_only_partial() -> None:
+def test_requirement_in_another_table_needs_denominator_alignment() -> None:
     """Величина, требующая join'а, не должна объявляться наблюдаемой."""
     candidates = assess_candidates(
         [
@@ -425,8 +425,8 @@ def test_requirement_in_another_table_is_only_partial() -> None:
         ]
     )
     candidate = next(c for c in candidates if c.key == "refusal_rate")
-    assert candidate.status == "PARTIALLY AVAILABLE"
-    assert "denominator" in candidate.reason
+    assert candidate.status == "NOT AVAILABLE"
+    assert "DENOMINATOR_NOT_ALIGNED" in candidate.reason
 
 
 def test_history_is_not_borrowed_from_an_unrelated_dataset() -> None:

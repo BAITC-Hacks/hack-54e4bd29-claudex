@@ -218,6 +218,17 @@ class TableEvidence:
     time_series_possible: bool
     organization_distinct: int | None = None
     region_distinct: int | None = None
+    # Explicit, externally verified semantic evidence; never derived from date
+    # columns, file count, load timestamps or months_covered. References must
+    # identify a reviewed manifest/contract, without patient data or secrets.
+    # Count distinct, comparable queue snapshots of this table's population.
+    verified_snapshot_count: int = 0
+    snapshot_verification: str | None = None
+    # On a refusal numerator table: fully qualified denominator table names.
+    # The verification must establish population, organization identity,
+    # reporting period, completeness and counting/deduplication rules.
+    aligned_denominator_tables: tuple[str, ...] = ()
+    denominator_verification: str | None = None
 
 
 @dataclass(slots=True)
@@ -293,6 +304,21 @@ def _feasibility(
         Feasibility.GOOD,
         f"История {months} мес. при событийной детализации и разрезе " "по организациям",
     )
+
+
+def assess_temporal_target(
+    target: str, *, verified_snapshot_count: int, denominator_aligned: bool
+) -> tuple[str, str]:
+    """Semantic gate only; passing does not establish training coverage."""
+    if target == "queue_size(t+n)":
+        if type(verified_snapshot_count) is not int or verified_snapshot_count < 2:
+            return Availability.NOT_AVAILABLE.value, "NO_VERIFIED_SNAPSHOT_HISTORY"
+    elif target == "refusal_rate":
+        if denominator_aligned is not True:
+            return Availability.NOT_AVAILABLE.value, "DENOMINATOR_NOT_ALIGNED"
+    else:
+        return Availability.NOT_AVAILABLE.value, "UNKNOWN_TARGET_SEMANTICS"
+    return Availability.PARTIAL.value, "REQUIRES_COVERAGE_REVIEW"
 
 
 def assess_candidates(evidence: Sequence[TableEvidence]) -> list[CandidateAssessment]:
@@ -389,6 +415,53 @@ def assess_candidates(evidence: Sequence[TableEvidence]) -> list[CandidateAssess
         supporting_names = set(co_located) or set(defining.found_in if defining else [])
         supporting = [t for t in evidence if f"{t.dataset}.{t.table}" in supporting_names]
         feasibility, feasibility_reason = _feasibility(supporting, status)
+
+        if candidate.key in {"queue_size", "refusal_rate"}:
+            # A semantic claim belongs to a table satisfying every local
+            # mandatory role. Never borrow it from an unrelated dataset.
+            local_support = [
+                t for t in supporting if f"{t.dataset}.{t.table}" in co_located
+            ]
+            snapshot_count = max(
+                (
+                    t.verified_snapshot_count
+                    for t in local_support
+                    if type(t.verified_snapshot_count) is int
+                    and t.snapshot_verification
+                    and t.snapshot_verification.strip()
+                ),
+                default=0,
+            )
+            denominator_names = {
+                name
+                for result in requirement_results
+                if result.role == "denominator"
+                for name in result.found_in
+            }
+            aligned = any(
+                t.denominator_verification
+                and t.denominator_verification.strip()
+                and t.aligned_denominator_tables
+                and set(t.aligned_denominator_tables) <= denominator_names
+                for t in local_support
+            )
+            semantic_status, semantic_reason = assess_temporal_target(
+                candidate.name,
+                verified_snapshot_count=snapshot_count,
+                denominator_aligned=aligned,
+            )
+            if semantic_status == Availability.NOT_AVAILABLE.value:
+                status = Availability.NOT_AVAILABLE
+                reason = semantic_reason + ": " + reason
+                feasibility = Feasibility.NOT_FEASIBLE
+                feasibility_reason = semantic_reason
+            elif status is not Availability.NOT_AVAILABLE:
+                status = Availability.PARTIAL
+                reason = semantic_reason + ": " + reason
+                # months_covered describes event dates, not verified snapshot
+                # history or an aligned denominator's complete coverage.
+                feasibility = Feasibility.NOT_FEASIBLE
+                feasibility_reason = semantic_reason
 
         results.append(
             CandidateAssessment(
