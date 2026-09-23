@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, ForecastQueryServiceDep
+from app.business.forecasting.contracts import ReferralForecastSnapshot
+from app.models.enums import DataScopeType
 from app.schemas.common import ERROR_RESPONSES
 from app.schemas.forecasting import (
     HistoricalReferralPointResponse,
@@ -25,10 +29,16 @@ def latest_referral_forecast(
     service: ForecastQueryServiceDep,
 ) -> ReferralForecastResponse:
     result = service.latest_referral_forecast(context)
+    return _response(result)
+
+
+def _response(result: ReferralForecastSnapshot) -> ReferralForecastResponse:
     return ReferralForecastResponse(
         id=result.id,
         target="DAILY_REFERRAL_COUNT",
-        scope_type="GLOBAL",
+        scope_type=DataScopeType(result.scope_type),
+        hospital_id=result.hospital_id,
+        region_id=result.region_id,
         horizon_days=len(result.points),
         input_period_start=result.input_period_start,
         input_period_end=result.input_period_end,
@@ -58,3 +68,12 @@ def latest_referral_forecast(
         ],
         disclaimer="Расчётный прогноз. Решение принимает уполномоченный сотрудник.",
     )
+
+
+@router.get(
+    "/{forecast_id}", response_model=ReferralForecastResponse, responses=ERROR_RESPONSES
+)
+def forecast_by_id(
+    forecast_id: uuid.UUID, context: CurrentUser, service: ForecastQueryServiceDep
+) -> ReferralForecastResponse:
+    return _response(service.get_forecast(context, forecast_id))

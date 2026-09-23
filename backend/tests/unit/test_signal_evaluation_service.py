@@ -15,11 +15,11 @@ from app.business.signals.contracts import (
 from app.business.signals.evaluation import SignalEvaluationService
 from app.business.signals.policy import SignalPolicy
 from app.models.enums import AuditAction
+from app.shared.delivery import DeliveryReadiness
 from tests.fakes import (
     FakeSignalRepository,
     FakeStore,
     FakeUnitOfWork,
-    unit_of_work_factory,
 )
 
 NOW = datetime(2025, 4, 1, 12, tzinfo=UTC)
@@ -30,8 +30,26 @@ class Inputs:
         self.watermark = watermark
         self.daily_calls: list[tuple[str, bool]] = []
 
+    def readiness(self, dataset_type, source_system=None):
+        del source_system
+        return DeliveryReadiness(
+            dataset_type,
+            published_import_ids=(uuid.uuid5(uuid.NAMESPACE_URL, self.watermark),),
+            confirmed_complete_through=NOW.date() - timedelta(days=1),
+            publication_watermark=getattr(self, "current_watermark", self.watermark),
+            completeness="COMPLETE",
+        )
+
+    def lock_source(self, _source, _dataset):
+        pass
+
     def _watermark(self):
-        return {"import_ids": [self.watermark]}
+        return {
+            "schema_version": "published-signal-input-v1",
+            "import_ids": [str(uuid.uuid5(uuid.NAMESPACE_URL, self.watermark))],
+            "delivery_watermark": self.watermark,
+            "confirmed_complete_through": (NOW.date() - timedelta(days=1)).isoformat(),
+        }
 
     def freshness_evidence(self):
         return (
@@ -105,9 +123,15 @@ class Inputs:
         )
 
 
+def _publication_uow(store, inputs):
+    uow = FakeUnitOfWork(store)
+    uow.deliveries = inputs
+    return uow
+
+
 def _service(store: FakeStore, inputs: Inputs) -> SignalEvaluationService:
     return SignalEvaluationService(
-        uow_factory=unit_of_work_factory(store),
+        uow_factory=lambda: _publication_uow(store, inputs),
         inputs=inputs,
         policy=SignalPolicy(),
         clock=lambda: NOW,
@@ -178,6 +202,7 @@ def test_concurrent_exact_replay_is_reported_as_idempotent(store: FakeStore) -> 
         def __init__(self, fake_store: FakeStore) -> None:
             super().__init__(fake_store)
             self.signals = ConcurrentReplayRepository(fake_store)
+            self.deliveries = Inputs()
 
     service = SignalEvaluationService(
         uow_factory=lambda: ConcurrentReplayUnitOfWork(store),
@@ -226,3 +251,27 @@ def test_one_evaluator_family_failure_does_not_rollback_other_signals(
         and record.status is EvaluationStatus.FAILED
         for record in report.records
     )
+
+
+def test_publication_changed_between_aggregate_read_and_signal_commit_is_suppressed(
+    store,
+):
+    inputs = Inputs()
+    inputs.current_watermark = "new-partial-delivery"
+    report = _service(store, inputs).evaluate_all()
+    spike = next(r for r in report.records if r.evaluator == "REFUSAL_SPIKE")
+    assert spike.status is EvaluationStatus.SUPPRESSED
+    assert spike.reason == "PUBLICATION_CHANGED"
+    assert len(store.signals) == 1  # independent historical DATA_STALE remains
+    assert len(store.audit) == 1
+
+
+def test_legacy_or_unknown_completeness_cannot_bypass_persistence_gate(store):
+    class LegacyInputs(Inputs):
+        def _watermark(self):
+            return {"import_ids": ["legacy-completed"]}
+
+    report = _service(store, LegacyInputs()).evaluate_all()
+    spike = next(r for r in report.records if r.evaluator == "REFUSAL_SPIKE")
+    assert spike.status is EvaluationStatus.SUPPRESSED
+    assert len(store.signals) == 1

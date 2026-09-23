@@ -6,7 +6,12 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from app.shared.forecasting import DailyReferralCount, ReferralDatasetWatermark
+from app.shared.forecasting import (
+    DailyReferralCount,
+    OrganizationForecastInput,
+    OrganizationForecastRequest,
+    ReferralDatasetWatermark,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +53,7 @@ class ForecastEngineResult:
     candidate_metrics: tuple[dict[str, object], ...]
     selection_rationale: str
     points: tuple[ForecastPointResult, ...]
+    organization_evidence: dict[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +74,9 @@ class ReferralForecastSnapshot:
     limitations: tuple[str, ...]
     historical: tuple[DailyReferralCount, ...]
     points: tuple[ForecastPointResult, ...]
+    scope_type: str = "GLOBAL"
+    hospital_id: uuid.UUID | None = None
+    region_id: uuid.UUID | None = None
 
 
 __all__ = [
@@ -75,6 +84,8 @@ __all__ = [
     "ForecastEngineResult",
     "ForecastMetricSet",
     "ForecastPointResult",
+    "OrganizationForecastInput",
+    "OrganizationForecastRequest",
     "ReferralDatasetWatermark",
     "ReferralForecastSnapshot",
 ]

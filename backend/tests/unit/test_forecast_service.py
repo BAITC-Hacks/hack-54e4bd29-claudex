@@ -220,3 +220,37 @@ def test_missing_global_forecast_is_not_rendered_as_zero() -> None:
 
     with pytest.raises(NotFoundError):
         service.latest_referral_forecast(_context(Role.ADMIN, global_scope=True))
+
+
+@pytest.mark.parametrize("change_after", [1, 2])
+def test_training_rejects_publication_change_before_persist(change_after):
+    from dataclasses import replace
+
+    from app.core.exceptions import ConflictError
+
+    class ChangingMetadata(FakeMetadata):
+        calls = 0
+
+        def referral_watermark(self):
+            self.calls += 1
+            initial = super().referral_watermark()
+            return (
+                initial
+                if self.calls <= change_after
+                else replace(initial, file_hashes=("b" * 64,))
+            )
+
+    forecasts = FakeForecastRepository()
+    versions = FakeModelVersionRepository()
+    uow = FakeUow(forecasts, versions)
+    service = ForecastTrainingService(
+        history_repository=FakeHistory(),
+        metadata_repository=ChangingMetadata(),
+        engine=FakeEngine(),
+        uow_factory=lambda: uow,
+    )
+    with pytest.raises(ConflictError, match="PUBLICATION_CHANGED"):
+        service.run_referral_forecast()
+    assert uow.commits == 0
+    assert forecasts.runs == []
+    assert versions.items == []

@@ -69,6 +69,8 @@ class ScenarioFilter:
     scope_type: DataScopeType | None = None
     source_signal_id: uuid.UUID | None = None
     source_incident_id: uuid.UUID | None = None
+    # Internal authorization constraint; never populated from API query parameters.
+    mapping_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

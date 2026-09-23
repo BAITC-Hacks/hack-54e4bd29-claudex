@@ -1,8 +1,4 @@
-"""Real signed-token acceptance for the local development realm.
-
-The test is opt-in because it requires the running Compose stack. It never
-prints access tokens and uses only synthetic development identities.
-"""
+"""Opt-in real signed tokens; isolated realm credentials come only from environment."""
 
 from __future__ import annotations
 
@@ -11,47 +7,27 @@ import os
 import httpx
 import pytest
 
+from scripts.security.acceptance_identities import AcceptanceIdentity, load_identities
+
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_REAL_KEYCLOAK_TESTS") != "1",
-    reason="set RUN_REAL_KEYCLOAK_TESTS=1 against the local Compose stack",
+    reason="requires isolated stack and MEDSIGNAL_TEST_IDENTITIES",
 )
-
 BASE = os.getenv("MEDSIGNAL_BASE_URL", "http://localhost")
 TOKEN_URL = f"{BASE}/auth/realms/medsignal/protocol/openid-connect/token"
 
-IDENTITIES = {
-    "health-authority": (
-        "health-authority-local_dev_only",
-        "HEALTH_AUTHORITY",
-        True,
-        {"H-A1", "H-A2", "H-B1"},
-    ),
-    "regional-analyst": (
-        "regional-analyst-local_dev_only",
-        "REGIONAL_ANALYST",
-        False,
-        {"H-A1", "H-A2"},
-    ),
-    "hospital-manager": (
-        "hospital-manager-local_dev_only",
-        "HOSPITAL_MANAGER",
-        False,
-        {"H-A1"},
-    ),
-}
 
-
-def _token(client: httpx.Client, username: str, password: str) -> str:
+def _token(client: httpx.Client, identity: AcceptanceIdentity) -> str:
     response = client.post(
         TOKEN_URL,
         data={
             "grant_type": "password",
             "client_id": "medsignal-frontend",
-            "username": username,
-            "password": password,
+            "username": identity.username,
+            "password": identity.password,
         },
     )
-    response.raise_for_status()
+    assert response.status_code == 200, "OIDC token acquisition failed"
     return str(response.json()["access_token"])
 
 
@@ -62,47 +38,55 @@ def _get(client: httpx.Client, token: str, path: str) -> httpx.Response:
 
 
 def test_real_tokens_map_roles_and_enforce_scope() -> None:
+    identities = load_identities()
+    assert {item.role for item in identities} == {
+        "ADMIN",
+        "HEALTH_AUTHORITY",
+        "REGIONAL_ANALYST",
+        "HOSPITAL_MANAGER",
+        "HOSPITAL_ANALYST",
+    }, "Acceptance requires all five roles"
+    assert any(
+        item.role == "HEALTH_AUTHORITY" and not item.global_scope for item in identities
+    )
     with httpx.Client(timeout=15.0) as client:
-        tokens = {
-            username: _token(client, username, details[0])
-            for username, details in IDENTITIES.items()
-        }
-
+        tokens = {item.username: _token(client, item) for item in identities}
         visible: dict[str, dict[str, str]] = {}
-        for username, (
-            _,
-            expected_role,
-            global_scope,
-            expected_codes,
-        ) in IDENTITIES.items():
-            token = tokens[username]
+        for identity in identities:
+            token = tokens[identity.username]
             whoami = _get(client, token, "/system/whoami")
             assert whoami.status_code == 200
             context = whoami.json()
-            assert expected_role in context["roles"]
-            assert context["has_global_scope"] is global_scope
+            assert identity.role in context["roles"]
+            assert context["has_global_scope"] is identity.global_scope
             assert context["scope_resolved"] is True
-
             hospitals = _get(client, token, "/hospitals?page_size=100")
             assert hospitals.status_code == 200
-            items = hospitals.json()["items"]
-            visible[username] = {item["code"]: item["id"] for item in items}
-            assert set(visible[username]) == expected_codes
-
-        global_hospitals = visible["health-authority"]
+            rows = hospitals.json()["items"]
+            visible[identity.username] = {row["code"]: row["id"] for row in rows}
+            assert set(visible[identity.username]) == identity.hospital_codes
+            if not identity.global_scope:
+                forecast = _get(client, token, "/forecasts/referrals/latest")
+                assert forecast.status_code == 404
+                signals = _get(client, token, "/signals?scope_type=GLOBAL")
+                assert signals.status_code == 200
+                assert signals.json()["total"] == 0
+        known = {
+            code: identifier
+            for rows in visible.values()
+            for code, identifier in rows.items()
+        }
+        for identity in identities:
+            for code, identifier in known.items():
+                if code not in identity.hospital_codes:
+                    assert (
+                        _get(
+                            client, tokens[identity.username], f"/hospitals/{identifier}"
+                        ).status_code
+                        == 404
+                    )
+        # Invalid bearer cannot use any cached authenticated result.
         assert (
-            _get(
-                client,
-                tokens["regional-analyst"],
-                f"/hospitals/{global_hospitals['H-B1']}",
-            ).status_code
-            == 404
-        )
-        assert (
-            _get(
-                client,
-                tokens["hospital-manager"],
-                f"/hospitals/{global_hospitals['H-A2']}",
-            ).status_code
-            == 404
+            _get(client, "invalid-token", "/forecasts/referrals/latest").status_code
+            == 401
         )

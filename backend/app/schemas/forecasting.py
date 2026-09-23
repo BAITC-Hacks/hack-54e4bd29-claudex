@@ -8,6 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from app.models.enums import DataScopeType
+
 _RESPONSE = ConfigDict(extra="forbid", protected_namespaces=())
 
 
@@ -30,7 +32,9 @@ class ReferralForecastResponse(BaseModel):
 
     id: uuid.UUID
     target: Literal["DAILY_REFERRAL_COUNT"]
-    scope_type: Literal["GLOBAL"]
+    scope_type: DataScopeType
+    hospital_id: uuid.UUID | None = None
+    region_id: uuid.UUID | None = None
     horizon_days: int
     input_period_start: datetime
     input_period_end: datetime

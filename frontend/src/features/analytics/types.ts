@@ -15,6 +15,8 @@ export const analyticsMetaSchema = z.object({
   latest_import_ids: z.array(z.string()),
   latest_import_completed_at: z.string().nullable(),
   limitations: z.array(z.string()),
+  mapping_version: z.string().nullable().optional(),
+  mapping_publication_available: z.boolean().optional(),
 });
 
 export const overviewSchema = z.object({
@@ -121,7 +123,11 @@ export const freshnessSchema = z.object({
       event_period_end: z.string().nullable(),
       source_load_date: z.string().nullable(),
       last_successful_import: z.string().nullable(),
-      status: z.enum(["CURRENT", "STALE", "UNKNOWN"]),
+      status: z.enum(["CURRENT", "STALE", "UNKNOWN", "PARTIAL"]),
+      confirmed_complete_through: z.string().nullable().optional(),
+      cadence_known: z.boolean().optional(),
+      completeness: z.enum(["COMPLETE", "PARTIAL", "UNKNOWN"]).optional(),
+      forecast_available: z.boolean().optional(),
       explanation: z.string().nullable(),
     }),
   ),

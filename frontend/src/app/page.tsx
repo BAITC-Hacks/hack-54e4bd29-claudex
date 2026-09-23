@@ -1,2 +1,3 @@
-import {redirect} from "next/navigation";
-export default function HomePage() { redirect(process.env.NEXT_PUBLIC_PILOT_MODE === "true" ? "/monitor" : "/command-center"); }
+import { redirect } from "next/navigation";
+import { env } from "@/config/env";
+export default function HomePage() { redirect(env.pilotModeEnabled ? "/monitor" : "/command-center"); }

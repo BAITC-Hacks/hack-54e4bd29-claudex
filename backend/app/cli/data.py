@@ -19,6 +19,7 @@ HTTP означало бы дать возможность прочитать п
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import uuid
 from collections.abc import Sequence
@@ -30,6 +31,7 @@ from app.core.config import load_settings_or_exit
 from app.core.logging import configure_logging
 from app.models.enums import DatasetType
 from app.security.context import DataScope, Role, SecurityContext
+from app.shared.delivery import DeliveryManifest
 from data_pipeline.contracts import ALLOWED_DATASETS
 
 EXIT_OK = 0
@@ -118,13 +120,30 @@ def _command_discover(source: Path) -> int:
     return EXIT_OK
 
 
-def _command_import(source: Path, datasets: list[str], dry_run: bool) -> int:
+def _command_import(
+    source: Path, datasets: list[str], dry_run: bool, manifest_path: Path | None = None
+) -> int:
     service = build_import_service(source)
     context = _operator_context()
     failed = False
 
+    manifest = (
+        DeliveryManifest.from_payload(
+            json.loads(manifest_path.read_text(encoding="utf-8"))
+        )
+        if manifest_path
+        else None
+    )
+    if not dry_run and (manifest is None or datasets != [manifest.dataset_type]):
+        print(
+            "APPROVED_MANIFEST_REQUIRED: one dataset and registered manifest",
+            file=sys.stderr,
+        )
+        return EXIT_CONFIG
     for name in datasets:
-        report = service.import_dataset(context, DatasetType(name), dry_run=dry_run)
+        report = service.import_dataset(
+            context, DatasetType(name), dry_run=dry_run, manifest=manifest
+        )
         _print_report(report)
         if report.failed:
             failed = True
@@ -152,6 +171,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
+    approval = commands.add_parser(
+        "approve-manifest", help="record explicit owner review; never inferred by import"
+    )
+    approval.add_argument("--manifest", type=Path, required=True)
+    approval.add_argument("--actor", required=True)
+    approval.add_argument("--evidence-ref", required=True)
+    approval.add_argument("--cadence-days", type=int)
+    from datetime import date
+
+    approval.add_argument("--legacy-complete-through", type=date.fromisoformat)
+
     commands.add_parser("discover", help="показать найденные файлы наборов")
 
     importer = commands.add_parser("import", help="загрузить наборы")
@@ -172,6 +202,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="проверить файлы, не записывая в хранилище",
     )
 
+    importer.add_argument(
+        "--manifest", type=Path, help="previously reviewed registered manifest JSON"
+    )
+
     recovery = commands.add_parser("recover", help="отменить незавершённый импорт")
     recovery.add_argument("--import-id", required=True, type=uuid.UUID)
 
@@ -188,6 +222,31 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     args = build_parser().parse_args(argv)
+    if args.command == "approve-manifest":
+        from app.business.ingestion.delivery import DeliveryService
+        from app.composition import get_unit_of_work_factory
+        from app.security.authorization import get_authorization_service
+
+        context = SecurityContext(
+            user_id=args.actor,
+            roles=frozenset({Role.ADMIN}),
+            scope=DataScope.global_scope(),
+        )
+        manifest = DeliveryManifest.from_payload(
+            json.loads(args.manifest.read_text(encoding="utf-8"))
+        )
+        print(
+            DeliveryService(
+                get_unit_of_work_factory(), get_authorization_service()
+            ).approve(
+                context,
+                manifest,
+                evidence_ref=args.evidence_ref,
+                cadence_days=args.cadence_days,
+                legacy_complete_through=args.legacy_complete_through,
+            )
+        )
+        return EXIT_OK
     source = args.source or Path(settings.data_source_dir)
 
     if not source.is_dir():
@@ -209,7 +268,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return EXIT_CONFIG
 
-    return _command_import(source, datasets, args.dry_run)
+    return _command_import(source, datasets, args.dry_run, args.manifest)
 
 
 if __name__ == "__main__":

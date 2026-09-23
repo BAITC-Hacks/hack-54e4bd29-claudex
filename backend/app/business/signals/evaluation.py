@@ -39,6 +39,10 @@ from app.models.signal import Signal, SignalExplanation
 logger = get_logger(__name__)
 
 
+class PublicationChangedError(Exception):
+    """Aggregate publication changed before an operational signal could commit."""
+
+
 class SignalEvaluationService:
     """Run independent evaluators, then persist only fired candidates."""
 
@@ -177,7 +181,15 @@ class SignalEvaluationService:
                 reason=result.reason,
                 metadata=dict(result.metadata),
             )
-        signal_id, persistence = self._persist_candidate(result.candidate)
+        try:
+            signal_id, persistence = self._persist_candidate(result.candidate)
+        except PublicationChangedError:
+            return EvaluationRecord(
+                evaluator=result.evaluator,
+                dataset_type=dataset_type,
+                status=EvaluationStatus.SUPPRESSED,
+                reason="PUBLICATION_CHANGED",
+            )
         return EvaluationRecord(
             evaluator=result.evaluator,
             dataset_type=dataset_type,
@@ -193,6 +205,26 @@ class SignalEvaluationService:
         self, candidate: SignalCandidate
     ) -> tuple[uuid.UUID, PersistenceStatus]:
         with self._uow_factory() as uow:
+            spike_datasets = {"REFERRAL_SPIKE": "REFERRALS", "REFUSAL_SPIKE": "REFUSALS"}
+            if candidate.rule_code in spike_datasets:
+                saved = candidate.data_watermark
+                if saved.get("schema_version") != "published-signal-input-v1":
+                    raise PublicationChangedError
+                dataset = spike_datasets[candidate.rule_code]
+                uow.deliveries.lock_source(candidate.source, dataset)
+                ready = uow.deliveries.readiness(dataset, source_system=candidate.source)
+                if (
+                    ready.completeness != "COMPLETE"
+                    or not ready.published_import_ids
+                    or ready.confirmed_complete_through is None
+                    or ready.confirmed_complete_through < candidate.evaluation_period_end
+                    or ready.publication_watermark != saved.get("delivery_watermark")
+                    or ready.confirmed_complete_through.isoformat()
+                    != saved.get("confirmed_complete_through")
+                    or [str(i) for i in ready.published_import_ids]
+                    != saved.get("import_ids")
+                ):
+                    raise PublicationChangedError
             existing = uow.signals.find_by_dedup_key(candidate.dedup_key)
             if existing is not None:
                 return existing.id, PersistenceStatus.SKIP_IDEMPOTENT

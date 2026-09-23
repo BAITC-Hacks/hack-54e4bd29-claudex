@@ -43,6 +43,12 @@ describe("analytics presentation states", () => {
     expect(screen.getByText("ИС БГ")).toBeInTheDocument();
   });
 
+  it("labels incomplete delivery and unavailable mapping explicitly", () => {
+    render(<DataFreshnessBadge status="PARTIAL" mappingAvailable={false} />);
+    expect(screen.getByText("Поставка неполная")).toBeInTheDocument();
+    expect(screen.getByText("Сопоставления недоступны")).toBeInTheDocument();
+  });
+
   it("labels unknown freshness explicitly", () => {
     render(<DataFreshnessBadge status="UNKNOWN" />);
     expect(screen.getByText("Не определено")).toBeInTheDocument();

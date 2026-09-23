@@ -78,6 +78,8 @@ def _meta(metadata: AnalyticsMetadata) -> AnalyticsMetaResponse:
         latest_import_ids=list(metadata.latest_import_ids),
         latest_import_completed_at=metadata.completed_import_watermark,
         limitations=list(metadata.limitations),
+        mapping_version=metadata.mapping_version,
+        mapping_publication_available=metadata.mapping_publication_available,
     )
 
 

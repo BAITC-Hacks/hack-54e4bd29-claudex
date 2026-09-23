@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -49,9 +50,17 @@ class FakeMetadataRepository:
     def __init__(self, hospital_ids: tuple[uuid.UUID, ...]) -> None:
         self.hospital_ids = hospital_ids
         self.watermark = ImportWatermark(
+            mapping_version="mapping-1",
+            mapping_generation=1,
+            mapping_verified=True,
             completed_at=datetime(2026, 5, 13, tzinfo=UTC),
             import_ids=(uuid.UUID("00000000-0000-0000-0000-000000000001"),),
         )
+
+    def delivery_readiness(self, dataset_type):
+        from app.shared.delivery import DeliveryReadiness
+
+        return DeliveryReadiness(dataset_type)
 
     def hospital_ids_for_regions(
         self, region_ids: tuple[uuid.UUID, ...]
@@ -122,7 +131,10 @@ def test_hospital_role_queries_only_explicit_canonical_hospitals() -> None:
         context(Role.HOSPITAL_ANALYST, hospital_ids=(hospital_id,)), DATE_FILTER
     )
 
-    assert repository.overview_scopes == [
+    assert [
+        replace(item, mapping_version=None, published_import_ids=None)
+        for item in repository.overview_scopes
+    ] == [
         QueryScope(
             canonical_hospital_ids=(hospital_id,),
             all_canonical=False,
@@ -139,7 +151,9 @@ def test_regional_scope_is_resolved_to_hospitals_and_excludes_unmapped() -> None
 
     service.overview(context(Role.REGIONAL_ANALYST, region_ids=(region_id,)), DATE_FILTER)
 
-    assert repository.overview_scopes[0] == QueryScope(
+    assert replace(
+        repository.overview_scopes[0], mapping_version=None, published_import_ids=None
+    ) == QueryScope(
         canonical_hospital_ids=hospital_ids,
         all_canonical=False,
         include_unmapped=False,
@@ -156,10 +170,12 @@ def test_health_authority_can_review_unmapped_but_canonical_scope_stays_bounded(
 
     service.overview(context(Role.HEALTH_AUTHORITY, region_ids=(region_id,)), DATE_FILTER)
 
-    assert repository.overview_scopes[0] == QueryScope(
+    assert replace(
+        repository.overview_scopes[0], mapping_version=None, published_import_ids=None
+    ) == QueryScope(
         canonical_hospital_ids=(hospital_id,),
         all_canonical=False,
-        include_unmapped=True,
+        include_unmapped=False,
     )
 
 
@@ -169,7 +185,9 @@ def test_unresolved_scope_fails_closed() -> None:
 
     service.overview(context(Role.REGIONAL_ANALYST, resolved=False), DATE_FILTER)
 
-    assert repository.overview_scopes[0] == QueryScope(
+    assert replace(
+        repository.overview_scopes[0], mapping_version=None, published_import_ids=None
+    ) == QueryScope(
         canonical_hospital_ids=(), all_canonical=False, include_unmapped=False
     )
 
@@ -202,6 +220,9 @@ def test_cache_key_isolated_by_scope_and_invalidated_by_import_watermark() -> No
         context(Role.HOSPITAL_ANALYST, hospital_ids=(second_hospital,)), DATE_FILTER
     )
     metadata.watermark = ImportWatermark(
+        mapping_version="mapping-1",
+        mapping_generation=1,
+        mapping_verified=True,
         completed_at=datetime(2026, 5, 14, tzinfo=UTC),
         import_ids=(uuid.UUID("00000000-0000-0000-0000-000000000002"),),
     )

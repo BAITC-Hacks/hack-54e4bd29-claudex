@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Protocol
 
 from app.business.ingestion.results import PipelineFileResult
+from app.shared.delivery import DeliveryEvidence
 
 
 class SourceFileRef(Protocol):
@@ -29,6 +30,10 @@ class SourceFileRef(Protocol):
 
 class IngestionPipeline(Protocol):
     """Разбор файла и загрузка его в аналитическое хранилище."""
+
+    def delivery_evidence(
+        self, dataset_type: str, import_ids: tuple[uuid.UUID, ...]
+    ) -> DeliveryEvidence | None: ...
 
     def discover(self, dataset_type: str) -> list[SourceFileRef]: ...
 
@@ -49,3 +54,9 @@ class IngestionPipeline(Protocol):
     def source_system(self, dataset_type: str) -> str: ...
 
     def expected_row_count(self, dataset_type: str) -> int | None: ...
+
+
+class DeliveryEvidenceReader(Protocol):
+    def delivery_evidence(
+        self, dataset_type: str, import_ids: tuple[uuid.UUID, ...]
+    ) -> DeliveryEvidence | None: ...

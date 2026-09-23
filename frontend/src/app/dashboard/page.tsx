@@ -187,7 +187,7 @@ export default function DashboardPage() {
                   {freshness.data.map((item) => (
                     <div key={item.dataset_type} className="flex items-start justify-between gap-3 border-b pb-3 last:border-0">
                       <div><p className="text-sm font-medium">{item.dataset_type}</p><p className="text-xs text-muted-foreground">Период до {formatDate(item.event_period_end)}</p><p className="text-xs text-muted-foreground">Импорт: {formatDate(item.last_successful_import)}</p></div>
-                      <DataFreshnessBadge status={item.status} />
+                      <DataFreshnessBadge status={item.status} mappingAvailable={freshness.meta.mapping_publication_available} />
                     </div>
                   ))}
                 </div>

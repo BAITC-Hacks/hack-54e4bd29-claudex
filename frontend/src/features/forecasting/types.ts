@@ -21,7 +21,11 @@ const forecastPointSchema = z.object({
 export const referralForecastSchema = z.object({
   id: z.string().uuid(),
   target: z.literal("DAILY_REFERRAL_COUNT"),
-  scope_type: z.literal("GLOBAL"),
+  scope_type: z.enum(["GLOBAL", "REGION", "HOSPITAL"]),
+  // Optional for compatibility with the existing latest-global response.
+  // By-ID responses supply canonical scope IDs (nullable), never aliases.
+  hospital_id: z.string().uuid().nullable().optional(),
+  region_id: z.string().uuid().nullable().optional(),
   horizon_days: z.number().int().positive(),
   input_period_start: z.string(),
   input_period_end: z.string(),

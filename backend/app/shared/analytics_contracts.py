@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Generic, TypeVar
 
@@ -167,6 +167,8 @@ class AnalyticsMetadata:
     limitations: tuple[str, ...]
     granularity: Granularity | None = None
     latest_import_ids: tuple[str, ...] = ()
+    mapping_version: str | None = None
+    mapping_publication_available: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -279,6 +281,7 @@ class FreshnessResult:
 
 
 class FreshnessStatus(StrEnum):
+    PARTIAL = "PARTIAL"
     CURRENT = "CURRENT"
     STALE = "STALE"
     UNKNOWN = "UNKNOWN"
@@ -293,6 +296,10 @@ class DatasetFreshness:
     last_successful_import: datetime | None
     status: FreshnessStatus
     explanation: str | None
+    confirmed_complete_through: date | None = None
+    cadence_known: bool = False
+    completeness: str = "UNKNOWN"
+    forecast_available: bool = False
 
 
 @dataclass(frozen=True, slots=True)

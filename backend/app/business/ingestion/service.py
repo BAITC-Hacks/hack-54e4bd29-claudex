@@ -15,8 +15,10 @@
 from __future__ import annotations
 
 import uuid
+from contextlib import suppress
 from datetime import UTC, datetime
 
+from app.business.ingestion.delivery import DeliveryService, assess_delivery
 from app.business.ingestion.ports import IngestionPipeline, SourceFileRef
 from app.business.ingestion.results import (
     DatasetImportReport,
@@ -26,7 +28,7 @@ from app.business.ingestion.results import (
 )
 from app.business.ports import UnitOfWorkFactory
 from app.core import metrics
-from app.core.exceptions import NotFoundError, ValidationError
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.logging import get_logger, get_request_id
 from app.models.data_import import DataImport
 from app.models.enums import (
@@ -40,6 +42,7 @@ from app.models.quality import DataQualityResult, QuarantineBatch
 from app.security.authorization import AuthorizationService
 from app.security.context import SecurityContext
 from app.security.permissions import Permission
+from app.shared.delivery import DeliveryManifest
 
 logger = get_logger(__name__)
 
@@ -66,6 +69,72 @@ class ImportService:
     # ------------------------------------------------------------------
 
     def import_dataset(
+        self,
+        context: SecurityContext,
+        dataset_type: DatasetType,
+        *,
+        dry_run: bool = False,
+        manifest: DeliveryManifest | None = None,
+    ) -> DatasetImportReport:
+        self._authz.require_permission(context, Permission.DATA_IMPORT_CREATE)
+        if dry_run:
+            return self._import_dataset_files(context, dataset_type, dry_run=True)
+        if manifest is None:
+            raise ValidationError("APPROVED_MANIFEST_REQUIRED")
+        if (
+            not isinstance(manifest, DeliveryManifest)
+            or manifest.dataset_type != dataset_type.value
+        ):
+            raise ValidationError("MANIFEST_DATASET_MISMATCH")
+        if manifest.source_system != self._pipeline.source_system(dataset_type.value):
+            raise ValidationError("MANIFEST_SOURCE_MISMATCH")
+        with self._uow_factory() as uow:
+            uow.deliveries.lock_source(manifest.source_system, manifest.dataset_type)
+            delivery = uow.deliveries.require(manifest.delivery_id)
+            if delivery.manifest_digest != manifest.digest or not delivery.approved_at:
+                raise ValidationError("CONTRACT_NOT_APPROVED")
+            files = self._pipeline.discover(dataset_type.value)
+            hashes = [self._pipeline.fingerprint(file) for file in files]
+            ready, reason = assess_delivery(
+                manifest,
+                received_hashes=frozenset(hashes),
+                overlaps_published_period=uow.deliveries.overlaps(manifest),
+                contract_approved=True,
+            )
+            if not ready or len(hashes) != len(set(hashes)):
+                raise ValidationError(reason if not ready else "DUPLICATE_PART")
+            report = DatasetImportReport(
+                dataset_type=dataset_type.value,
+                source_system=manifest.source_system,
+                dry_run=False,
+            )
+            # Source lock spans file processing, while each file commits independently.
+            # A killed process releases the lock; successful parts survive recovery.
+            for file, expected_hash in zip(files, hashes, strict=True):
+                report.files.append(
+                    self._import_file(
+                        context,
+                        dataset_type,
+                        file,
+                        dry_run=False,
+                        delivery_id=delivery.id,
+                        expected_hash=expected_hash,
+                    )
+                )
+            uow.commit()
+        if report.failed:
+            # Record PARTIAL and retain successful files, but never publish them.
+            with suppress(ConflictError):
+                DeliveryService(self._uow_factory, self._authz, self._pipeline).publish(
+                    context, manifest.delivery_id
+                )
+            return report
+        DeliveryService(self._uow_factory, self._authz, self._pipeline).publish(
+            context, manifest.delivery_id
+        )
+        return report
+
+    def _import_dataset_files(
         self,
         context: SecurityContext,
         dataset_type: DatasetType,
@@ -136,8 +205,12 @@ class ImportService:
         file: SourceFileRef,
         *,
         dry_run: bool,
+        delivery_id: uuid.UUID | None = None,
+        expected_hash: str | None = None,
     ) -> FileImportReport:
         file_hash = self._pipeline.fingerprint(file)
+        if expected_hash is not None and file_hash != expected_hash:
+            raise ValidationError("SOURCE_CHANGED_AFTER_REVIEW")
         source_system = self._pipeline.source_system(dataset_type.value)
 
         # --- Идемпотентность ------------------------------------------------
@@ -146,6 +219,12 @@ class ImportService:
         # файл с изменённым содержимым — новый, даже под старым именем.
         with self._uow_factory() as uow:
             existing = uow.data_imports.find_by_hash(dataset_type.value, file_hash)
+            if (
+                existing is not None
+                and delivery_id is not None
+                and existing.delivery_id != delivery_id
+            ):
+                raise ConflictError("FILE_ALREADY_BOUND_TO_OTHER_DELIVERY")
             if existing is not None and _is_completed(existing):
                 metrics.record_skipped(dataset_type.value, source_system)
                 return FileImportReport(
@@ -159,7 +238,15 @@ class ImportService:
         if dry_run:
             return self._dry_run_file(dataset_type, file, file_hash)
 
-        import_id = self._register_import(context, dataset_type, file, file_hash)
+        if existing is not None and delivery_id is not None:
+            # A dead process may have left staged/published rows. Clean only this
+            # uncompleted import under the source lock before deterministic retry.
+            self._pipeline.rollback(
+                dataset_type=dataset_type.value, import_id=existing.id
+            )
+        import_id = self._register_import(
+            context, dataset_type, file, file_hash, delivery_id=delivery_id
+        )
         metrics.record_started(dataset_type.value, source_system)
 
         try:
@@ -181,6 +268,14 @@ class ImportService:
                 error_summary=_summarize(error),
             )
 
+        if expected_hash is not None and (
+            result.file_hash != expected_hash
+            or self._pipeline.fingerprint(file) != expected_hash
+        ):
+            self._fail(
+                dataset_type, import_id, ValidationError("SOURCE_CHANGED_DURING_IMPORT")
+            )
+            raise ValidationError("SOURCE_CHANGED_DURING_IMPORT")
         self._complete(dataset_type, import_id, file, result)
         metrics.record_completed(
             dataset_type.value,
@@ -253,6 +348,8 @@ class ImportService:
         dataset_type: DatasetType,
         file: SourceFileRef,
         file_hash: str,
+        *,
+        delivery_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         """Создать запись об импорте и перевести её в работу.
 
@@ -283,6 +380,7 @@ class ImportService:
                     DataImport(
                         id=uuid.uuid4(),
                         dataset_type=dataset_type.value,
+                        delivery_id=delivery_id,
                         source=self._pipeline.source_system(dataset_type.value),
                         file_name=file.name,
                         file_hash=file_hash,
@@ -448,19 +546,35 @@ class ImportService:
         """
         self._authz.require_permission(context, Permission.ADMIN_MANAGE)
 
+        # Read only the immutable lock coordinates first. Do not carry this
+        # detached status into the critical section: a retry may publish while
+        # recovery waits for the same source lock.
         with self._uow_factory() as uow:
+            initial = uow.data_imports.get(import_id)
+            if initial is None:
+                raise NotFoundError("Импорт не найден")
+            source, dataset_type = initial.source, initial.dataset_type
+
+        with self._uow_factory() as uow:
+            uow.deliveries.lock_source(source, dataset_type)
             data_import = uow.data_imports.get(import_id)
             if data_import is None:
                 raise NotFoundError("Импорт не найден")
+            if (data_import.source, data_import.dataset_type) != (source, dataset_type):
+                raise ConflictError("IMPORT_SOURCE_CHANGED")
+            if data_import.delivery_id is not None:
+                delivery = uow.deliveries.get_by_id(data_import.delivery_id)
+                if delivery is None:
+                    raise ValidationError("DELIVERY_NOT_REGISTERED")
+                if delivery.status == "PUBLISHED":
+                    raise ValidationError("PUBLISHED_DELIVERY")
             if _is_completed(data_import):
                 raise ValidationError(
                     "Импорт завершён успешно и восстановлению не подлежит"
                 )
-            dataset_type = data_import.dataset_type
-
-        self._pipeline.rollback(dataset_type=dataset_type, import_id=import_id)
-
-        with self._uow_factory() as uow:
+            # Keep the advisory transaction lock through analytical cleanup and
+            # the PG status commit. Import/retry/publication cannot interleave.
+            self._pipeline.rollback(dataset_type=dataset_type, import_id=import_id)
             uow.data_imports.update_status(
                 import_id,
                 status=DataImportStatus.FAILED,

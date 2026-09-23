@@ -25,6 +25,7 @@ from app.models.action import Action
 from app.models.analytics import Forecast, Scenario
 from app.models.audit import AuditEvent
 from app.models.data_import import DataImport
+from app.models.delivery import Delivery
 from app.models.directory import Hospital, Region
 from app.models.enums import (
     AuditAction,
@@ -42,6 +43,7 @@ from app.models.quality import DataQualityResult, QuarantineBatch
 from app.models.signal import Signal
 from app.models.system import SystemOperation
 from app.security.context import DataScope
+from app.shared.delivery import DeliveryManifest, DeliveryReadiness
 from app.shared.filters import (
     AuditFilter,
     HospitalFilter,
@@ -49,6 +51,7 @@ from app.shared.filters import (
     ScenarioFilter,
     SignalFilter,
 )
+from app.shared.mapping import MappingReadiness, MappingSnapshot
 from app.shared.pagination import PageRequest
 
 # Псевдонимы нужны потому, что внутри протоколов имя `list`
@@ -354,6 +357,44 @@ class SystemOperationRepository(Protocol):
     ) -> SystemOperation | None: ...
 
 
+class DeliveryRepository(Protocol):
+    def get_by_id(self, delivery_id: uuid.UUID) -> Delivery | None: ...
+    def has_complete_parts(self, delivery: Delivery) -> bool: ...
+
+    def lock_source(self, source: str, dataset: str) -> None: ...
+    def get(self, delivery_id: str) -> Delivery | None: ...
+    def require(self, delivery_id: str, refresh: bool = False) -> Delivery: ...
+    def has_legacy(self, source: str, dataset: str) -> bool: ...
+    def overlaps(self, manifest: DeliveryManifest) -> bool: ...
+    def add_approved(
+        self,
+        manifest: DeliveryManifest,
+        *,
+        evidence_ref: str,
+        actor: str,
+        cadence_days: int | None,
+    ) -> Delivery: ...
+    def imports(self, delivery_id: uuid.UUID) -> list[DataImport]: ...
+    def readiness(
+        self, dataset_type: str, source_system: str | None = None
+    ) -> DeliveryReadiness: ...
+
+
+class MappingRepository(Protocol):
+    def lock(self) -> None: ...
+    def readiness(self) -> MappingReadiness: ...
+    def get_alias(
+        self, alias_id: uuid.UUID, kind: str = "ORGANIZATION"
+    ) -> OrganizationAlias | RegionAlias | None: ...
+    def target_exists(self, target_id: uuid.UUID, kind: str) -> bool: ...
+    def register(
+        self, *, kind: str, source_system: str, identity_space: str, source_key: str
+    ) -> OrganizationAlias | RegionAlias: ...
+    def record_decision(self, *, actor: str, evidence_ref: str) -> str: ...
+    def candidate(self, version: str) -> MappingSnapshot: ...
+    def activate(self, version: str) -> None: ...
+
+
 class UnitOfWork(Protocol):
     """Единица работы: общая транзакция для набора репозиториев.
 
@@ -391,6 +432,12 @@ class UnitOfWork(Protocol):
 
     @property
     def data_imports(self) -> DataImportRepository: ...
+
+    @property
+    def deliveries(self) -> DeliveryRepository: ...
+
+    @property
+    def mappings(self) -> MappingRepository: ...
 
     @property
     def data_quality(self) -> DataQualityRepository: ...

@@ -6,14 +6,19 @@ import argparse
 import json
 import re
 import shlex
+import tempfile
 from pathlib import Path
 from typing import Any
 
 from scripts.operations.common import (
     clickhouse_verification_expression,
     compose,
+    object_inventory,
+    postgres_inventory,
     require_phase8_namespace,
     verify_manifest,
+    verify_object_inventory,
+    verify_postgres_inventory,
 )
 
 TABLE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -40,10 +45,45 @@ def _clickhouse(project: str, query: str, input_bytes: bytes | None = None) -> b
 
 def restore_and_verify(backup: Path, namespace: str, project: str) -> dict[str, Any]:
     namespace = require_phase8_namespace(namespace)
+    project = require_phase8_namespace(project)
     backup = backup.resolve()
     verify_manifest(backup)
     stores = json.loads((backup / "stores.json").read_text(encoding="utf-8"))
 
+    required = (
+        "postgres_inventory",
+        "minio_objects",
+        "clickhouse_migrations",
+        "clickhouse_checks",
+        "clickhouse_kinds",
+    )
+    missing = [key for key in required if stores.get(key) is None]
+    if stores.get("verification_version") != 2:
+        missing.append("verification_version_2")
+    if missing:
+        return {
+            "status": "RESTORE_VERIFICATION_INCOMPLETE",
+            "namespace": namespace,
+            "project": project,
+            "missing_evidence": missing,
+            "restored": False,
+        }
+    # Validate inventory coverage and object evidence before target writes.
+    verify_postgres_inventory(stores["postgres_inventory"], stores["postgres_inventory"])
+    verify_object_inventory(
+        stores["minio_objects"],
+        object_inventory(backup / "minio", stores["minio_buckets"]),
+    )
+    if not TABLE.fullmatch(stores["clickhouse_database"]):
+        raise ValueError("unsafe ClickHouse database name")
+    for table in stores["clickhouse_tables"]:
+        if not TABLE.fullmatch(table):
+            raise ValueError("unsafe ClickHouse table name")
+        kind = stores["clickhouse_kinds"].get(table)
+        if kind not in {"TABLE", "MATERIALIZED_VIEW"}:
+            raise ValueError("incomplete ClickHouse kind evidence")
+        if kind == "TABLE" and table not in stores["clickhouse_checks"]:
+            raise ValueError("incomplete ClickHouse content evidence")
     postgres_db = _safe_database(namespace, "postgres")
     create_database = (
         'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 '
@@ -68,26 +108,15 @@ def restore_and_verify(backup: Path, namespace: str, project: str) -> dict[str, 
         f'pg_restore -U "$POSTGRES_USER" -d {postgres_db} --exit-on-error',
         input_bytes=(backup / "postgres.dump").read_bytes(),
     )
-    pg_count_query = shlex.quote(
-        "SELECT count(*) FROM pg_tables WHERE schemaname='public'"
-    )
-    pg_tables = int(
-        compose(
-            project,
-            "exec",
-            "-T",
-            "postgres",
-            "sh",
-            "-c",
-            f'psql -U "$POSTGRES_USER" -d {postgres_db} -Atc {pg_count_query}',
-        )
-        .decode()
-        .strip()
-    )
+    pg_actual = postgres_inventory(project, postgres_db)
+    verify_postgres_inventory(stores["postgres_inventory"], pg_actual)
+    pg_tables = len(pg_actual["tables"])
 
     clickhouse_db = _safe_database(namespace, "clickhouse")
     _clickhouse(project, f"CREATE DATABASE `{clickhouse_db}`")
     source_db = stores["clickhouse_database"]
+    if not TABLE.fullmatch(source_db):
+        raise ValueError("unsafe ClickHouse database name")
     definitions: dict[str, str] = {}
     for table in stores["clickhouse_tables"]:
         if not TABLE.fullmatch(table):
@@ -145,10 +174,24 @@ def restore_and_verify(backup: Path, namespace: str, project: str) -> dict[str, 
                 f"expected {expected['value']}, got {actual}"
             )
 
+    migration_checks = [
+        json.loads(line)
+        for line in _clickhouse(
+            project,
+            f"SELECT version, checksum FROM `{clickhouse_db}`.schema_migrations "  # noqa: S608 -- namespace is validated
+            "ORDER BY version FORMAT JSONEachRow",
+        )
+        .decode()
+        .splitlines()
+        if line
+    ]
+    if migration_checks != stores["clickhouse_migrations"]:
+        raise RuntimeError("ClickHouse migration checksum mismatch")
+
     minio_prefix = namespace
     mount = f"{(backup / 'minio').resolve()}:/backup:ro"
     minio_script_parts = [
-        "mc alias set target http://minio:9000 "
+        "set -eu; mc alias set target http://minio:9000 "
         '"$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null'
     ]
     for bucket in stores["minio_buckets"]:
@@ -175,17 +218,65 @@ def restore_and_verify(backup: Path, namespace: str, project: str) -> dict[str, 
         "; ".join(minio_script_parts),
     )
 
+    # Read every restored object back through the target API. Hashing only the
+    # local backup (verify_manifest) cannot detect a failed/corrupted restore.
+    with tempfile.TemporaryDirectory(
+        prefix="phase8-restore-verify-", dir=backup.parent
+    ) as temp:
+        verify_root = Path(temp).resolve()
+        if not verify_root.is_relative_to(backup.parent):
+            raise ValueError("unsafe verification directory")
+        download = [
+            "set -eu; mc alias set target http://minio:9000 "
+            '"$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null'
+        ]
+        for bucket in stores["minio_buckets"]:
+            (verify_root / bucket).mkdir()
+            target = f"{minio_prefix}-{bucket.removeprefix('medsignal-')}"
+            download.append(
+                f"mc mirror target/{target} /verification/{bucket} >/dev/null"
+            )
+        compose(
+            project,
+            "run",
+            "--rm",
+            "--no-deps",
+            "--volume",
+            f"{verify_root}:/verification",
+            "--entrypoint",
+            "/bin/sh",
+            "minio-init",
+            "-c",
+            "; ".join(download),
+        )
+        verify_object_inventory(
+            stores["minio_objects"],
+            object_inventory(verify_root, stores["minio_buckets"]),
+        )
+
     return {
-        "status": "RESTORE_VERIFIED",
+        "status": "RESTORE_CONTENT_VERIFIED",
+        "application_workflow": "NOT_TESTED",
+        "consistency": "REQUIRES_QUIESCED_WRITERS_NO_CROSS_STORE_SNAPSHOT",
+        "rpo_rto_acceptance": "EXTERNAL_DEPENDENCY",
         "namespace": namespace,
         "project": project,
-        "postgres": {"database": postgres_db, "tables": pg_tables},
+        "postgres": {
+            "database": postgres_db,
+            "tables": pg_tables,
+            "rows_constraints_revisions": "MATCH",
+        },
         "clickhouse": {
             "database": clickhouse_db,
             "rows": clickhouse_counts,
             "verification": verification,
+            "migration_checksums": "MATCH",
         },
-        "minio": {"bucket_prefix": minio_prefix, "buckets": len(stores["minio_buckets"])},
+        "minio": {
+            "bucket_prefix": minio_prefix,
+            "buckets": len(stores["minio_buckets"]),
+            "object_hashes": "MATCH",
+        },
         "redis": "NOT_APPLICABLE_NON_AUTHORITATIVE",
     }
 
@@ -194,7 +285,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--backup", type=Path, required=True)
     parser.add_argument("--namespace", required=True)
-    parser.add_argument("--project", default="medsignal")
+    parser.add_argument("--project", required=True)
     parser.add_argument("--evidence", type=Path)
     args = parser.parse_args()
     result = restore_and_verify(args.backup, args.namespace, args.project)
@@ -203,7 +294,7 @@ def main() -> int:
         args.evidence.parent.mkdir(parents=True, exist_ok=True)
         args.evidence.write_text(rendered, encoding="utf-8")
     print(rendered)
-    return 0
+    return 0 if result["status"] == "RESTORE_CONTENT_VERIFIED" else 2
 
 
 if __name__ == "__main__":

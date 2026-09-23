@@ -21,6 +21,7 @@ from app.business.ingestion.results import (
 )
 from app.core.config import Settings
 from app.core.logging import get_logger
+from app.shared.delivery import DeliveryEvidence
 from data_pipeline.contracts import get_contract
 from data_pipeline.ingestion.discovery import SourceFile, discover, fingerprint
 from data_pipeline.loading.clickhouse_writer import (
@@ -142,6 +143,39 @@ class PipelineAdapter:
             result.rows_loaded = published.published_rows
 
         return _to_business(result, quarantine, bucket)
+
+    def delivery_evidence(
+        self, dataset_type: str, import_ids: tuple[uuid.UUID, ...]
+    ) -> DeliveryEvidence | None:
+        from app.shared.delivery import DeliveryEvidence
+
+        specs = {
+            "REFERRALS": ("fact_referral_events", "registration_dt", None),
+            "REFUSALS": ("fact_refusal_events", "refuse_dt", None),
+            "WAITING": ("fact_waiting_events", "registration_dt", "snapshot_dt"),
+        }
+        # TREATED has only a source load date, not an independently observed
+        # reporting period. Do not silently reinterpret it as event evidence.
+        if dataset_type not in specs or not import_ids:
+            return None
+        table, event, snapshot = specs[dataset_type]
+        snapshot_sql = (
+            f"if(uniqExact({snapshot}) = 1, min({snapshot}), NULL)"
+            if snapshot
+            else "NULL"
+        )
+        result = self._client_factory().query(
+            f"SELECT count(), min({event}), max({event}), {snapshot_sql} "  # noqa: S608
+            f"FROM {table} WHERE import_id IN {{ids:Array(UUID)}}",
+            parameters={"ids": [str(i) for i in import_ids]},
+        )
+        rows, start, end, snapshot_at = result.result_rows[0]
+        return DeliveryEvidence(
+            int(rows),
+            start.date() if rows and start else None,
+            end.date() if rows and end else None,
+            snapshot_at.date() if snapshot_at else None,
+        )
 
     def rollback(self, *, dataset_type: str, import_id: uuid.UUID) -> None:
         contract = get_contract(dataset_type)

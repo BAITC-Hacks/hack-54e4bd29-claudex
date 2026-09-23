@@ -1,51 +1,116 @@
-'use client';
-import Link from 'next/link';
-import {useState} from 'react';
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {ArrowRight, BellRing, Pause, Play, RefreshCw, SkipForward} from 'lucide-react';
-import {pilotApi, number, day, severity, status} from './api';
-import type {Monitor} from './types';
+"use client";
 
-const button = 'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium hover:bg-secondary disabled:opacity-40';
-export function MonitorPage() {
- const client = useQueryClient();
- const [search, setSearch] = useState('');
- const [filter, setFilter] = useState('ALL');
- const query = useQuery({queryKey:['monitor'], queryFn:()=>pilotApi<Monitor>('monitor'), refetchInterval:2000, retry:1});
- const command = useMutation({mutationFn:(action:string)=>pilotApi<Monitor>('replay','POST',{action}),
-  onSuccess:data=>client.setQueryData(['monitor'],data)});
- const data = query.data;
- const alerts = data?.alerts.filter(a=>a.hospital.toLowerCase().includes(search.toLowerCase()) && (filter==='ALL'||a.status===filter)) ?? [];
- return <div className="mx-auto max-w-6xl space-y-6">
-  <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="mb-2 text-xs font-semibold uppercase tracking-widest text-teal-700">MedSignal · плановая госпитализация</p>
-   <h1 className="text-3xl font-semibold tracking-tight">Где ожидается рост потока?</h1>
-   <p className="mt-2 max-w-2xl text-sm text-muted-foreground">Обученная модель прогнозирует направления на 7 дней. Откройте предупреждение, чтобы проверить основания и план действий.</p></div>
-   <Link className={button} href="/monitor/model">Как проверена модель <ArrowRight size={16}/></Link></div>
-  <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
-   <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="font-semibold">Историческое воспроизведение · реальные данные</p>
-    <p className="mt-1 text-sm">{data ? `Данные по ${day(data.as_of)}. Один шаг — один день. Автоматически — каждые 10 секунд.` : 'Загружаем результаты обучения…'}</p></div>
-    <div className="flex gap-2"><button className={button} disabled={!data || command.isPending || data.finished} onClick={()=>command.mutate(data?.running?'pause':'play')}>{data?.running?<Pause size={16}/>:<Play size={16}/>} {data?.running?'Пауза':'Запустить'}</button>
-     <button aria-label="Следующий день" className={button} disabled={!data || command.isPending || data.finished || data.running} onClick={()=>command.mutate('step')}><SkipForward size={16}/> День</button>
-     <button aria-label="Сначала" className={button} disabled={!data || command.isPending} onClick={()=>command.mutate('reset')}><RefreshCw size={16}/></button></div></div>
-   <p className="mt-3 text-xs font-medium">Исследовательский пилот: полнота обнаружения роста пока низкая. Не единственный канал контроля.</p>
-   <p className="mt-3 text-xs">Это не подключение к больницам в реальном времени. На каждом шаге сохранённая модель заново рассчитывает прогноз по доступной на эту дату истории. Будущие записи не входят в признаки.</p>
-   {data?.finished && <p className="mt-2 font-medium">Достигнут конец выгрузки. Новые данные не выдумываются; можно повторить воспроизведение.</p>}
-  </section>
-  {(query.error || command.error) && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">{(query.error || command.error)?.message}</p>}
-  {data && <><div className="grid gap-4 sm:grid-cols-3">{[
-   ['Предупреждений за день',data.alerts.length],['Организаций проверено',data.hospitals_checked],['Записей за новый день',data.new_records]
-  ].map(([label,value])=><div key={label} className="rounded-xl border bg-card p-5"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-2 text-3xl font-semibold">{number(Number(value))}</p></div>)}</div>
-   <div className="flex flex-wrap gap-3"><input aria-label="Поиск по больнице" className="min-w-60 flex-1 rounded-lg border bg-background px-4 py-2 text-sm" placeholder="Найти больницу…" value={search} onChange={e=>setSearch(e.target.value)}/>
-    <select aria-label="Статус предупреждения" className="rounded-lg border bg-background px-3 py-2 text-sm" value={filter} onChange={e=>setFilter(e.target.value)}><option value="ALL">Все статусы</option>{Object.entries(status).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></div>
-   <div className="space-y-3">{alerts.map(alert=><Link key={alert.id} href={`/monitor/${alert.id}`} className="block rounded-xl border bg-card p-5 transition hover:border-teal-500 hover:shadow-sm">
-    <div className="flex flex-wrap items-center gap-2 text-xs"><span className={`rounded-full px-2.5 py-1 font-semibold ${alert.severity==='CRITICAL'?'bg-red-100 text-red-800':alert.severity==='HIGH'?'bg-orange-100 text-orange-800':'bg-amber-100 text-amber-900'}`}><BellRing className="mr-1 inline" size={13}/>{severity[alert.severity]}</span>
-     <span className="rounded-full bg-secondary px-2.5 py-1">{status[alert.status]}</span>
-     {alert.quality.status==='EXPERIMENTAL' && <span className="text-muted-foreground">На проверке по этой больнице простой прогноз точнее</span>}</div>
-    <div className="mt-3 flex items-center justify-between gap-5"><div><h2 className="text-lg font-semibold">{alert.title}</h2><p className="mt-1 text-sm text-muted-foreground">{alert.hospital}</p></div><ArrowRight className="shrink-0 text-teal-700" size={20}/></div>
-    <p className="mt-3 text-sm"><strong>{number(alert.predicted_total)}</strong> направлений за неделю · обычно {number(alert.reference_total)} · прирост +{number(alert.extra_referrals)}</p>
-   </Link>)}</div>
-   {alerts.length===0 && <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">{data.alerts.length?'По выбранным фильтрам предупреждений нет.':'Модель не обнаружила роста выше порога на эту дату.'}</div>}
-   <p className="text-xs text-muted-foreground">Критичность отражает размер прогнозируемого роста, а не подтверждённую опасность для пациентов. Очередь и свободные койки в этих данных не измеряются.</p>
-  </>}
- </div>;
+import Link from "next/link";
+import { useState } from "react";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { AuthGate } from "@/features/auth/auth-gate";
+import { useAuth } from "@/features/auth/auth-context";
+import { fetchLatestReferralForecast, fetchReferralForecast } from "@/features/forecasting/api";
+import { ReferralForecastCard } from "@/features/forecasting/components/referral-forecast-card";
+import { SCOPE_LABELS, SEVERITY_LABELS, STATUS_LABELS } from "@/features/signals/labels";
+import { fetchSignals } from "@/services/domain";
+import { ApiError } from "@/services/api-client";
+import { forecastLoginReturnTo } from "./forecast-login-return";
+import { useLocalResearch } from "./local-research";
+import { MonitorPage as ResearchMonitorPage } from "./research-monitor-page";
+
+const button = "inline-flex items-center rounded-lg border px-4 py-2 text-sm font-medium hover:bg-secondary disabled:opacity-40";
+
+export function MonitorPage({ forecastId }: { forecastId?: string } = {}) {
+  const research = useLocalResearch();
+  const { accessToken } = useAuth();
+  if (research && forecastId === undefined) return <ResearchMonitorPage />;
+  return <AuthGate returnTo={forecastId === undefined ? undefined : () => forecastLoginReturnTo(forecastId)}><MonitoringSession key={accessToken} forecastId={forecastId} /></AuthGate>;
+}
+
+function MonitoringSession({ forecastId }: { forecastId?: string }) {
+  // An identity change remounts this boundary. Neither credentials nor a
+  // previous user's aggregates enter shared query keys/caches.
+  const [client] = useState(() => new QueryClient({ defaultOptions: { queries: {
+    retry: false, gcTime: 0, staleTime: 0, refetchOnWindowFocus: false,
+  } } }));
+  return <QueryClientProvider client={client}><PersistedMonitoring forecastId={forecastId} /></QueryClientProvider>;
+}
+
+function ReadError({ error, subject }: { error: Error; subject: "forecast" | "signals" }) {
+  let message = subject === "forecast" ? "Не удалось загрузить прогноз. Повторите запрос." : "Не удалось загрузить сигналы. Повторите запрос.";
+  if (error instanceof ApiError) {
+    if (error.code === "INVALID_FORECAST_ID") message = "Некорректный идентификатор прогноза. Используйте UUID из карточки сигнала.";
+    if (error.httpStatus === 404) message = subject === "forecast"
+      ? "Прогноз не найден или недоступен в вашей области данных."
+      : "Сигналы не найдены или недоступны в вашей области данных.";
+    if (error.httpStatus === 403) message = subject === "forecast"
+      ? "Недостаточно прав для просмотра прогноза."
+      : "Недостаточно прав для просмотра сигналов.";
+  }
+  return <p role="alert" className="rounded-lg border p-4 text-sm">{message}</p>;
+}
+
+async function afterAuthEffects<T>(signal: AbortSignal, read: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  // AuthProvider installs the API token in its parent effect. Query observers
+  // mount first, so defer transport until those effects have finished. Consume
+  // and check the signal to cancel an obsolete identity before sending anything.
+  await Promise.resolve();
+  signal.throwIfAborted();
+  return read(signal);
+}
+
+function PersistedMonitoring({ forecastId }: { forecastId?: string }) {
+  const { login } = useAuth();
+  const forecast = useQuery({ queryKey: ["monitoring", "forecast", forecastId ?? "latest"], queryFn: ({ signal }) => afterAuthEffects(signal, currentSignal => forecastId === undefined ? fetchLatestReferralForecast(currentSignal) : fetchReferralForecast(forecastId, currentSignal)) });
+  const signals = useQuery({ queryKey: ["monitoring", "signals"], queryFn: ({ signal }) => afterAuthEffects(signal, currentSignal => fetchSignals({ page: 1, pageSize: 20 }, currentSignal)) });
+  const expired = [forecast.error, signals.error].some(error => error instanceof ApiError && error.isUnauthenticated);
+
+  if (expired) return <section className="mx-auto max-w-3xl space-y-4 rounded-xl border p-6">
+    <h1 className="text-xl font-semibold">Сессия истекла</h1>
+    <p role="alert">Войдите повторно, чтобы продолжить просмотр защищённых данных.</p>
+    <button className={button} onClick={() => void login(forecastId === undefined ? undefined : forecastLoginReturnTo(forecastId))}>Войти повторно</button>
+  </section>;
+
+  return <div className="mx-auto max-w-6xl space-y-6">
+    <header className="flex flex-wrap items-start justify-between gap-4">
+      <div><h1 className="text-3xl font-semibold">Мониторинг направлений</h1>
+        <p className="mt-2 max-w-3xl text-sm text-muted-foreground">Сохранённый прогноз и сигналы в вашей области доступа. Решения принимает уполномоченный сотрудник.</p>
+      </div>
+      <button className={button} disabled={forecast.isFetching || signals.isFetching} onClick={() => { void forecast.refetch(); void signals.refetch(); }}>Обновить</button>
+    </header>
+
+    <section aria-label="Сохранённый прогноз" className="space-y-4">
+      {forecast.isPending ? <p role="status">Загрузка прогноза…</p> : forecast.error ? <ReadError error={forecast.error} subject="forecast" /> : forecast.data ? <>
+        <p className="text-sm font-medium">Область прогноза: {SCOPE_LABELS[forecast.data.scope_type]} ({forecast.data.scope_type}).</p>
+        <ReferralForecastCard forecast={forecast.data} isLoading={false} error={null} />
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950" role="status">
+          <h2 className="font-semibold">Допуск модели недоступен</h2>
+          <p className="mt-2">В этом ответе API нет подтверждения допуска к эксплуатации. Актуальность периода и качество прогноза сами по себе не подтверждают допуск. Этот экран не активирует модель и не создаёт сигналы.</p>
+        </div>
+        <details className="rounded-xl border p-5 text-sm">
+          <summary className="cursor-pointer font-semibold">Основания и происхождение прогноза</summary>
+          <dl className="mt-3 space-y-2 break-words">
+            <div><dt className="font-medium">Идентификатор сохранённого прогноза</dt><dd>{forecast.data.id}</dd></div>
+            {forecast.data.hospital_id && <div><dt className="font-medium">Идентификатор организации</dt><dd>{forecast.data.hospital_id}</dd></div>}
+            {forecast.data.region_id && <div><dt className="font-medium">Идентификатор региона</dt><dd>{forecast.data.region_id}</dd></div>}
+            <div><dt className="font-medium">Период исходных данных</dt><dd>{forecast.data.input_period_start} — {forecast.data.input_period_end}</dd></div>
+            <div><dt className="font-medium">Период прогноза</dt><dd>{forecast.data.forecast_start} — {forecast.data.forecast_end}</dd></div>
+            <div><dt className="font-medium">MAE простого сравнения</dt><dd>{forecast.data.baseline_metrics.mae}</dd></div>
+          </dl>
+        </details>
+      </> : null}
+    </section>
+
+    <section aria-label="Сигналы и действия человека" className="space-y-4 rounded-xl border bg-card p-5">
+      <h2 className="text-xl font-semibold">Сигналы в вашей области доступа</h2>
+      <p className="text-sm text-muted-foreground">Подтверждение сигнала и создание инцидента доступны в карточке сигнала с учётом ваших прав. Список может включать сигналы из других расчётов; связь с прогнозом проверяйте в основаниях карточки.</p>
+      {signals.isPending ? <p role="status">Загрузка сигналов…</p> : signals.error ? <ReadError error={signals.error} subject="signals" /> : signals.data?.items.length ? <ul className="space-y-3">
+        {signals.data.items.map(item => <li key={item.id}>
+          <Link href={`/signals/${encodeURIComponent(item.id)}`} className="block rounded-lg border p-4 hover:border-teal-600">
+            <h3 className="font-semibold">{item.title}</h3>
+            <p className="mt-1 text-sm">{item.summary}</p>
+            <p className="mt-2 text-xs text-muted-foreground">{SCOPE_LABELS[item.scope_type]}{item.hospital_name ? ` · ${item.hospital_name}` : ""} · {SEVERITY_LABELS[item.severity]} · {STATUS_LABELS[item.status]}</p>
+          </Link>
+        </li>)}
+      </ul> : <p>Доступных сигналов пока нет.</p>}
+      {signals.data && !signals.error && signals.data.has_next && <p className="text-sm">Показаны первые {signals.data.items.length} из {signals.data.total}. Остальные доступны в общем списке.</p>}
+      <Link href="/signals" className={button}>Открыть все сигналы</Link>
+    </section>
+  </div>;
 }

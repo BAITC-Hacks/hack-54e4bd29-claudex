@@ -18,8 +18,16 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, utcnow
@@ -35,8 +43,9 @@ class OrganizationAlias(Base):
         # строка из двух разных систем может означать разные организации.
         UniqueConstraint(
             "source_system",
+            "identity_space",
             "normalized_value",
-            name="uq_organization_aliases_source_system_normalized_value",
+            name="uq_organization_aliases_identity",
         ),
         Index("ix_organization_aliases_mapping_status", "mapping_status"),
         Index("ix_organization_aliases_hospital_id", "hospital_id"),
@@ -49,6 +58,15 @@ class OrganizationAlias(Base):
         UUID(as_uuid=True),
         ForeignKey("hospitals.id", ondelete="SET NULL"),
         nullable=True,
+    )
+    identity_space: Mapped[str] = mapped_column(
+        String(96),
+        nullable=False,
+        default="LEGACY_UNRESOLVED",
+        server_default="LEGACY_UNRESOLVED",
+    )
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
     )
     source_system: Mapped[str] = mapped_column(String(64), nullable=False)
     source_value: Mapped[str] = mapped_column(Text, nullable=False)
@@ -86,8 +104,9 @@ class RegionAlias(Base):
     __table_args__ = (
         UniqueConstraint(
             "source_system",
+            "identity_space",
             "normalized_value",
-            name="uq_region_aliases_source_system_normalized_value",
+            name="uq_region_aliases_identity",
         ),
         Index("ix_region_aliases_mapping_status", "mapping_status"),
     )
@@ -97,6 +116,15 @@ class RegionAlias(Base):
     )
     region_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("regions.id", ondelete="SET NULL"), nullable=True
+    )
+    identity_space: Mapped[str] = mapped_column(
+        String(96),
+        nullable=False,
+        default="LEGACY_UNRESOLVED",
+        server_default="LEGACY_UNRESOLVED",
+    )
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
     )
     source_system: Mapped[str] = mapped_column(String(64), nullable=False)
     source_value: Mapped[str] = mapped_column(Text, nullable=False)
@@ -179,3 +207,23 @@ class ProfileAlias(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
     )
+
+
+class MappingState(Base):
+    __tablename__ = "mapping_state"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active_generation: Mapped[int | None] = mapped_column(Integer)
+    active_version: Mapped[str | None] = mapped_column(String(128))
+
+
+class MappingRevision(Base):
+    __tablename__ = "mapping_revisions"
+    version: Mapped[str] = mapped_column(String(128), primary_key=True)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+    digest: Mapped[str] = mapped_column(String(64))
+    rows: Mapped[list] = mapped_column(JSONB)
+    actor: Mapped[str] = mapped_column(String(256))
+    evidence_ref: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

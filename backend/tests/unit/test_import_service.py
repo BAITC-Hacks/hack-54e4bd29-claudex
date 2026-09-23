@@ -8,8 +8,10 @@
 from __future__ import annotations
 
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -103,7 +105,15 @@ def store() -> FakeStore:
 
 
 def build_service(store: FakeStore, pipeline: FakePipeline) -> ImportService:
-    return ImportService(unit_of_work_factory(store), AuthorizationService(), pipeline)
+    @contextmanager
+    def factory():
+        with unit_of_work_factory(store)() as uow:
+            # File lifecycle fixtures have no persisted deliveries. Integration
+            # tests exercise the real repository and lock boundaries.
+            uow.deliveries = SimpleNamespace(lock_source=lambda *_: None)
+            yield uow
+
+    return ImportService(factory, AuthorizationService(), pipeline)
 
 
 def admin_context():
@@ -124,8 +134,8 @@ def test_second_import_of_the_same_file_is_skipped(
     service = build_service(store, pipeline)
     context = admin_context()
 
-    first = service.import_dataset(context, DatasetType.REFERRALS)
-    second = service.import_dataset(context, DatasetType.REFERRALS)
+    first = service._import_dataset_files(context, DatasetType.REFERRALS)
+    second = service._import_dataset_files(context, DatasetType.REFERRALS)
 
     assert first.files[0].outcome is ImportOutcome.COMPLETED
     assert second.files[0].outcome is ImportOutcome.SKIPPED_IDEMPOTENT
@@ -139,9 +149,9 @@ def test_skipped_import_reports_previously_loaded_rows(
 ) -> None:
     service = build_service(store, pipeline)
     context = admin_context()
-    service.import_dataset(context, DatasetType.REFERRALS)
+    service._import_dataset_files(context, DatasetType.REFERRALS)
 
-    again = service.import_dataset(context, DatasetType.REFERRALS)
+    again = service._import_dataset_files(context, DatasetType.REFERRALS)
     assert again.files[0].rows_loaded == pipeline.rows - pipeline.rejected
 
 
@@ -155,10 +165,10 @@ def test_same_name_different_content_is_a_new_import(
     )
     service = build_service(store, pipeline)
     context = admin_context()
-    service.import_dataset(context, DatasetType.REFERRALS)
+    service._import_dataset_files(context, DatasetType.REFERRALS)
 
     pipeline.hashes["part.csv"] = "hash-v2"
-    second = service.import_dataset(context, DatasetType.REFERRALS)
+    second = service._import_dataset_files(context, DatasetType.REFERRALS)
 
     assert second.files[0].outcome is ImportOutcome.COMPLETED
     assert len(store.data_imports) == 2
@@ -171,8 +181,8 @@ def test_same_hash_in_another_dataset_is_a_separate_import(
     service = build_service(store, pipeline)
     context = admin_context()
 
-    service.import_dataset(context, DatasetType.REFERRALS)
-    other = service.import_dataset(context, DatasetType.REFUSALS)
+    service._import_dataset_files(context, DatasetType.REFERRALS)
+    other = service._import_dataset_files(context, DatasetType.REFUSALS)
 
     assert other.files[0].outcome is ImportOutcome.COMPLETED
     assert len(store.data_imports) == 2
@@ -185,7 +195,7 @@ def test_completed_import_stores_statistics(
     store: FakeStore, pipeline: FakePipeline
 ) -> None:
     service = build_service(store, pipeline)
-    service.import_dataset(admin_context(), DatasetType.REFERRALS)
+    service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
 
     record = next(iter(store.data_imports.values()))
     assert record.status is DataImportStatus.COMPLETED
@@ -199,7 +209,7 @@ def test_import_is_written_to_the_audit_log(
     store: FakeStore, pipeline: FakePipeline
 ) -> None:
     service = build_service(store, pipeline)
-    service.import_dataset(admin_context(), DatasetType.REFERRALS)
+    service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
 
     actions = [event.action.value for event in store.audit]
     assert "DATA_IMPORT_REGISTERED" in actions
@@ -220,7 +230,7 @@ def test_quality_findings_are_persisted(store: FakeStore, tmp_path: Path) -> Non
         ),
     )
     service = build_service(store, pipeline)
-    service.import_dataset(admin_context(), DatasetType.REFERRALS)
+    service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
 
     assert len(store.quality) == 1
     assert store.quality[0].affected_rows == 17
@@ -244,7 +254,7 @@ def test_quality_message_carries_no_source_values(
         ),
     )
     service = build_service(store, pipeline)
-    service.import_dataset(admin_context(), DatasetType.REFERRALS)
+    service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
 
     message = store.quality[0].message
     assert "61.01" not in message
@@ -264,7 +274,7 @@ def test_quarantine_references_are_persisted(store: FakeStore, tmp_path: Path) -
         ),
     )
     service = build_service(store, pipeline)
-    service.import_dataset(admin_context(), DatasetType.REFERRALS)
+    service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
 
     assert len(store.quarantine) == 1
     assert store.quarantine[0].bucket == "medsignal-quarantine"
@@ -277,7 +287,7 @@ def test_unmapped_organizations_are_registered(store: FakeStore, tmp_path: Path)
         organizations=("больница а", "клиника б"),
     )
     service = build_service(store, pipeline)
-    report = service.import_dataset(admin_context(), DatasetType.REFERRALS)
+    report = service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
 
     assert report.unmapped_organizations == 2
     assert len(store.organization_aliases) == 2
@@ -292,7 +302,7 @@ def test_failed_import_is_rolled_back(store: FakeStore, tmp_path: Path) -> None:
         fail_on={"part.csv"},
     )
     service = build_service(store, pipeline)
-    report = service.import_dataset(admin_context(), DatasetType.REFERRALS)
+    report = service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
 
     assert report.files[0].outcome is ImportOutcome.FAILED
     assert report.failed
@@ -314,7 +324,7 @@ def test_one_bad_file_does_not_cancel_the_good_one(
         fail_on={"part_2.csv"},
     )
     service = build_service(store, pipeline)
-    report = service.import_dataset(admin_context(), DatasetType.REFERRALS)
+    report = service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
 
     outcomes = [f.outcome for f in report.files]
     assert outcomes == [ImportOutcome.COMPLETED, ImportOutcome.FAILED]
@@ -329,10 +339,10 @@ def test_failed_import_can_be_retried(store: FakeStore, tmp_path: Path) -> None:
     )
     service = build_service(store, pipeline)
     context = admin_context()
-    service.import_dataset(context, DatasetType.REFERRALS)
+    service._import_dataset_files(context, DatasetType.REFERRALS)
 
     pipeline.fail_on.clear()
-    retry = service.import_dataset(context, DatasetType.REFERRALS)
+    retry = service._import_dataset_files(context, DatasetType.REFERRALS)
 
     assert retry.files[0].outcome is ImportOutcome.COMPLETED
     assert len(store.data_imports) == 1
@@ -345,7 +355,7 @@ def test_recover_marks_the_import_failed(store: FakeStore, tmp_path: Path) -> No
     )
     service = build_service(store, pipeline)
     context = admin_context()
-    report = service.import_dataset(context, DatasetType.REFERRALS)
+    report = service._import_dataset_files(context, DatasetType.REFERRALS)
     import_id = report.files[0].data_import_id
     assert import_id is not None
 
@@ -361,7 +371,7 @@ def test_recover_refuses_a_completed_import(
     """Удаление успешно загруженных данных — не процедура восстановления."""
     service = build_service(store, pipeline)
     context = admin_context()
-    report = service.import_dataset(context, DatasetType.REFERRALS)
+    report = service._import_dataset_files(context, DatasetType.REFERRALS)
     import_id = report.files[0].data_import_id
     assert import_id is not None
 
@@ -382,7 +392,9 @@ def test_recover_requires_an_existing_import(
 
 def test_dry_run_writes_nothing(store: FakeStore, pipeline: FakePipeline) -> None:
     service = build_service(store, pipeline)
-    report = service.import_dataset(admin_context(), DatasetType.REFERRALS, dry_run=True)
+    report = service._import_dataset_files(
+        admin_context(), DatasetType.REFERRALS, dry_run=True
+    )
 
     assert report.files[0].outcome is ImportOutcome.DRY_RUN
     assert report.files[0].rows_loaded == 0
@@ -395,7 +407,9 @@ def test_dry_run_still_parses_and_validates(
 ) -> None:
     """Холостой прогон обязан выполнить именно те шаги, что могут отказать."""
     service = build_service(store, pipeline)
-    report = service.import_dataset(admin_context(), DatasetType.REFERRALS, dry_run=True)
+    report = service._import_dataset_files(
+        admin_context(), DatasetType.REFERRALS, dry_run=True
+    )
 
     assert report.files[0].rows_read == pipeline.rows
     assert report.files[0].rows_rejected == pipeline.rejected
@@ -415,7 +429,7 @@ def test_ordinary_user_cannot_start_an_import(
     service = build_service(store, pipeline)
     context = make_context(roles={role}, scope=DataScope.global_scope())
     with pytest.raises(ForbiddenError):
-        service.import_dataset(context, DatasetType.REFERRALS)
+        service._import_dataset_files(context, DatasetType.REFERRALS)
 
 
 @pytest.mark.parametrize(
@@ -443,14 +457,14 @@ def test_ordinary_user_cannot_recover(store: FakeStore, pipeline: FakePipeline) 
 def test_health_authority_may_import(store: FakeStore, pipeline: FakePipeline) -> None:
     service = build_service(store, pipeline)
     context = make_context(roles={Role.HEALTH_AUTHORITY}, scope=DataScope.global_scope())
-    report = service.import_dataset(context, DatasetType.REFERRALS)
+    report = service._import_dataset_files(context, DatasetType.REFERRALS)
     assert report.files[0].outcome is ImportOutcome.COMPLETED
 
 
 def test_missing_files_are_reported(store: FakeStore) -> None:
     service = build_service(store, FakePipeline(files=[]))
     with pytest.raises(NotFoundError):
-        service.import_dataset(admin_context(), DatasetType.REFERRALS)
+        service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
 
 
 # --- Состояние, прочитанное из базы -----------------------------------------
@@ -468,12 +482,12 @@ def test_status_stored_as_text_is_still_recognised(
     """
     service = build_service(store, pipeline)
     context = admin_context()
-    service.import_dataset(context, DatasetType.REFERRALS)
+    service._import_dataset_files(context, DatasetType.REFERRALS)
 
     record = next(iter(store.data_imports.values()))
     record.status = "COMPLETED"  # так выглядит значение после чтения из базы
 
-    again = service.import_dataset(context, DatasetType.REFERRALS)
+    again = service._import_dataset_files(context, DatasetType.REFERRALS)
     assert again.files[0].outcome is ImportOutcome.SKIPPED_IDEMPOTENT
     assert len(pipeline.processed) == 1
 
@@ -484,7 +498,7 @@ def test_completed_import_is_never_re_registered(
     """Переиспользование записи завершённого импорта удалило бы его данные."""
     service = build_service(store, pipeline)
     context = admin_context()
-    service.import_dataset(context, DatasetType.REFERRALS)
+    service._import_dataset_files(context, DatasetType.REFERRALS)
 
     record = next(iter(store.data_imports.values()))
     record.status = "COMPLETED"
@@ -517,7 +531,7 @@ def test_row_count_drift_is_measured_across_the_whole_dataset(
         expected_rows=200,
     )
     service = build_service(store, pipeline)
-    report = service.import_dataset(admin_context(), DatasetType.REFERRALS)
+    report = service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
 
     assert report.rows_read == 200
     assert report.row_count_drift is None
@@ -531,7 +545,7 @@ def test_real_drift_is_reported(store: FakeStore, tmp_path: Path) -> None:
         expected_rows=500,
     )
     service = build_service(store, pipeline)
-    report = service.import_dataset(admin_context(), DatasetType.REFERRALS)
+    report = service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
 
     assert report.row_count_drift == 400
 
@@ -570,7 +584,7 @@ def test_completed_import_is_counted(store: FakeStore, pipeline: FakePipeline) -
 
     before = _metric_value(metrics.data_rows_loaded_total, "REFERRALS", "ИС БГ")
     service = build_service(store, pipeline)
-    service.import_dataset(admin_context(), DatasetType.REFERRALS)
+    service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
     after = _metric_value(metrics.data_rows_loaded_total, "REFERRALS", "ИС БГ")
 
     assert after - before == pipeline.rows - pipeline.rejected
@@ -585,7 +599,7 @@ def test_failed_import_is_counted(store: FakeStore, tmp_path: Path) -> None:
     )
     before = _metric_value(metrics.data_import_failed_total, "REFERRALS", "ИС БГ")
     service = build_service(store, pipeline)
-    service.import_dataset(admin_context(), DatasetType.REFERRALS)
+    service._import_dataset_files(admin_context(), DatasetType.REFERRALS)
     after = _metric_value(metrics.data_import_failed_total, "REFERRALS", "ИС БГ")
 
     assert after - before == 1

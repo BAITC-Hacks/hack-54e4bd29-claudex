@@ -43,6 +43,7 @@ from app.repositories.clickhouse_forecasting import (
 from app.repositories.clickhouse_forecasting import (
     ClickHouseReferralHistoryRepository,
 )
+from app.repositories.forecast_metadata import SqlAlchemyForecastMetadataRepository
 from app.repositories.signal_inputs import (
     ClickHouseQueryClient as SignalClickHouseQueryClient,
 )
@@ -147,17 +148,23 @@ def build_analytics_service() -> AnalyticsService:
 
 
 def build_forecast_query_service() -> ForecastQueryService:
+    metadata = SqlAlchemyForecastMetadataRepository(get_session_factory())
     return ForecastQueryService(
+        mapping_is_current=metadata.mapping_is_current,
         uow_factory=get_unit_of_work_factory(),
         history_repository=ClickHouseReferralHistoryRepository(
-            cast(ForecastClickHouseQueryClient, get_clickhouse_client())
+            cast(ForecastClickHouseQueryClient, get_clickhouse_client()),
+            import_ids_provider=metadata.referral_history_import_ids,
         ),
         authorization=get_authorization_service(),
     )
 
 
 def build_scenario_service() -> ScenarioService:
+    metadata = SqlAlchemyForecastMetadataRepository(get_session_factory())
     return ScenarioService(
+        mapping_is_current=metadata.mapping_is_current,
+        current_mapping_version=metadata.current_mapping_version,
         uow_factory=get_unit_of_work_factory(),
         analytics=build_analytics_service(),
         authorization=get_authorization_service(),

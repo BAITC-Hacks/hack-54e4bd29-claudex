@@ -10,6 +10,12 @@
 
 **Spec:** ../specs/2026-09-23-pilot-consolidation-design.md
 
+## Execution status — 2026-09-23
+
+D1–D3 implementation and native regression checks are complete. Independent review findings are fixed and rechecked. Real PostgreSQL clean/upgrade/locking and ClickHouse projection execution remain NOT TESTED; owner supply semantics/mappings remain EXTERNAL DEPENDENCY. Checklist steps that combine implementation with live checks are not marked complete solely from native tests.
+
+Actual commands, results and outstanding gates: [consolidation report](../../acceptance/PILOT_CONSOLIDATION_IMPLEMENTATION.md). Unchecked original steps remain a conservative combined acceptance checklist, not a claim that the corresponding code is absent.
+
 ## Global Constraints
 
 SOURCE DIRECTORY = READ ONLY. Dataset allowlist остаётся referrals/waiting/refusals/treated.

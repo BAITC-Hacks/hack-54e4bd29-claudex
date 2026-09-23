@@ -8,13 +8,15 @@ import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { env } from "@/config/env";
 import { useAuth } from "@/features/auth/auth-context";
+import { useLocalResearch } from "@/features/monitoring/local-research";
 import { cn } from "@/utils/cn";
 
-const NAVIGATION = process.env.NEXT_PUBLIC_PILOT_MODE === "true" ? [
+const navigation = (research: boolean) => research ? [
   { href: "/monitor", label: "Предупреждения" },
   { href: "/monitor/model", label: "Обучение" },
 ] : [
   { href: "/command-center", label: "Карта" },
+  { href: "/monitor", label: "Мониторинг" },
   { href: "/dashboard", label: "Аналитика" },
   { href: "/signals", label: "Сигналы" },
   { href: "/scenarios", label: "Сценарии" },
@@ -24,6 +26,7 @@ const NAVIGATION = process.env.NEXT_PUBLIC_PILOT_MODE === "true" ? [
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const research = useLocalResearch();
   const { isAuthenticated, login, logout } = useAuth();
 
   return (
@@ -40,7 +43,7 @@ export function SiteHeader() {
           </Link>
 
           <nav className="hidden items-center gap-1 rounded-xl border border-slate-200/80 bg-white/75 p-1 shadow-[0_8px_24px_-22px_rgba(15,46,68,.8)] lg:flex">
-            {NAVIGATION.map((item) => {
+            {navigation(research).map((item) => {
               const active = pathname === item.href || (item.href !== "/command-center" && pathname.startsWith(`${item.href}/`));
               return (
                 <Link
@@ -63,7 +66,7 @@ export function SiteHeader() {
             <ShieldCheck size={12} /> Минздрав РК
           </span>
           <span className="hidden rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-500 xl:block">{env.appEnv}</span>
-          {process.env.NEXT_PUBLIC_PILOT_MODE === "true" ? (
+          {research ? (
             <span className="text-xs font-semibold text-amber-700">Локальный пилот</span>
           ) : isAuthenticated ? (
             <Button className="gap-2" size="sm" variant="ghost" onClick={logout}>

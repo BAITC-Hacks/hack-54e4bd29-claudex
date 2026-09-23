@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
 from app.business.forecasting.contracts import (
@@ -16,7 +16,7 @@ from app.business.forecasting.ports import (
     ReferralHistoryRepository,
 )
 from app.business.ports import UnitOfWorkFactory
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.analytics import Forecast
 from app.models.enums import DataScopeType, ForecastStatus, ModelVersionStatus
 from app.models.forecast_point import ForecastPoint
@@ -24,7 +24,7 @@ from app.models.model_version import ModelVersion
 from app.security.authorization import AuthorizationService
 from app.security.context import SecurityContext
 from app.security.permissions import Permission
-from app.shared.forecasting import REFERRAL_TARGET
+from app.shared.forecasting import REFERRAL_TARGET, DailyReferralCount
 
 FORECAST_LIMITATIONS = (
     "Прогноз основан примерно на трёх месяцах доступной истории.",
@@ -50,9 +50,13 @@ class ForecastTrainingService:
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def run_referral_forecast(self) -> uuid.UUID:
-        history = self._history.daily_global()
         watermark = self._metadata.referral_watermark()
+        history = self._history.daily_global()
+        if self._metadata.referral_watermark() != watermark:
+            raise ConflictError("DATA_PUBLICATION_CHANGED_RETRY")
         result = self._engine.train(history, watermark, generated_at=self._clock())
+        if self._metadata.referral_watermark() != watermark:
+            raise ConflictError("DATA_PUBLICATION_CHANGED_RETRY")
         watermark_data = watermark.as_dict()
         model_version = ModelVersion(
             id=uuid.uuid4(),
@@ -137,10 +141,12 @@ class ForecastQueryService:
         history_repository: ReferralHistoryRepository,
         authorization: AuthorizationService,
         clock: Callable[[], datetime] | None = None,
+        mapping_is_current: Callable[[str], bool] | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._history = history_repository
         self._authorization = authorization
+        self._mapping_is_current = mapping_is_current
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def latest_referral_forecast(
@@ -154,7 +160,44 @@ class ForecastQueryService:
             if forecast is None:
                 raise NotFoundError("Прогноз не найден")
             points = uow.forecasts.points_for(forecast.id)
-        history = self._history.daily_global()
+        return self._snapshot(forecast, points, self._history.daily_global()[-30:])
+
+    def get_forecast(
+        self, context: SecurityContext, forecast_id: uuid.UUID
+    ) -> ReferralForecastSnapshot:
+        """Read authorized persisted evidence; never attach unrelated live history."""
+        self._authorization.require_permission(context, Permission.FORECAST_READ)
+        with self._uow_factory() as uow:
+            forecast = uow.forecasts.get(forecast_id, context.scope)
+            if (
+                forecast is None
+                or forecast.status != ForecastStatus.VALID
+                or forecast.target != REFERRAL_TARGET
+            ):
+                raise NotFoundError("Прогноз не найден")
+            self._check_mapping(context, forecast)
+            points = uow.forecasts.points_for(forecast.id)
+        self._check_mapping(context, forecast)
+        return self._snapshot(forecast, points, ())
+
+    def _check_mapping(self, context: SecurityContext, forecast: Forecast) -> None:
+        if context.has_global_scope:
+            return
+        version = forecast.dataset_watermark.get("mapping_version")
+        if (
+            not isinstance(version, str)
+            or not version
+            or self._mapping_is_current is None
+            or not self._mapping_is_current(version)
+        ):
+            raise NotFoundError("Прогноз не найден")
+
+    def _snapshot(
+        self,
+        forecast: Forecast,
+        points: Sequence[ForecastPoint],
+        history: tuple[DailyReferralCount, ...],
+    ) -> ReferralForecastSnapshot:
         if forecast.forecast_start is None or forecast.forecast_end is None:
             raise NotFoundError("Прогноз не найден")
         is_stale = forecast.forecast_end < self._clock().date()
@@ -179,7 +222,10 @@ class ForecastQueryService:
             dataset_watermark=forecast.dataset_watermark,
             freshness_status="STALE" if is_stale else "CURRENT",
             limitations=limitations,
-            historical=history[-30:],
+            historical=history,
+            scope_type=forecast.scope_type,
+            hospital_id=forecast.hospital_id,
+            region_id=forecast.region_id,
             points=tuple(
                 ForecastPointResult(
                     item.forecast_date,

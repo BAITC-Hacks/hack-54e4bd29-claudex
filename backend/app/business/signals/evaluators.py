@@ -324,7 +324,11 @@ class ForecastGrowthEvaluator:
         self._policy = policy
 
     def evaluate(
-        self, evidence: ForecastEvidence | None, *, now: datetime
+        self,
+        evidence: ForecastEvidence | None,
+        *,
+        now: datetime,
+        admitted_organization: bool = False,
     ) -> EvaluatorResult:
         if evidence is None:
             return EvaluatorResult(
@@ -352,7 +356,27 @@ class ForecastGrowthEvaluator:
             )
         delta = evidence.forecast_value - evidence.baseline_value
         delta_percent = delta / evidence.baseline_value * 100
-        severity = _growth_severity(delta_percent, self._policy)
+        severity: SignalSeverity | None
+        if admitted_organization:
+            # Identical inclusive boundaries to M's frozen referral-growth-v1.
+            if (
+                evidence.baseline_value < 20
+                or delta < 10
+                or evidence.forecast_value < evidence.baseline_value * 1.2
+            ):
+                return EvaluatorResult(self.name, EvaluationStatus.NO_SIGNAL)
+            if evidence.forecast_value >= evidence.baseline_value * (
+                1 + self._policy.critical_percent / 100
+            ):
+                severity = SignalSeverity.CRITICAL
+            elif evidence.forecast_value >= evidence.baseline_value * (
+                1 + self._policy.high_percent / 100
+            ):
+                severity = SignalSeverity.HIGH
+            else:
+                severity = SignalSeverity.WARNING
+        else:
+            severity = _growth_severity(delta_percent, self._policy)
         if severity is None:
             return EvaluatorResult(self.name, EvaluationStatus.NO_SIGNAL)
         source_type = (

@@ -136,3 +136,42 @@ def evaluate_signals(self: Task, operation_id: str | None = None) -> dict[str, A
         operations.mark_failed(parsed_id, reason="Signal Engine не завершил оценку")
         record_background_job("signals.evaluate", "failed")
         raise
+
+
+@celery_app.task(
+    name="ml.forecast_organization",
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=600,
+    time_limit=900,
+)
+def forecast_organization(
+    *,
+    hospital_id: str,
+    model_version: str,
+    mapping_version: str,
+    delivery_watermark: str,
+    origin: str,
+    horizon_days: int = 7,
+) -> dict[str, object]:
+    """Internal worker command; accepts identifiers, never model policy or paths."""
+    from datetime import date
+
+    from app.adapters.organization_forecasting import build_organization_forecast_service
+    from app.business.forecasting.contracts import OrganizationForecastRequest
+
+    request = OrganizationForecastRequest(
+        hospital_id=uuid.UUID(hospital_id),
+        model_version=model_version,
+        mapping_version=mapping_version,
+        delivery_watermark=delivery_watermark,
+        origin=date.fromisoformat(origin),
+        horizon_days=horizon_days,
+    )
+    try:
+        result = build_organization_forecast_service().run(request)
+        record_background_job("ml.forecast_organization", str(result["status"]).lower())
+        return result
+    except Exception:
+        record_background_job("ml.forecast_organization", "failed")
+        raise

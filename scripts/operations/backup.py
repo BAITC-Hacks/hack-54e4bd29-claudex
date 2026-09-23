@@ -12,6 +12,9 @@ from scripts.operations.common import (
     build_manifest,
     clickhouse_verification_expression,
     compose,
+    object_inventory,
+    postgres_inventory,
+    verify_postgres_inventory,
 )
 
 TABLE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -40,6 +43,7 @@ def create_backup(output: Path, project: str) -> dict[str, object]:
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
 
+    pg_inventory = postgres_inventory(project)
     postgres = compose(
         project,
         "exec",
@@ -50,6 +54,7 @@ def create_backup(output: Path, project: str) -> dict[str, object]:
         'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom',
     )
     (output / "postgres.dump").write_bytes(postgres)
+    verify_postgres_inventory(pg_inventory, postgres_inventory(project))
 
     clickhouse_dir = output / "clickhouse"
     clickhouse_dir.mkdir()
@@ -111,7 +116,7 @@ def create_backup(output: Path, project: str) -> dict[str, object]:
     mount = f"{minio_dir}:/backup"
     buckets = " ".join(MINIO_BUCKETS)
     minio_script = (
-        'mc alias set source http://minio:9000 "$MINIO_ROOT_USER" '
+        'set -eu; mc alias set source http://minio:9000 "$MINIO_ROOT_USER" '
         '"$MINIO_ROOT_PASSWORD" >/dev/null; '
         f"for bucket in {buckets}; do "
         'mc mirror --overwrite "source/$bucket" "/backup/$bucket" >/dev/null; '
@@ -131,7 +136,25 @@ def create_backup(output: Path, project: str) -> dict[str, object]:
         minio_script,
     )
 
+    migration_checks = None
+    if "schema_migrations" in tables:
+        migration_checks = [
+            json.loads(line)
+            for line in _clickhouse(
+                project,
+                "SELECT version, checksum FROM schema_migrations "
+                "ORDER BY version FORMAT JSONEachRow",
+            )
+            .decode()
+            .splitlines()
+            if line
+        ]
     metadata = {
+        "verification_version": 2,
+        "consistency": "REQUIRES_QUIESCED_WRITERS_NO_CROSS_STORE_SNAPSHOT",
+        "postgres_inventory": pg_inventory,
+        "minio_objects": object_inventory(minio_dir, MINIO_BUCKETS),
+        "clickhouse_migrations": migration_checks,
         "clickhouse_database": database,
         "clickhouse_tables": tables,
         "clickhouse_counts": clickhouse_counts,

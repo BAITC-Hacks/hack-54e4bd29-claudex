@@ -62,3 +62,13 @@ describe("SignalEvidence", () => {
     expect(screen.getByText(/данные неактуальны/i)).toBeInTheDocument();
   });
 });
+
+it("links only the forecast ID persisted on the Signal to protected evidence", () => {
+  render(<SignalEvidence detail={{ ...detail, forecast_id: "00000000-0000-0000-0000-000000000101" }} />);
+  expect(screen.getByRole("link", { name: /Открыть сохранённый прогноз/ })).toHaveAttribute("href", "/monitor/model?forecast_id=00000000-0000-0000-0000-000000000101");
+});
+
+it("does not invent a forecast link when the Signal has no forecast ID", () => {
+  render(<SignalEvidence detail={detail} />);
+  expect(screen.queryByRole("link", { name: /Открыть сохранённый прогноз/ })).not.toBeInTheDocument();
+});

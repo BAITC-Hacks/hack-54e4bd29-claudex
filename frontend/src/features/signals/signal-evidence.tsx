@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SCOPE_LABELS } from "@/features/signals/labels";
@@ -19,6 +20,11 @@ export function SignalEvidence({ detail }: { detail: SignalDetail }) {
             {detail.data_current ? "Данные актуальны для правила" : "Данные неактуальны"}
           </Badge>
         </div>
+        {detail.forecast_id && (
+          <Link className="inline-block text-primary underline" href={`/monitor/model?forecast_id=${encodeURIComponent(detail.forecast_id)}`}>
+            Открыть сохранённый прогноз
+          </Link>
+        )}
         <dl className="space-y-2">
           <EvidenceRow label="Правило">
             <span className="font-mono text-xs">

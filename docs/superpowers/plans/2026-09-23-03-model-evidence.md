@@ -11,6 +11,12 @@ existing MLflow/artifact infrastructure при интеграции.
 
 **Spec:** ../specs/2026-09-23-pilot-consolidation-design.md
 
+## Execution status — 2026-09-23
+
+M1–M2 implementation and synthetic verification are complete. M3 records INSUFFICIENT_DATA / POLICY_NOT_APPROVED; real candidate training, sealed final evaluation and artifact replay were not performed. They require unseen data and owner-approved policy. No operational model is admitted.
+
+Actual commands, results and outstanding gates: [consolidation report](../../acceptance/PILOT_CONSOLIDATION_IMPLEMENTATION.md). Unchecked original steps remain a conservative combined acceptance checklist, not a claim that the corresponding code is absent.
+
 ## Global Constraints
 
 Не обещать заранее precision/recall. Не подбирать модель/пороги на final test.

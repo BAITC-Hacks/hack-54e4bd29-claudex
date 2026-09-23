@@ -611,6 +611,13 @@ class FakeScenarioRepository:
         self, scope: DataScope, filters: ScenarioFilter, page: PageRequest
     ) -> tuple[list[Scenario], int]:
         items = self._visible(scope)
+        if filters.mapping_version is not None:
+            items = [
+                item
+                for item in items
+                if (item.data_watermark or {}).get("mapping_version")
+                == filters.mapping_version
+            ]
         if filters.scenario_type is not None:
             items = [
                 item for item in items if item.scenario_type == filters.scenario_type
@@ -883,6 +890,16 @@ class FakeAliasRepository:
         return len(self._registry)
 
 
+class FakeMappingRepository:
+    """Record the transaction-held mapping lock for persistence tests."""
+
+    def __init__(self) -> None:
+        self.locked = False
+
+    def lock(self) -> None:
+        self.locked = True
+
+
 class FakeUnitOfWork:
     """Единица работы в памяти.
 
@@ -899,6 +916,7 @@ class FakeUnitOfWork:
         self.actions = FakeActionRepository(store)
         self.forecasts = FakeForecastRepository(store)
         self.scenarios = FakeScenarioRepository(store)
+        self.mappings = FakeMappingRepository()
         self.audit = FakeAuditRepository(store)
         self.users = FakeUserRepository(store)
         self.data_imports = FakeDataImportRepository(store)
@@ -917,7 +935,7 @@ class FakeUnitOfWork:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        return None
+        self.mappings.locked = False
 
     def commit(self) -> None:
         self._store.commits += 1

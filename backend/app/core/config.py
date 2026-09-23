@@ -122,6 +122,7 @@ class Settings(BaseSettings):
     mlflow_tracking_uri: str = "http://mlflow:5000"
     mlflow_experiment_name: str = "medsignal-referral-forecast"
     mlflow_registered_model_name: str = "medsignal-referral-flow"
+    organization_forecast_enabled: bool = False
     forecast_horizon_days: int = Field(default=7, ge=1, le=14)
     forecast_min_train_days: int = Field(default=42, ge=21, le=365)
     forecast_min_relative_improvement: float = Field(default=0.02, ge=0, le=1)

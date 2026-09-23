@@ -11,8 +11,9 @@ Data Audit показал, что выгрузки распадаются на �
 | 1 | полное юридическое наименование | пролеченные случаи, направления, отказы |
 | 2 | четырёхсимвольный код | очередь |
 
-Внутри первой группы связь надёжна: наименования пересекаются на 1 362
-из 1 381. Между группами пересечение нулевое.
+Внутри первой группы наименования пересекаются на 1 362 из 1 381.
+Это наблюдение не подтверждает соответствие canonical Hospital: нужна
+проверка системы-источника, роли столбца и evidence. Между группами пересечение нулевое.
 
 То же с регионами: очередь использует числовые коды, отказы — наименования.
 
@@ -47,8 +48,8 @@ Data Audit показал, что выгрузки распадаются на �
 ## 3. Что делает конвейер
 
 Встреченные значения накапливаются. Повторная встреча увеличивает
-счётчик, а не создаёт дубликат. Ключ — система-источник и нормализованное
-значение: одна и та же строка из двух разных систем может означать
+счётчик, а не создаёт дубликат. После D2 ключ — система-источник, identity_space (набор/роль столбца)
+и нормализованное значение: одна и та же строка из двух разных систем может означать
 разные организации.
 
 Нормализация схлопывает только регистр и повторяющиеся пробелы. Кавычки,
@@ -91,3 +92,14 @@ Data Audit показал, что выгрузки распадаются на �
 3. Существует ли справочник профилей коек, общий для обеих систем?
 
 До ответов сопоставление не выполняется.
+
+
+## D2: reviewed versioned publication (2026-09-23)
+
+See [ADR-0019](../ADR/0019-versioned-mapping-projection.md). Existing aliases become `LEGACY_UNRESOLVED`, excluded from approved snapshots even if an old canonical ID exists. Role-separated identities such as `IS_BG:REFERRALS:RECEIVING` and `IS_BG:WAITING:DESTINATION` never merge on matching text. Imported ambiguous alias collections remain unresolved; they must be registered in an exact known role before approval.
+
+`app.cli.mapping --actor <subject> register|approve|revoke|publish` is an explicit operator path. Approve requires an existing active canonical target, evidence and exact expected alias version. A conflicting reassignment requires revocation first; REVIEW_REQUIRED is blocked. Approval/revocation, generation advancement and audit commit together. The CLI records reviewed manual decisions; supported stored methods are only OFFICIAL_REFERENCE and MANUAL_APPROVED. Region decisions use the same lifecycle; source-level region projection is used where facts contain that exact source dimension. Profiles remain disabled.
+
+ClickHouse `mapping_projection` stores immutable version, kind, identity_space, source_key, canonical_id. Its organization canonical_id is resolved as hospital_id before aggregation. A candidate is inserted under the PG mapping lock, then count+digest verified; only then may the PG active pointer move. A lost acknowledgement retries missing exact rows and verifies; duplicates/conflicting rows fail closed. The active version is unavailable immediately after any decision, including revocation. A previous cached response cannot restore the old entitlement.
+
+No real dictionary, evidence or approval was created by this implementation. Current owner confirmation is EXTERNAL DEPENDENCY. Historical counts above are historical audit evidence, not current runtime verification.

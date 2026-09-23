@@ -1,4 +1,4 @@
-"""Trainable hospital-level referral monitoring, with a sealed temporal test.
+"""Legacy Q1 pilot reproduction (legacy-q1-v1), not independent admission evidence.
 
 Only registration date and receiving organisation enter the model. Outcomes,
 patient identifiers and diagnosis fields are deliberately not used.
@@ -14,13 +14,18 @@ from collections import Counter, defaultdict
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import joblib
 import numpy as np
 from numpy.typing import ArrayLike
 from sklearn.ensemble import HistGradientBoostingRegressor
 from threadpoolctl import threadpool_limits
+
+if TYPE_CHECKING:
+    from ml.monitoring_contracts import AggregateManifest, SplitSpec
+
+LEGACY_PATH_VERSION = "legacy-q1-v1"
 
 SCHEMA = "hospital-referrals-direct7-v1"
 FEATURES = [
@@ -321,7 +326,28 @@ def alert_for(
     }
 
 
+def prepare_approved_experiment(
+    rows: list[dict[str, object]], manifest: AggregateManifest, split: SplitSpec
+) -> dict[str, Any]:
+    """New v2 path accepts only a trusted approved aggregate manifest and rows.
+
+    No raw-source discovery or fitting occurs here. Owner approval and independent
+    evidence remain separate admission gates.
+    """
+    from ml.evaluation.monitoring import eligible_organizations, load_approved_aggregates
+
+    series = load_approved_aggregates(rows, manifest)
+    return {
+        "path_version": "approved-aggregate-v2",
+        "series": series,
+        "eligible_organizations": eligible_organizations(series, split),
+        "manifest_sha256": manifest.sha256,
+        "dataset_sha256": manifest.aggregate_sha256,
+    }
+
+
 def train(source: Path, output: Path) -> None:
+    """Preserved legacy-q1-v1 reproduction only; never an admission experiment."""
     paths = sorted(source.glob("referrals_part_*.csv"))
     if len(paths) != 3:
         raise ValueError(

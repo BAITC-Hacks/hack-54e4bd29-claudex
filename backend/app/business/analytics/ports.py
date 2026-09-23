@@ -19,6 +19,7 @@ from app.shared.analytics_data import (
     RawTreatedSnapshot,
     RawWaitingSummary,
 )
+from app.shared.delivery import DeliveryReadiness
 
 __all__ = [
     "AnalyticsCache",
@@ -85,6 +86,8 @@ class AnalyticsRepository(Protocol):
 
 
 class AnalyticsMetadataRepository(Protocol):
+    def delivery_readiness(self, dataset_type: str) -> DeliveryReadiness: ...
+
     def hospital_ids_for_regions(
         self, region_ids: tuple[uuid.UUID, ...]
     ) -> tuple[uuid.UUID, ...]: ...

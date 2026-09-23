@@ -8,18 +8,20 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Protocol
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.analytics import Forecast
 from app.models.data_import import DataImport
+from app.models.delivery import Delivery
 from app.models.enums import DataImportStatus, ForecastStatus
 from app.models.forecast_point import ForecastPoint
 from app.models.model_version import ModelVersion
 from app.models.quality import DataQualityResult
+from app.repositories.delivery import SqlAlchemyDeliveryRepository
 from app.shared.signal_engine import (
     DailyAggregate,
     ForecastEvidence,
@@ -77,12 +79,22 @@ class SqlClickHouseSignalInputRepository:
         spec = self._spec(dataset_type)
         # Identifiers are selected from the closed _DATASETS map; user input is
         # never interpolated. Values remain ClickHouse parameters.
+        import_ids = tuple(
+            row.id
+            for row in self._completed_imports()
+            if row.dataset_type == dataset_type and row.source == spec.source
+        )
+        if not import_ids:
+            return None
         query = f"""
             /* signal-engine:latest:{dataset_type} */
             SELECT max({spec.event_column})
             FROM {spec.table}
+            WHERE import_id IN {{published_import_ids:Array(UUID)}}
             """
-        rows = self._client.query(query, parameters={}).result_rows
+        rows = self._client.query(
+            query, parameters={"published_import_ids": [str(i) for i in import_ids]}
+        ).result_rows
         if not rows or rows[0][0] is None:
             return None
         value = rows[0][0]
@@ -103,33 +115,63 @@ class SqlClickHouseSignalInputRepository:
         spec = self._spec(dataset_type)
         if not spec.supports_daily:
             raise ValueError(f"Dataset {dataset_type!r} не имеет event daily series")
-        # Same immutable allowlist boundary as latest_event_at.
-        query = f"""
-            /* signal-engine:daily:{dataset_type} */
-            SELECT event_date, value
-            FROM (
-                SELECT toDate({spec.event_column}) AS event_date, count() AS value
-                FROM {spec.table}
-                WHERE toDate({spec.event_column}) < {{before:Date}}
-                GROUP BY event_date
-                ORDER BY event_date DESC
-                LIMIT {{limit_days:UInt64}}
-            )
-            ORDER BY event_date
-            """
-        rows = self._client.query(
-            query,
-            parameters={"before": before, "limit_days": limit_days},
-        ).result_rows
-        return TimeSeriesEvidence(
-            dataset_type=dataset_type,
-            source=spec.source,
-            points=tuple(
-                DailyAggregate(row[0], int(row[1]), is_complete=True) for row in rows
-            ),
-            watermark=self._watermark_for(dataset_type),
-            source_is_current=source_is_current,
+        empty = TimeSeriesEvidence(
+            dataset_type,
+            spec.source,
+            (),
+            {"schema_version": "published-signal-input-v1", "completeness": "UNKNOWN"},
+            False,
         )
+        if self._session_factory is None:
+            return empty
+        with self._session_factory() as session, session.begin():
+            deliveries = SqlAlchemyDeliveryRepository(session)
+            deliveries.lock_source(spec.source, dataset_type)
+            ready = deliveries.readiness(dataset_type, source_system=spec.source)
+            if (
+                ready.completeness != "COMPLETE"
+                or not ready.published_import_ids
+                or ready.confirmed_complete_through is None
+                or ready.confirmed_complete_through < before - timedelta(days=1)
+            ):
+                return empty
+            query = f"""
+                /* signal-engine:daily:{dataset_type} */
+                SELECT event_date, value FROM (
+                    SELECT toDate({spec.event_column}) AS event_date, count() AS value
+                    FROM {spec.table}
+                    WHERE toDate({spec.event_column}) < {{before:Date}}
+                      AND toDate({spec.event_column}) >= {{after:Date}}
+                      AND import_id IN {{published_import_ids:Array(UUID)}}
+                    GROUP BY event_date ORDER BY event_date DESC
+                    LIMIT {{limit_days:UInt64}}
+                ) ORDER BY event_date
+            """
+            rows = self._client.query(
+                query,
+                parameters={
+                    "before": before,
+                    "after": before - timedelta(days=limit_days),
+                    "limit_days": limit_days,
+                    "published_import_ids": [str(i) for i in ready.published_import_ids],
+                },
+            ).result_rows
+            return TimeSeriesEvidence(
+                dataset_type,
+                spec.source,
+                tuple(
+                    DailyAggregate(row[0], int(row[1]), is_complete=True) for row in rows
+                ),
+                {
+                    "schema_version": "published-signal-input-v1",
+                    "import_ids": [str(i) for i in ready.published_import_ids],
+                    "delivery_watermark": ready.publication_watermark,
+                    "confirmed_complete_through": (
+                        ready.confirmed_complete_through.isoformat()
+                    ),
+                },
+                source_is_current,
+            )
 
     def _completed_imports(self) -> list[DataImport]:
         if self._session_factory is None:
@@ -137,7 +179,11 @@ class SqlClickHouseSignalInputRepository:
         with self._session_factory() as session:
             rows = session.scalars(
                 select(DataImport)
-                .where(DataImport.status == DataImportStatus.COMPLETED)
+                .outerjoin(Delivery, DataImport.delivery_id == Delivery.id)
+                .where(
+                    DataImport.status == DataImportStatus.COMPLETED,
+                    or_(DataImport.delivery_id.is_(None), Delivery.status == "PUBLISHED"),
+                )
                 .order_by(DataImport.dataset_type, DataImport.completed_at, DataImport.id)
             ).all()
             session.expunge_all()

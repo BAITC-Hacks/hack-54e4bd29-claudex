@@ -11,6 +11,12 @@ Next.js/TanStack Query, Compose/Nginx, Prometheus/Grafana.
 
 **Spec:** ../specs/2026-09-23-pilot-consolidation-design.md
 
+## Execution status — 2026-09-23
+
+R1–R2 implementation and native verification are complete; organization inference remains disabled. R3 performance and R4 runtime/perimeter acceptance remain NOT TESTED or EXTERNAL DEPENDENCY. R5 has an unsigned protocol/report, not a completed pilot. Real-token/restart/race/restore acceptance is not replaced by synthetic tests.
+
+Actual commands, results and outstanding gates: [consolidation report](../../acceptance/PILOT_CONSOLIDATION_IMPLEMENTATION.md). Unchecked original steps remain a conservative combined acceptance checklist, not a claim that the corresponding code is absent.
+
 ## Global Constraints
 
 Нет второго production backend и второго состояния сигналов в JSON.

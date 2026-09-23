@@ -24,6 +24,7 @@ from app.repositories.analytics import (
     SqlAlchemyScenarioRepository,
 )
 from app.repositories.audit import SqlAlchemyAuditRepository
+from app.repositories.delivery import SqlAlchemyDeliveryRepository
 from app.repositories.directory import (
     SqlAlchemyHospitalRepository,
     SqlAlchemyRegionRepository,
@@ -33,6 +34,7 @@ from app.repositories.incidents import (
     SqlAlchemyIncidentRepository,
 )
 from app.repositories.mapping import (
+    SqlAlchemyMappingRepository,
     SqlAlchemyOrganizationAliasRepository,
     SqlAlchemyProfileAliasRepository,
     SqlAlchemyRegionAliasRepository,
@@ -58,6 +60,8 @@ class SqlAlchemyUnitOfWork:
     forecasts: SqlAlchemyForecastRepository
     model_versions: SqlAlchemyModelVersionRepository
     scenarios: SqlAlchemyScenarioRepository
+    mappings: SqlAlchemyMappingRepository
+    deliveries: SqlAlchemyDeliveryRepository
     data_imports: SqlAlchemyDataImportRepository
     data_quality: SqlAlchemyDataQualityRepository
     quarantine: SqlAlchemyQuarantineRepository
@@ -90,6 +94,8 @@ class SqlAlchemyUnitOfWork:
         self.forecasts = SqlAlchemyForecastRepository(session)
         self.model_versions = SqlAlchemyModelVersionRepository(session)
         self.scenarios = SqlAlchemyScenarioRepository(session)
+        self.mappings = SqlAlchemyMappingRepository(session)
+        self.deliveries = SqlAlchemyDeliveryRepository(session)
         self.data_imports = SqlAlchemyDataImportRepository(session)
         self.data_quality = SqlAlchemyDataQualityRepository(session)
         self.quarantine = SqlAlchemyQuarantineRepository(session)

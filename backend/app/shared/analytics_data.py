@@ -12,12 +12,17 @@ class QueryScope:
     canonical_hospital_ids: tuple[uuid.UUID, ...]
     all_canonical: bool
     include_unmapped: bool
+    mapping_version: str | None = None
+    published_import_ids: tuple[uuid.UUID, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class ImportWatermark:
     completed_at: datetime | None
     import_ids: tuple[uuid.UUID, ...]
+    mapping_version: str | None = None
+    mapping_generation: int = 0
+    mapping_verified: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,3 +112,4 @@ class ImportSummary:
     rows_rejected: int
     warnings_count: int
     quality_issues: tuple[str, ...] = ()
+    completeness: str = "UNKNOWN"

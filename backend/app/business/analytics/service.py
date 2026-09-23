@@ -7,8 +7,11 @@ import json
 import logging
 import uuid
 from collections.abc import Callable
+from contextvars import ContextVar
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from typing import TypeVar
+from functools import wraps
+from typing import Any, TypeVar
 
 from app.business.analytics.contracts import (
     AnalyticsCell,
@@ -49,10 +52,11 @@ from app.core.analytics_metrics import (
     observe_analytics_query,
     record_analytics_cache,
 )
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import DependencyUnavailableError, NotFoundError
 from app.security.authorization import AuthorizationService
 from app.security.context import Role, SecurityContext
 from app.security.permissions import Permission
+from app.shared.delivery import DeliveryReadiness
 
 GOVERNANCE_ROLES = frozenset({Role.ADMIN, Role.HEALTH_AUTHORITY})
 OVERVIEW_SOURCES = ("ИС БГ:REFERRALS", "ИС БГ:WAITING", "ИС БГ:REFUSALS")
@@ -73,6 +77,45 @@ def _exact(value: ValueT | None) -> AnalyticsCell[ValueT]:
     return AnalyticsCell(value=value, suppressed=False)
 
 
+def classify_freshness(readiness: DeliveryReadiness, now: datetime) -> FreshnessStatus:
+    if readiness.completeness == "PARTIAL":
+        return FreshnessStatus.PARTIAL
+    if readiness.cadence_days is None or readiness.confirmed_complete_through is None:
+        return FreshnessStatus.UNKNOWN
+    return (
+        FreshnessStatus.CURRENT
+        if (now.date() - readiness.confirmed_complete_through).days
+        <= readiness.cadence_days
+        else FreshnessStatus.STALE
+    )
+
+
+def publication_snapshot(method: Callable[..., Any]) -> Callable[..., Any]:
+    """One immutable PG read snapshot per response, rechecked after cache/query."""
+
+    @wraps(method)
+    def checked(
+        self: AnalyticsService, context: SecurityContext, *args: Any, **kwargs: Any
+    ) -> Any:
+        self._authorization.require_permission(context, Permission.ANALYTICS_READ)
+        watermark = self._metadata.latest_completed_imports()
+        if (
+            not (context.scope.resolved and context.scope.is_global)
+            and not watermark.mapping_verified
+        ):
+            raise DependencyUnavailableError("MAPPING_PUBLICATION_UNAVAILABLE")
+        token = self._read_watermark.set(watermark)
+        try:
+            result = method(self, context, *args, **kwargs)
+            if self._metadata.latest_completed_imports() != watermark:
+                raise DependencyUnavailableError("PUBLICATION_CHANGED_RETRY")
+            return result
+        finally:
+            self._read_watermark.reset(token)
+
+    return checked
+
+
 class AnalyticsService:
     """Apply permissions, data scope and cache isolation around aggregates."""
 
@@ -88,6 +131,9 @@ class AnalyticsService:
         max_date_range_days: int = 366,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
+        self._read_watermark: ContextVar[ImportWatermark | None] = ContextVar(
+            "analytics_publication", default=None
+        )
         self._repository = repository
         self._metadata = metadata_repository
         self._cache = cache
@@ -96,6 +142,22 @@ class AnalyticsService:
         self._cache_ttl_seconds = cache_ttl_seconds
         self._max_date_range_days = max_date_range_days
         self._clock = clock or (lambda: datetime.now(UTC))
+
+    def _watermark(self) -> ImportWatermark:
+        current = self._read_watermark.get()
+        return (
+            current if current is not None else self._metadata.latest_completed_imports()
+        )
+
+    def _publication_scope(self, scope: QueryScope) -> QueryScope:
+        watermark = self._watermark()
+        if not scope.all_canonical and not watermark.mapping_verified:
+            raise DependencyUnavailableError("MAPPING_PUBLICATION_UNAVAILABLE")
+        return replace(
+            scope,
+            mapping_version=watermark.mapping_version,
+            published_import_ids=watermark.import_ids,
+        )
 
     def _query_scope(
         self,
@@ -110,18 +172,18 @@ class AnalyticsService:
         )
         regional = self._metadata.hospital_ids_for_regions(context_regions)
 
-        if context.has_global_scope:
+        if context.scope.is_global and context.scope.resolved:
             scope = QueryScope((), all_canonical=True, include_unmapped=True)
         else:
             canonical_ids = tuple(dict.fromkeys((*direct, *regional)))
             scope = QueryScope(
                 canonical_hospital_ids=canonical_ids,
                 all_canonical=False,
-                include_unmapped=bool(context.roles & GOVERNANCE_ROLES),
+                include_unmapped=False,
             )
 
         if filters is None:
-            return scope
+            return self._publication_scope(scope)
 
         requested_hospitals = {
             uuid.UUID(item.key.removeprefix("canonical:"))
@@ -137,9 +199,11 @@ class AnalyticsService:
             for item in filters.organization_ids
         )
         if not requested_hospitals and has_canonical_constraint:
-            return QueryScope((), all_canonical=False, include_unmapped=False)
+            return self._publication_scope(
+                QueryScope((), all_canonical=False, include_unmapped=False)
+            )
         if not requested_hospitals:
-            return scope
+            return self._publication_scope(scope)
 
         if scope.all_canonical:
             narrowed = tuple(sorted(requested_hospitals, key=str))
@@ -149,17 +213,19 @@ class AnalyticsService:
                 for item in scope.canonical_hospital_ids
                 if item in requested_hospitals
             )
-        return QueryScope(
-            canonical_hospital_ids=narrowed,
-            all_canonical=False,
-            include_unmapped=(
-                scope.include_unmapped
-                and not filters.region_ids
-                and any(
-                    item.identity_space is OrganizationIdentitySpace.SOURCE
-                    for item in filters.organization_ids
-                )
-            ),
+        return self._publication_scope(
+            QueryScope(
+                canonical_hospital_ids=narrowed,
+                all_canonical=False,
+                include_unmapped=(
+                    scope.include_unmapped
+                    and not filters.region_ids
+                    and any(
+                        item.identity_space is OrganizationIdentitySpace.SOURCE
+                        for item in filters.organization_ids
+                    )
+                ),
+            )
         )
 
     def _authorize(self, context: SecurityContext, filters: AnalyticsFilter) -> None:
@@ -167,7 +233,7 @@ class AnalyticsService:
         filters.validate(max_days=self._max_date_range_days)
         for identity in filters.organization_ids:
             self.require_organization_access(context, identity)
-        if not context.has_global_scope:
+        if not (context.scope.is_global and context.scope.resolved):
             for region_id in filters.region_ids:
                 self._authorization.require_region_access(context, region_id)
 
@@ -175,7 +241,7 @@ class AnalyticsService:
         self, context: SecurityContext, identity: OrganizationIdentity
     ) -> None:
         if identity.identity_space is OrganizationIdentitySpace.SOURCE:
-            if not context.roles & GOVERNANCE_ROLES:
+            if not (context.scope.resolved and context.scope.is_global):
                 raise NotFoundError("Организация не найдена")
             return
 
@@ -193,6 +259,8 @@ class AnalyticsService:
     ) -> str:
         material = {
             "endpoint": endpoint,
+            "mapping_version": watermark.mapping_version,
+            "mapping_generation": watermark.mapping_generation,
             "date_from": filters.date_from.isoformat(),
             "date_to": filters.date_to.isoformat(),
             "granularity": filters.granularity.value,
@@ -236,14 +304,17 @@ class AnalyticsService:
             limitations=limitations,
             granularity=filters.granularity if time_series else None,
             latest_import_ids=tuple(str(item) for item in watermark.import_ids),
+            mapping_version=watermark.mapping_version,
+            mapping_publication_available=watermark.mapping_verified,
         )
 
+    @publication_snapshot
     def overview(
         self, context: SecurityContext, filters: AnalyticsFilter
     ) -> OverviewResult:
         self._authorize(context, filters)
         scope = self._query_scope(context, filters)
-        watermark = self._metadata.latest_completed_imports()
+        watermark = self._watermark()
         key = self._cache_key("overview", filters, scope, watermark)
         try:
             raw = self._cache.get_overview(key)
@@ -292,7 +363,7 @@ class AnalyticsService:
                 rows = self._repository.refusal_timeseries(filters, scope)
             sources = ("ИС БГ:REFUSALS",)
         delta = timedelta(days=1 if filters.granularity.value == "DAY" else 7)
-        watermark = self._metadata.latest_completed_imports()
+        watermark = self._watermark()
         return TimeSeriesResult(
             metadata=self._metadata_for(
                 filters,
@@ -312,39 +383,54 @@ class AnalyticsService:
             ),
         )
 
+    @publication_snapshot
     def referral_timeseries(
         self, context: SecurityContext, filters: AnalyticsFilter
     ) -> TimeSeriesResult:
         return self._timeseries(context, filters, metric=MetricName.REFERRALS_TOTAL)
 
+    @publication_snapshot
     def refusal_timeseries(
         self, context: SecurityContext, filters: AnalyticsFilter
     ) -> TimeSeriesResult:
         return self._timeseries(context, filters, metric=MetricName.REFUSALS_TOTAL)
 
+    @publication_snapshot
     def waiting_summary(
         self, context: SecurityContext, filters: AnalyticsFilter
     ) -> WaitingAgeStatistics:
         self._authorize(context, filters)
-        with observe_analytics_query("waiting_summary"):
-            raw = self._repository.waiting_summary(
-                filters, self._query_scope(context, filters)
+        readiness = self._metadata.delivery_readiness("WAITING")
+        scope = self._query_scope(context, filters)
+        snapshot_approved = bool(readiness.snapshot_approved_import_ids)
+        if snapshot_approved:
+            scope = replace(
+                scope,
+                published_import_ids=tuple(
+                    i
+                    for i in scope.published_import_ids or ()
+                    if i in readiness.snapshot_approved_import_ids
+                ),
             )
-        watermark = self._metadata.latest_completed_imports()
+        with observe_analytics_query("waiting_summary"):
+            raw = self._repository.waiting_summary(filters, scope)
+        watermark = self._watermark()
         return WaitingAgeStatistics(
             metadata=self._metadata_for(
                 filters,
                 watermark,
                 sources=("ИС БГ:WAITING",),
-                limitations=(WAITING_LIMITATION, MAPPING_LIMITATION),
+                limitations=(WAITING_LIMITATION, MAPPING_LIMITATION)
+                + (() if snapshot_approved else ("SNAPSHOT_SEMANTICS_UNCONFIRMED",)),
             ),
             waiting_records=_exact(raw.waiting_records),
-            median_days=_exact(raw.median_days),
-            p75_days=_exact(raw.p75_days),
-            p90_days=_exact(raw.p90_days),
-            oldest_days=_exact(raw.oldest_days),
+            median_days=_exact(raw.median_days if snapshot_approved else None),
+            p75_days=_exact(raw.p75_days if snapshot_approved else None),
+            p90_days=_exact(raw.p90_days if snapshot_approved else None),
+            oldest_days=_exact(raw.oldest_days if snapshot_approved else None),
         )
 
+    @publication_snapshot
     def observed_waiting(
         self, context: SecurityContext, filters: AnalyticsFilter
     ) -> ObservedWaitingStatistics:
@@ -353,7 +439,7 @@ class AnalyticsService:
             raw = self._repository.observed_waiting(
                 filters, self._query_scope(context, filters)
             )
-        watermark = self._metadata.latest_completed_imports()
+        watermark = self._watermark()
         return ObservedWaitingStatistics(
             metadata=self._metadata_for(
                 filters,
@@ -397,6 +483,7 @@ class AnalyticsService:
             canonical_hospital_id=raw.canonical_hospital_id,
         )
 
+    @publication_snapshot
     def organizations(
         self,
         context: SecurityContext,
@@ -413,7 +500,7 @@ class AnalyticsService:
                 limit=page_size,
                 offset=(page - 1) * page_size,
             )
-        watermark = self._metadata.latest_completed_imports()
+        watermark = self._watermark()
         return OrganizationSummariesResult(
             metadata=self._metadata_for(
                 filters, watermark, limitations=(MAPPING_LIMITATION,)
@@ -424,6 +511,7 @@ class AnalyticsService:
             total=total,
         )
 
+    @publication_snapshot
     def organization_detail(
         self,
         context: SecurityContext,
@@ -439,7 +527,7 @@ class AnalyticsService:
         if result is None:
             raise NotFoundError("Организация не найдена")
         raw, treated = result
-        watermark = self._metadata.latest_completed_imports()
+        watermark = self._watermark()
         return OrganizationDetail(
             metadata=self._metadata_for(
                 filters,
@@ -464,6 +552,7 @@ class AnalyticsService:
             ),
         )
 
+    @publication_snapshot
     def freshness(self, context: SecurityContext) -> FreshnessOverview:
         self._authorization.require_permission(context, Permission.ANALYTICS_READ)
         with observe_analytics_query("data_freshness"):
@@ -472,8 +561,12 @@ class AnalyticsService:
             item.dataset_type: item for item in self._metadata.latest_import_summaries()
         }
         now = self._clock()
+        readiness = {
+            row.dataset_type: self._metadata.delivery_readiness(row.dataset_type)
+            for row in coverage
+        }
         fallback = AnalyticsFilter(now, now)
-        watermark = self._metadata.latest_completed_imports()
+        watermark = self._watermark()
         return FreshnessOverview(
             metadata=self._metadata_for(fallback, watermark),
             datasets=tuple(
@@ -487,26 +580,52 @@ class AnalyticsService:
                         if row.dataset_type in imports
                         else None
                     ),
-                    status=FreshnessStatus.UNKNOWN,
-                    explanation="Периодичность поставки данных не определена.",
+                    status=classify_freshness(readiness[row.dataset_type], now),
+                    explanation=readiness[row.dataset_type].reason
+                    or (
+                        "Периодичность поставки данных не определена."
+                        if readiness[row.dataset_type].cadence_days is None
+                        else None
+                    ),
+                    confirmed_complete_through=readiness[
+                        row.dataset_type
+                    ].confirmed_complete_through,
+                    cadence_known=readiness[row.dataset_type].cadence_days is not None,
+                    completeness=readiness[row.dataset_type].completeness,
+                    forecast_available=False,
                 )
                 for row in coverage
             ),
         )
 
+    @publication_snapshot
     def quality(self, context: SecurityContext) -> QualityOverview:
         self._authorization.require_permission(context, Permission.ANALYTICS_READ)
         now = self._clock()
         fallback = AnalyticsFilter(now, now)
-        watermark = self._metadata.latest_completed_imports()
+        watermark = self._watermark()
+        if not (context.scope.resolved and context.scope.is_global):
+            return QualityOverview(
+                metadata=self._metadata_for(
+                    fallback, watermark, limitations=("GLOBAL_QUALITY_TOTALS_RESTRICTED",)
+                ),
+                datasets=(),
+            )
         datasets = tuple(
             DatasetQualitySummary(
                 dataset_type=item.dataset_type,
-                status=("WARNING" if item.warnings_count else "LOADED"),
+                status=(
+                    "PARTIAL"
+                    if item.completeness == "PARTIAL"
+                    else "WARNING"
+                    if item.warnings_count
+                    else "LOADED"
+                ),
                 rows_loaded=item.rows_loaded,
                 warnings_count=item.warnings_count,
                 rejected_count=item.rows_rejected,
-                issues=item.quality_issues,
+                issues=item.quality_issues
+                + (("INCOMPLETE_DELIVERY",) if item.completeness == "PARTIAL" else ()),
             )
             for item in self._metadata.latest_import_summaries()
         )
@@ -514,6 +633,7 @@ class AnalyticsService:
             metadata=self._metadata_for(fallback, watermark), datasets=datasets
         )
 
+    @publication_snapshot
     def refusal_breakdown(
         self,
         context: SecurityContext,
@@ -526,7 +646,7 @@ class AnalyticsService:
             rows = self._repository.refusal_breakdown(
                 filters, self._query_scope(context, filters), dimension=dimension
             )
-        watermark = self._metadata.latest_completed_imports()
+        watermark = self._watermark()
         sensitive = dimension in {
             "resident",
             "insured",

@@ -4,12 +4,15 @@
 при сравнении с состоянием базы.
 """
 
+from __future__ import annotations
+
 from app.models.access import User, UserDataScope
 from app.models.action import Action
 from app.models.analytics import Forecast, Scenario
 from app.models.audit import AuditEvent
 from app.models.base import Base
 from app.models.data_import import DataImport
+from app.models.delivery import Delivery, DeliveryPart
 from app.models.directory import Hospital, Region
 from app.models.enums import (
     ActionType,
@@ -39,7 +42,13 @@ from app.models.enums import (
 )
 from app.models.forecast_point import ForecastPoint
 from app.models.incident import Incident
-from app.models.mapping import OrganizationAlias, ProfileAlias, RegionAlias
+from app.models.mapping import (
+    MappingRevision,
+    MappingState,
+    OrganizationAlias,
+    ProfileAlias,
+    RegionAlias,
+)
 from app.models.model_version import ModelVersion
 from app.models.quality import DataQualityResult, QuarantineBatch
 from app.models.signal import Signal, SignalExplanation
@@ -58,6 +67,8 @@ __all__ = [
     "DataQualityResult",
     "DataScopeType",
     "DatasetType",
+    "Delivery",
+    "DeliveryPart",
     "ExplanationGenerator",
     "FactorDirection",
     "Forecast",
@@ -67,6 +78,8 @@ __all__ = [
     "Incident",
     "IncidentStatus",
     "MappingMethod",
+    "MappingRevision",
+    "MappingState",
     "MappingStatus",
     "ModelVersion",
     "ModelVersionStatus",

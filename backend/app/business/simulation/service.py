@@ -6,6 +6,7 @@ import hashlib
 import json
 import uuid
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime, time
 from decimal import Decimal
 from typing import Any, Protocol
@@ -62,10 +63,14 @@ class ScenarioService:
         analytics: ReferralAnalytics,
         authorization: AuthorizationService,
         clock: Callable[[], datetime] | None = None,
+        mapping_is_current: Callable[[str], bool] | None = None,
+        current_mapping_version: Callable[[], str | None] | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._analytics = analytics
         self._authz = authorization
+        self._mapping_is_current = mapping_is_current
+        self._current_mapping_version = current_mapping_version
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def preview(
@@ -88,12 +93,13 @@ class ScenarioService:
         with self._uow_factory() as uow:
             existing = uow.scenarios.find_by_request(context.actor_id, client_request_id)
             if existing is not None:
+                if uow.scenarios.get(existing.id, context.scope) is None:
+                    raise NotFoundError("Сценарий не найден")
+                self._check_mapping(context, existing.data_watermark)
                 if existing.parameters.get("request_fingerprint") != fingerprint:
                     raise ConflictError(
                         "client_request_id уже использован для другого сценария"
                     )
-                if uow.scenarios.get(existing.id, context.scope) is None:
-                    raise NotFoundError("Сценарий не найден")
                 return existing
 
         # Save deliberately repeats every read performed by preview. The preview
@@ -101,14 +107,22 @@ class ScenarioService:
         self._validate_command_scope(context, command.scope)
         self._validate_sources(context, command)
         baseline = self._resolve_baseline(context, command)
+        self._check_mapping(context, baseline.data_watermark)
         preview = self._preview(command, baseline)
         scenario = self._to_model(
             context, command, preview, client_request_id, fingerprint
         )
 
         with self._uow_factory() as uow:
+            if not context.has_global_scope:
+                # Serialize with mapping revocation through persistence (ADR-0019).
+                uow.mappings.lock()
+                self._check_mapping(context, baseline.data_watermark)
             persisted, created = uow.scenarios.add_if_absent(scenario)
             if not created:
+                if uow.scenarios.get(persisted.id, context.scope) is None:
+                    raise NotFoundError("Сценарий не найден")
+                self._check_mapping(context, persisted.data_watermark)
                 if persisted.parameters.get("request_fingerprint") != fingerprint:
                     raise ConflictError(
                         "client_request_id уже использован для другого сценария"
@@ -136,7 +150,8 @@ class ScenarioService:
             scenario = uow.scenarios.get(scenario_id, context.scope)
             if scenario is None:
                 raise NotFoundError("Сценарий не найден")
-            return scenario
+        self._check_mapping(context, scenario.data_watermark)
+        return scenario
 
     def list(
         self,
@@ -145,9 +160,42 @@ class ScenarioService:
         page: PageRequest,
     ) -> Page[Scenario]:
         self._authz.require_permission(context, Permission.SCENARIO_READ)
+        if context.has_global_scope:
+            with self._uow_factory() as uow:
+                items, total = uow.scenarios.list(context.scope, filters, page)
+            return Page.build(items, total, page)
+
+        version = (
+            self._current_mapping_version() if self._current_mapping_version else None
+        )
+        watermark = {"mapping_version": version}
+        self._check_mapping(context, watermark)
+        # Restrict both SQL count and page to the same verified mapping snapshot.
+        filters = replace(filters, mapping_version=version)
         with self._uow_factory() as uow:
             items, total = uow.scenarios.list(context.scope, filters, page)
+        # Revocation during the read invalidates totals as well as returned rows.
+        self._check_mapping(context, watermark)
         return Page.build(items, total, page)
+
+    def _mapping_allows(
+        self, context: SecurityContext, watermark: dict[str, Any] | None
+    ) -> bool:
+        if context.has_global_scope:
+            return True
+        version = (watermark or {}).get("mapping_version")
+        return (
+            isinstance(version, str)
+            and bool(version)
+            and self._mapping_is_current is not None
+            and self._mapping_is_current(version)
+        )
+
+    def _check_mapping(
+        self, context: SecurityContext, watermark: dict[str, Any] | None
+    ) -> None:
+        if not self._mapping_allows(context, watermark):
+            raise NotFoundError("Объект не найден")
 
     def _validate_command_scope(
         self, context: SecurityContext, scope: ScenarioScope
@@ -247,6 +295,7 @@ class ScenarioService:
                     metadata.completed_import_watermark.isoformat()
                 ),
                 "latest_import_ids": list(metadata.latest_import_ids),
+                "mapping_version": metadata.mapping_version,
             },
             sources=metadata.sources,
             limitations=metadata.limitations,
@@ -268,6 +317,7 @@ class ScenarioService:
             forecast = uow.forecasts.get(command.forecast_id, context.scope)
             if forecast is None or not self._same_scope(forecast, command.scope):
                 raise NotFoundError("Прогноз не найден")
+        self._check_mapping(context, forecast.dataset_watermark)
         forecast_status = ForecastStatus(forecast.status)
         if forecast_status is not ForecastStatus.VALID:
             raise ValidationError("Прогноз не является структурно валидным")

@@ -42,6 +42,9 @@ class Permission(StrEnum):
 
     AUDIT_READ = "audit.read"
 
+    DELIVERY_APPROVE = "delivery.approve"
+    MAPPING_MANAGE = "mapping.manage"
+
     ADMIN_MANAGE = "admin.manage"
 
 

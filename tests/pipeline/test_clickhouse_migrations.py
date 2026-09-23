@@ -99,6 +99,7 @@ def test_project_migrations_load() -> None:
         "003_fact_refusal_events",
         "004_fact_treated_snapshot",
         "005_daily_aggregates",
+        "006_mapping_projection",
     ]
 
 

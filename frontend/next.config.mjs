@@ -10,7 +10,10 @@ const nextConfig = {
   reactStrictMode: true,
   turbopack: { root: projectRoot },
   async rewrites() {
-    return process.env.PILOT_API_URL ? [{source: "/api/pilot/:path*", destination: `${process.env.PILOT_API_URL}/api/pilot/:path*`}] : [];
+    const localResearch = process.env.NEXT_PUBLIC_PILOT_MODE === "true" &&
+      ["local", "test"].includes(process.env.NEXT_PUBLIC_APP_ENV) &&
+      ["development", "test"].includes(process.env.NODE_ENV);
+    return localResearch && process.env.PILOT_API_URL ? [{source: "/api/pilot/:path*", destination: `${process.env.PILOT_API_URL}/api/pilot/:path*`}] : [];
   },
   // Версия и заголовок сервера наружу не сообщаются.
   poweredByHeader: false,

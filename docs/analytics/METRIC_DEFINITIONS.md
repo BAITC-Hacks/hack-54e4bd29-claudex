@@ -19,3 +19,14 @@
 `hospitalized_total` в overview означает направление с заполненной `hospitalization_dt`, не имеющее приоритетного отказа и не нарушающее хронологию. `data_quality_warnings` в overview — число направлений с датой госпитализации или отказа раньше регистрации.
 
 Процент отказов не реализован: соответствие числителя и знаменателя между двумя выгрузками не доказано. Показатели загрузки/занятости не реализованы: отсутствует знаменатель коечной мощности.
+
+
+## D3 publication, completeness and dates (2026-09-23)
+
+All descriptive counts resolve exact approved organization/region projections before applying scope and aggregation. Matching text in another identity_space is not a match. Global governance preserves unmatched facts; restricted hospital/region users see only resolved canonical scope. New facts must belong to a PUBLISHED delivery. Legacy imports remain historical without a claim of confirmed completeness. Raw rows are not exposed by these contracts.
+
+Daily sums and overview counts must use identical period bounds, mapping version, import IDs and effective scope. `ImportWatermark` is a historical descriptive allowlist; operational adapters instead consume `DeliveryReadiness.published_import_ids` and its confirmed complete-through date.
+
+Freshness separates event period, source load date, last successful file import, owner-confirmed complete-through date, cadence and completeness. A new load of Q1 2025 facts cannot make their event coverage CURRENT. Unknown cadence/date is UNKNOWN; incomplete reservations/parts are PARTIAL. Cadence-based CURRENT only describes reviewed delivery recency; `forecast_available=false` in descriptive freshness does not approve any model. Model eligibility is a separate R/M gate.
+
+Queue age is null with SNAPSHOT_SEMANTICS_UNCONFIRMED until owner-confirmed snapshot semantics and observed single-snapshot evidence agree. Once confirmed, age queries use only that dataset's published reviewed imports; an unrelated approval does not validate a legacy snapshot. TREATED load time remains a source-load timestamp, never an inferred reporting period. Quality exact totals are global-only; partial totals are explicitly labeled.

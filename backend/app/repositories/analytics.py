@@ -166,6 +166,11 @@ class SqlAlchemyScenarioRepository:
         self, scope: DataScope, filters: ScenarioFilter, page: PageRequest
     ) -> ScenarioPage:
         statement = self._scoped(scope)
+        if filters.mapping_version is not None:
+            statement = statement.where(
+                Scenario.data_watermark["mapping_version"].as_string()
+                == filters.mapping_version
+            )
         if filters.scenario_type is not None:
             statement = statement.where(Scenario.scenario_type == filters.scenario_type)
         if filters.scope_type is not None:

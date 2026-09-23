@@ -26,6 +26,8 @@ jobs:
   backend-lint:
     name: Backend — линтер и типы
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
 
@@ -58,6 +60,8 @@ jobs:
   backend-tests:
     name: Backend — тесты
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
 
@@ -80,8 +84,11 @@ jobs:
         run: python -m pytest --cov=app --cov-report=term-missing
 
   schema-drift:
-    name: PostgreSQL — migrations and metadata drift
+    name: PostgreSQL — migrations and metadata drift (${{ matrix.migration_path }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        migration_path: [clean, upgrade]
     services:
       postgres:
         image: postgres:16-alpine
@@ -109,7 +116,7 @@ jobs:
         working-directory: backend
         run: pip install --requirement requirements-dev.txt
 
-      - name: Применение 0001–0006 и проверка drift
+      - name: Чистая схема, upgrade принятой версии и проверка drift
         working-directory: backend
         env:
           APP_ENV: local
@@ -120,8 +127,64 @@ jobs:
           POSTGRES_USER: medsignal
           POSTGRES_PASSWORD: phase8-ci-password
         run: |
+          if [ "${{ matrix.migration_path }}" = "upgrade" ]; then
+            alembic upgrade 0006_scenario_analysis
+          fi
           alembic upgrade head
           alembic check
+
+  data-publication-integration:
+    name: Synthetic publication and worker transactions — PostgreSQL/ClickHouse
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: phase8-data-ci
+          POSTGRES_USER: medsignal
+          POSTGRES_PASSWORD: phase8-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medsignal -d phase8-data-ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8-alpine
+        env:
+          CLICKHOUSE_USER: medsignal
+          CLICKHOUSE_PASSWORD: phase8-ci-password
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+        ports:
+          - 8123:8123
+        options: >-
+          --health-cmd "wget -qO- http://localhost:8123/ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install integration test dependencies
+        run: |
+          pip install -r backend/requirements-dev.txt
+          pip install -r data_pipeline/requirements.txt -r ml/requirements.txt
+      - name: Isolated synthetic database tests
+        working-directory: backend
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+          D_TEST_ALLOW_ISOLATED: "1"
+          D_TEST_POSTGRES_DSN: postgresql+psycopg://medsignal:phase8-ci-password@127.0.0.1:5432/phase8-data-ci
+          R1_TEST_POSTGRES_DSN: postgresql+psycopg://medsignal:phase8-ci-password@127.0.0.1:5432/phase8-data-ci
+          D_TEST_CLICKHOUSE_HOST: 127.0.0.1
+          D_TEST_CLICKHOUSE_PORT: "8123"
+          D_TEST_CLICKHOUSE_USER: medsignal
+          D_TEST_CLICKHOUSE_PASSWORD: phase8-ci-password
+        run: >-
+          python -m pytest
+          tests/integration/test_delivery_postgres.py
+          tests/integration/test_clickhouse_publication.py
+          tests/integration/test_organization_forecast_atomicity.py
+          -q
 
   architecture:
     name: Архитектурные границы

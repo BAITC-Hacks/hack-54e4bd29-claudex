@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from typing import Any, Protocol
 
 from app.shared.analytics_contracts import (
@@ -127,6 +128,80 @@ class ClickHouseAnalyticsRepository:
     def __init__(self, client: ClickHouseQueryClient) -> None:
         self._client = client
 
+    def _query(
+        self, scope: QueryScope, query: str, parameters: dict[str, object] | None = None
+    ) -> QueryResult:
+        """Replace only our fixed fact sources with a publication/mapping relation.
+
+        No request-supplied SQL identifiers are accepted. Resolving before WHERE
+        and GROUP BY gives daily totals and overview exactly the same fact set.
+        Canonical IDs baked into legacy facts are not scope entitlements.
+        """
+        specs = {
+            "fact_referral_events": (
+                "IS_BG:REFERRALS:RECEIVING",
+                "receiving_org_key",
+                "receiving_hospital_id",
+                "IS_BG:REFERRALS:REGION",
+            ),
+            "fact_waiting_events": (
+                "IS_BG:WAITING:DESTINATION",
+                "hospital_source",
+                "hospital_id",
+                "IS_BG:WAITING:REGION",
+            ),
+            "fact_refusal_events": (
+                "IS_BG:REFUSALS:INCOMING",
+                "hospital_source",
+                "hospital_id",
+                "IS_BG:REFUSALS:REGION",
+            ),
+            "fact_treated_snapshot": (
+                "ERSB:TREATED:ORGANIZATION",
+                "hospital_source",
+                "hospital_id",
+                "ERSB:TREATED:REGION",
+            ),
+        }
+        for table, (space, key, hospital, region_space) in specs.items():
+            source = f"FROM {table}"
+            if source not in query:
+                continue
+            has_region = table in {"fact_waiting_events", "fact_refusal_events"}
+            excluded = f"{hospital}, region_id" if has_region else hospital
+            region_select = ", r.resolved_id AS region_id" if has_region else ""
+            region_join = (
+                f"""LEFT JOIN (
+                    SELECT source_key, toNullable(canonical_id) AS resolved_id
+                    FROM mapping_projection
+                    WHERE version = {{mapping_version:String}} AND kind = 'REGION'
+                      AND identity_space = '{region_space}'
+                ) AS r ON f.region_source = r.source_key"""
+                if has_region
+                else ""
+            )
+            expected_source = "ЭРСБ" if table == "fact_treated_snapshot" else "ИС БГ"
+            relation = f"""FROM (
+                SELECT f.* EXCEPT ({excluded}),
+                       m.resolved_id AS {hospital}{region_select}
+                FROM {table} AS f
+                LEFT JOIN (
+                    SELECT source_key, toNullable(canonical_id) AS resolved_id
+                    FROM mapping_projection
+                    WHERE version = {{mapping_version:String}} AND kind = 'ORGANIZATION'
+                      AND identity_space = '{space}'
+                ) AS m ON f.{key} = m.source_key AND f.source_system = '{expected_source}'
+                {region_join}
+                WHERE f.import_id IN {{published_import_ids:Array(UUID)}}
+            )"""
+            query = query.replace(source, relation)
+        params = dict(parameters or {})
+        params.update(
+            mapping_version=scope.mapping_version or "",
+            published_import_ids=[str(i) for i in scope.published_import_ids or ()],
+        )
+        return self._client.query(query, parameters=params)
+
     def _series(
         self,
         *,
@@ -169,7 +244,7 @@ class ClickHouseAnalyticsRepository:
             LIMIT 400
         """
         parameters = _base_parameters(filters) | scope_params | identity_params
-        rows = self._client.query(query, parameters=parameters).result_rows
+        rows = self._query(scope, query, parameters=parameters).result_rows
         return tuple(RawTimeSeriesPoint(row[0], int(row[1])) for row in rows)
 
     def referral_timeseries(
@@ -244,7 +319,8 @@ class ClickHouseAnalyticsRepository:
               AND {identity_sql}
               AND {profile_sql}
         """
-        rows = self._client.query(
+        rows = self._query(
+            scope,
             query,
             parameters=_base_parameters(filters) | scope_params | identity_params,
         ).result_rows
@@ -299,7 +375,8 @@ class ClickHouseAnalyticsRepository:
               AND {identity_sql}
               AND {profile_sql}
         """
-        rows = self._client.query(
+        rows = self._query(
+            scope,
             query,
             parameters=_base_parameters(filters) | scope_params | identity_params,
         ).result_rows
@@ -380,15 +457,18 @@ class ClickHouseAnalyticsRepository:
               AND {refusal_scope}
               AND {refusal_identity}
         """
-        ref = self._client.query(
+        ref = self._query(
+            scope,
             referral_query,
             parameters=common | referral_params | referral_identity_params,
         ).result_rows[0]
-        waiting = self._client.query(
+        waiting = self._query(
+            scope,
             waiting_query,
             parameters=common | waiting_params | waiting_identity_params,
         ).result_rows[0]
-        refusal = self._client.query(
+        refusal = self._query(
+            scope,
             refusal_query,
             parameters=common | refusal_params | refusal_identity_params,
         ).result_rows[0]
@@ -499,7 +579,7 @@ class ClickHouseAnalyticsRepository:
             | refusal_identity_params
             | {"limit": limit, "offset": offset}
         )
-        rows = self._client.query(query, parameters=parameters).result_rows
+        rows = self._query(scope, query, parameters=parameters).result_rows
         total = int(rows[0][8]) if rows else 0
         organizations = tuple(
             RawOrganization(
@@ -516,7 +596,9 @@ class ClickHouseAnalyticsRepository:
         )
         return organizations, total
 
-    def _treated_snapshot(self, hospital_id: object | None) -> RawTreatedSnapshot | None:
+    def _treated_snapshot(
+        self, hospital_id: object | None, scope: QueryScope
+    ) -> RawTreatedSnapshot | None:
         if hospital_id is None:
             return None
         query = """
@@ -529,8 +611,8 @@ class ClickHouseAnalyticsRepository:
             ORDER BY snapshot_load_dt DESC
             LIMIT 1
         """
-        rows = self._client.query(
-            query, parameters={"hospital_id": str(hospital_id)}
+        rows = self._query(
+            scope, query, parameters={"hospital_id": str(hospital_id)}
         ).result_rows
         if not rows:
             return None
@@ -555,7 +637,8 @@ class ClickHouseAnalyticsRepository:
     ) -> tuple[RawOrganization, RawTreatedSnapshot | None] | None:
         if identity_key.startswith("canonical:"):
             hospital_id = identity_key.removeprefix("canonical:")
-            narrowed = QueryScope(
+            narrowed = replace(
+                scope,
                 canonical_hospital_ids=tuple(
                     item
                     for item in scope.canonical_hospital_ids
@@ -567,7 +650,8 @@ class ClickHouseAnalyticsRepository:
             if scope.all_canonical:
                 import uuid
 
-                narrowed = QueryScope(
+                narrowed = replace(
+                    scope,
                     canonical_hospital_ids=(uuid.UUID(hospital_id),),
                     all_canonical=False,
                     include_unmapped=False,
@@ -589,7 +673,7 @@ class ClickHouseAnalyticsRepository:
             )
             if raw.canonical_hospital_id is None:
                 return None
-            return raw, self._treated_snapshot(raw.canonical_hospital_id)
+            return raw, self._treated_snapshot(raw.canonical_hospital_id, narrowed)
 
         candidates, _ = self.organizations(filters, scope, limit=20_000, offset=0)
         digest = identity_key.removeprefix("source:")
@@ -598,7 +682,7 @@ class ClickHouseAnalyticsRepository:
                 source_organization_digest(item.identity_space, item.source_value)
                 == digest
             ):
-                return item, self._treated_snapshot(item.canonical_hospital_id)
+                return item, self._treated_snapshot(item.canonical_hospital_id, scope)
         return None
 
     def dataset_coverage(self, scope: QueryScope) -> tuple[RawDatasetCoverage, ...]:
@@ -636,7 +720,7 @@ class ClickHouseAnalyticsRepository:
                 FROM {table}
                 WHERE {scope_sql}
             """
-            rows = self._client.query(query, parameters=parameters).result_rows
+            rows = self._query(scope, query, parameters=parameters).result_rows
             row = rows[0] if rows else (None, None, None)
             results.append(RawDatasetCoverage(dataset, row[0], row[1], row[2]))
         return tuple(results)
@@ -675,7 +759,8 @@ class ClickHouseAnalyticsRepository:
             ORDER BY value DESC
             LIMIT 100
         """
-        rows = self._client.query(
+        rows = self._query(
+            scope,
             query,
             parameters=_base_parameters(filters) | scope_params | identity_params,
         ).result_rows

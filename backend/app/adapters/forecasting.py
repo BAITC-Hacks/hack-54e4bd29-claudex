@@ -128,9 +128,13 @@ def build_forecast_training_service() -> ForecastTrainingService:
         experiment_name=settings.mlflow_experiment_name,
         registered_model_name=settings.mlflow_registered_model_name,
     )
+    metadata = SqlAlchemyForecastMetadataRepository(get_session_factory())
     return ForecastTrainingService(
-        history_repository=ClickHouseReferralHistoryRepository(client),
-        metadata_repository=SqlAlchemyForecastMetadataRepository(get_session_factory()),
+        history_repository=ClickHouseReferralHistoryRepository(
+            client,
+            import_ids_provider=metadata.referral_history_import_ids,
+        ),
+        metadata_repository=metadata,
         engine=ReferralForecastEngine(
             tracker=tracker,
             horizon_days=settings.forecast_horizon_days,

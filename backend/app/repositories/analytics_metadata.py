@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.data_import import DataImport
+from app.models.delivery import Delivery
 from app.models.directory import Hospital
 from app.models.enums import DataImportStatus
 from app.models.quality import DataQualityResult
+from app.repositories.delivery import SqlAlchemyDeliveryRepository
+from app.repositories.mapping import SqlAlchemyMappingRepository
 from app.shared.analytics_data import ImportSummary, ImportWatermark
+from app.shared.delivery import DeliveryReadiness
 
 
 class SqlAlchemyAnalyticsMetadataRepository:
@@ -35,7 +39,11 @@ class SqlAlchemyAnalyticsMetadataRepository:
         with self._session_factory() as session:
             rows = session.scalars(
                 select(DataImport)
-                .where(DataImport.status == DataImportStatus.COMPLETED)
+                .outerjoin(Delivery, DataImport.delivery_id == Delivery.id)
+                .where(
+                    DataImport.status == DataImportStatus.COMPLETED,
+                    or_(DataImport.delivery_id.is_(None), Delivery.status == "PUBLISHED"),
+                )
                 .order_by(DataImport.completed_at.desc())
             ).all()
             session.expunge_all()
@@ -51,16 +59,34 @@ class SqlAlchemyAnalyticsMetadataRepository:
     def latest_completed_imports(self) -> ImportWatermark:
         rows = self._completed_rows()
         completed = [row.completed_at for row in rows if row.completed_at is not None]
+        with self._session_factory() as session:
+            mapping = SqlAlchemyMappingRepository(session).readiness()
         return ImportWatermark(
+            mapping_version=mapping.version,
+            mapping_generation=mapping.generation,
+            mapping_verified=mapping.verified,
             completed_at=max(completed) if completed else None,
             import_ids=tuple(sorted((row.id for row in rows), key=str)),
         )
+
+    def _partial_rows(self) -> list[DataImport]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(DataImport)
+                .join(Delivery, DataImport.delivery_id == Delivery.id)
+                .where(Delivery.status != "PUBLISHED")
+                .order_by(DataImport.completed_at.desc())
+            ).all()
+            session.expunge_all()
+        return list(rows)
 
     def latest_import_summaries(self) -> tuple[ImportSummary, ...]:
         # A logical dataset can be delivered in multiple files.  The newest row
         # supplies the watermark/source metadata, while counts and quality
         # findings must cover every completed part of that dataset.
-        rows = self._completed_rows()
+        partial_rows = self._partial_rows()
+        partial_ids = {row.id for row in partial_rows}
+        rows = self._completed_rows() + partial_rows
         if not rows:
             return ()
         ids = [row.id for row in rows]
@@ -83,13 +109,22 @@ class SqlAlchemyAnalyticsMetadataRepository:
         for row in rows:
             grouped.setdefault(row.dataset_type, []).append(row)
         for dataset_type, dataset_rows in sorted(grouped.items()):
-            latest = dataset_rows[0]
+            latest = max(
+                dataset_rows,
+                key=lambda row: (
+                    row.completed_at is not None,
+                    row.completed_at or row.created_at,
+                ),
+            )
             if latest.completed_at is None:
                 continue
             summaries.append(
                 ImportSummary(
                     dataset_type=dataset_type,
                     source=latest.source,
+                    completeness="PARTIAL"
+                    if any(row.id in partial_ids for row in dataset_rows)
+                    else "UNKNOWN",
                     import_id=latest.id,
                     completed_at=latest.completed_at,
                     rows_loaded=sum(row.rows_loaded for row in dataset_rows),
@@ -104,6 +139,10 @@ class SqlAlchemyAnalyticsMetadataRepository:
                 )
             )
         return tuple(summaries)
+
+    def delivery_readiness(self, dataset_type: str) -> DeliveryReadiness:
+        with self._session_factory() as session:
+            return SqlAlchemyDeliveryRepository(session).readiness(dataset_type)
 
     def hospital_name(self, hospital_id: uuid.UUID) -> str | None:
         with self._session_factory() as session:

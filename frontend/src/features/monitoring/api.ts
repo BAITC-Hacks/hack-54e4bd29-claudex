@@ -1,4 +1,7 @@
+import { isLocalResearchHost } from './local-research';
+
 export async function pilotApi<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  if (!isLocalResearchHost()) throw new Error('Исследовательский API доступен только в явном локальном режиме');
   const response = await fetch(`/api/pilot/${path}`, {
     method, cache: 'no-store',
     headers: {'Content-Type': 'application/json', 'X-MedSignal-Demo': '1'},

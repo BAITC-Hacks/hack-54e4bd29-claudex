@@ -327,3 +327,11 @@ make data-import-core DATA_DIR=~/Downloads/data
 ## Лицензия и статус
 
 Прототип для GovTech Camp. Не предназначен для эксплуатации с реальными персональными данными без отдельной оценки защищённости и согласования с владельцами информационных систем.
+
+## Pilot consolidation: D / M / R
+
+Implementation, verification and outstanding release gates are recorded in
+[the consolidation report](docs/acceptance/PILOT_CONSOLIDATION_IMPLEMENTATION.md).
+Operational organization forecasting remains disabled by default. New imports
+require a [reviewed supply manifest](docs/data/DATA_SUPPLY_CONTRACT.md);
+owner approvals, independent model evidence and runtime acceptance are still required.

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -36,6 +36,8 @@ class AnalyticsMetaResponse(BaseModel):
     latest_import_ids: list[str]
     latest_import_completed_at: datetime | None
     limitations: list[str]
+    mapping_version: str | None = None
+    mapping_publication_available: bool = False
 
 
 class OverviewData(BaseModel):
@@ -186,6 +188,10 @@ class DatasetFreshnessResponse(BaseModel):
     last_successful_import: datetime | None
     status: FreshnessStatus
     explanation: str | None
+    confirmed_complete_through: date | None = None
+    cadence_known: bool = False
+    completeness: str = "UNKNOWN"
+    forecast_available: bool = False
 
 
 class FreshnessResponse(BaseModel):
