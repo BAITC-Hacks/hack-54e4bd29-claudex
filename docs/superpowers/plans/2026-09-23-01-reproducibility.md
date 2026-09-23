@@ -92,9 +92,9 @@ create pilot/requirements-dev.txt; lint/format pilot и ml/monitoring.py без 
 **Interfaces:** existing ml.monitoring.aggregate/features/samples/alert_for и
 pilot.api.create_app сохраняют публичный контракт; CI produces junit-monitoring.xml.
 
-- [ ] Запустить существующие tests/monitoring в чистом Python 3.12 job, подтвердить
+- [x] Запустить существующие tests/monitoring в чистом Python 3.12 job, подтвердить
   реальную ошибку при её наличии. Не писать искусственно красный тест для YAML.
-- [ ] Добавить requirements-dev, использующий production requirements пилота:
+- [x] Добавить requirements-dev, использующий production requirements пилота:
 
 ~~~text
 -r requirements.txt
@@ -103,7 +103,7 @@ httpx==0.28.*
 ruff==0.8.*
 ~~~
 
-- [ ] Добавить отдельный job monitoring; env PYTHONPATH указывает на repository root.
+- [x] Добавить отдельный job monitoring; env PYTHONPATH указывает на repository root.
   Команды job:
 
 ~~~bash
@@ -114,7 +114,7 @@ python -m pytest tests/monitoring -q --junitxml=junit-monitoring.xml
 docker compose -f docker-compose.pilot.yml config --quiet
 ~~~
 
-- [ ] Расширить existing API test, проверив fail-closed mutations и отсутствие
+- [x] Расширить existing API test, проверив fail-closed mutations и отсутствие
   выдуманных predictions при отсутствующем bundle:
 
 ~~~python
@@ -126,18 +126,18 @@ def test_missing_model_never_returns_fake_monitor(tmp_path):
         ).status_code == 403
 ~~~
 
-- [ ] Повторить пилотные tests и existing ml/tests. Убедиться, что основной ML job
+- [x] Повторить пилотные tests и existing ml/tests. Убедиться, что основной ML job
   продолжает проверять весь ml, а не только старую подпапку.
-- [ ] Добавить development target пилотного image с requirements-dev и synthetic
+- [x] Добавить development target пилотного image с requirements-dev и synthetic
   tests/monitoring; сохранить runtime target последним/default и непривилегированным.
   Добавить monitoring-tests service в docker-compose.pilot.yml с profiles tools,
   build target development, без ports и без source datasets mounts. Его command:
   python -m pytest tests/monitoring -q.
-- [ ] Добавить make test-monitoring с командой
+- [x] Добавить make test-monitoring с командой
   docker compose -f docker-compose.pilot.yml run --rm --no-deps monitoring-tests.
   make test должен включать backend, ML, pipeline, monitoring,
   frontend и security/contracts, не создавать ложное название «все» для поднабора.
-- [ ] Commit: ci: include local monitoring pilot in regression checks.
+- [x] Commit: ci: include local monitoring pilot in regression checks.
 
 **Приёмка:** поломка tests/monitoring блокирует merge; CI не скачивает real medical data,
 не обучает на реальных выгрузках и не обращается к external LLM/API.
@@ -165,7 +165,7 @@ def assess_temporal_target(
     return ("PARTIALLY AVAILABLE", "REQUIRES_COVERAGE_REVIEW")
 ~~~
 
-- [ ] Написать regression test против прежней ложной доступности:
+- [x] Написать regression test против прежней ложной доступности:
 
 ~~~python
 def test_one_snapshot_is_not_queue_forecast_history():
@@ -176,16 +176,33 @@ def test_one_snapshot_is_not_queue_forecast_history():
     ) == ("NOT AVAILABLE", "NO_VERIFIED_SNAPSHOT_HISTORY")
 ~~~
 
-- [ ] Run python -m pytest tests/audit/test_target_semantics.py -q; expected FAIL
+- [x] Run python -m pytest tests/audit/test_target_semantics.py -q; expected FAIL
   до появления helper.
-- [ ] Подключить helper к существующему target analysis; неизвестная семантика
+- [x] Подключить helper к существующему target analysis; неизвестная семантика
   не считается подтверждённой. Один срез остаётся доступен для descriptive count.
-- [ ] Добавить аналогичный assert для refusal_rate; run python -m pytest tests/audit -q.
-- [ ] Обновить human/machine summaries как датированную semantic correction, сохранив
+- [x] Добавить аналогичный assert для refusal_rate; run python -m pytest tests/audit -q.
+- [x] Обновить human/machine summaries как датированную semantic correction, сохранив
   исходные fingerprint/row count; не переписывать историю измерений и min/max вручную.
-- [ ] README описывает основной защищённый продукт и отдельный historical research
+- [x] README описывает основной защищённый продукт и отдельный historical research
   pilot, actual model и deferred features; roadmap ссылается на текущие документы.
-- [ ] Commit: docs: align target feasibility and pilot readiness claims.
+- [x] Commit: docs: align target feasibility and pilot readiness claims.
 
 **Приёмка:** повторный audit не восстанавливает неверный queue forecast AVAILABLE;
 читатель видит, что рост направлений не является доказанной перегрузкой.
+
+## Execution status — 23.09.2026
+
+Implementation: F1 baseline repair, F2 CI integration and F3 semantic correction are
+committed in codex/pilot-reproducibility through 7cdfe3d. Independent task and final
+integration reviews approved the source/documentation changes.
+
+Native verification: backend 408 passed/2 skipped; root 207 passed/1 skipped;
+monitoring 8 passed; frontend 17 passed and production build passed on Node 24;
+12 architecture contracts kept. F3 added 24 regression cases including the real CLI.
+
+Execution acceptance remains partial: Node 22/container builds stalled in the host
+Docker runtime; aggregate make test and external GitHub CI/required-check enforcement
+are NOT TESTED. These unchecked runtime gates are not waived. Exact commands, exit
+codes, evidence identities and remaining gates: ../../acceptance/PILOT_BASELINE.md.
+
+No downstream D/M/R implementation or production admission is included.

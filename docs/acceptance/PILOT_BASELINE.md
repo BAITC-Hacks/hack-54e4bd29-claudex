@@ -123,3 +123,60 @@ used different per-file matching and is not the CI-equivalent result reported ab
 No container Node 22 success, live migration, token or restore result is inferred from
 native tests or from the historical Phase 8 report. Docker daemon/current MedSignal
 services were not restarted or stopped to force the additional build to succeed.
+
+## F1–F3 integrated result — 2026-09-23
+
+Reviewed implementation revision: 7cdfe3d (F1 4e83139/7096a0d; F2 6fe96a0;
+F3 7cdfe3d). Subsequent changes in this package only record acceptance/plan status.
+Source/documentation review: PASS, with no remaining actionable findings. Independent
+F1 review required clearer exit-code evidence, which was corrected and re-reviewed.
+F2 and F3 reviews, including cross-task integration, found no blocking defects.
+This is implementation acceptance within the native/config scope, not production acceptance.
+
+| Final check | Status | Result |
+|---|---|---|
+| Backend regression | PASS | 408 passed, 2 skipped; exit 0 |
+| Root audit/pipeline/security/operations/performance/E2E contracts + ML | PASS | 207 passed, 1 skipped; exit 0 |
+| Monitoring pilot, separate Python environment | PASS | 8 passed; exit 0 |
+| Frontend (unchanged after F1 verification) | PASS | 17 passed; lint, typecheck and native production build exit 0 |
+| Architecture after integration | PASS | 12 kept, 0 broken; 252 files, 1246 dependencies; exit 0 |
+| Data tooling Ruff / format / mypy | PASS | 45 formatted files; 35 source files type-checked; exit 0 each |
+| Pilot and ML Ruff / format / mypy | PASS | 26 formatted files; 21 ML source files type-checked; exit 0 each |
+| F3 synthetic semantic regressions | PASS | RED 23 failed/1 passed; GREEN 24 passed; full audit 71 passed |
+| Stored audit evidence integrity | PASS | Only eight semantic fields plus dated correction metadata changed; measurements and fingerprints preserved |
+| Docker builds / Node 22 runtime / aggregate make test | NOT TESTED | Runtime stalled; native checks do not establish container execution |
+| New GitHub Actions execution / required branch checks | NOT TESTED | Workflow configured locally; branch not pushed and repository settings not inspected |
+| Live medical-data / production controls | NOT TESTED | No live imports, OIDC-role runs, migrations or restore in this package |
+
+The monitoring suite is separate because existing backend and pilot Uvicorn pins conflict.
+Existing ML tests are included in the root total; the audit total is also a subset, not
+additional tests. Three skipped tests require external integration dependencies.
+
+Final commands, from the worktree root (UTF-8 and PYTHONPATH as above):
+
+~~~text
+.venv/Scripts/python.exe -m pytest tests/audit tests/pipeline tests/security tests/operations tests/performance tests/e2e ml/tests -q --junitxml=.superpowers/sdd/2026-09-23-01-reproducibility/final-root.xml
+.venv/Scripts/lint-imports.exe --config .importlinter
+.venv/Scripts/python.exe -m ruff check data_pipeline tests/audit tests/pipeline
+.venv/Scripts/python.exe -m ruff format --check data_pipeline tests/audit tests/pipeline
+.venv/Scripts/python.exe -m mypy data_pipeline
+# backend cwd, PYTHONPATH = absolute worktree root
+../.venv/Scripts/python.exe -m pytest -q -o addopts='' --junitxml=../.superpowers/sdd/2026-09-23-01-reproducibility/final-backend.xml
+# root cwd, isolated pilot environment
+.superpowers/sdd/2026-09-23-01-reproducibility/pilot-venv/Scripts/python.exe -m pytest tests/monitoring -q --junitxml=.superpowers/sdd/2026-09-23-01-reproducibility/junit-monitoring.xml
+~~~
+
+## Remaining gates and cleanup
+
+- Re-run frontend production and monitoring container builds on a functioning Docker
+  runtime; verify Node 22 and runtime UID there. No shared daemon restart was attempted.
+- Run the updated workflow in GitHub and inspect required-check settings before claiming
+  merge blocking. Passing local tests alone does not prove external CI acceptance.
+- A bounded removal attempt for the diagnostic container phase8-repro-node-probe timed
+  out. Its cleanup is unconfirmed; inspect/remove only that named probe once Docker
+  responds. Existing MedSignal containers, volumes and source datasets were not removed.
+- F3 evidence references are assertions of external review, not a contract-content
+  validator. The CLI supplies no unverified positive evidence. Snapshot/denominator
+  coverage review is still required even after a positive semantic gate.
+- D/M/R implementation, real-data evaluation and operational admission have not started
+  in this package. No retraining, mappings, accepted migration changes or secret changes.

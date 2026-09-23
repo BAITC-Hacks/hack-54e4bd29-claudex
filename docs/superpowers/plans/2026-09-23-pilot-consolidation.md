@@ -54,8 +54,8 @@ flowchart LR
 ## Первая итерация
 
 - [ ] F1: воспроизвести build/test в чистом окружении; не исправлять права через ослабление security.
-- [ ] F2: включить monitoring/pilot tests и проверки standalone Compose в CI.
-- [ ] F3: устранить противоречия claims, roadmap и target feasibility.
+- [x] F2: включить monitoring/pilot tests и проверки standalone Compose в CI.
+- [x] F3: устранить противоречия claims, roadmap и target feasibility.
 - [ ] D1: описать договор поставки, запросить owner evidence, реализовать контроль повторов и пересечений на synthetic fixtures.
 - [ ] M1: оформить независимый evaluation harness, не переобучать бесконечно на уже просмотренном test.
 
@@ -106,3 +106,11 @@ data semantics и model evaluation перед объединением. D и M �
 - [x] Новые номера migrations не конфликтуют с существующими 0001–0006/001–005.
 - [x] Исходные datasets и текущие рабочие volumes не используются для destructive tests.
 - [x] План не начинает реализацию и не утверждает прохождение runtime tests.
+
+
+## Execution checkpoint — 23.09.2026
+
+F2/F3 implementation is reviewed and committed through 7cdfe3d. F1 native checks
+passed, but the full build gate remains incomplete: Docker execution and external
+CI are NOT TESTED. See [current evidence](../../acceptance/PILOT_BASELINE.md).
+D/M/R have not started. No production readiness is inferred from this checkpoint.
