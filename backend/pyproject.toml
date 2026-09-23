@@ -51,6 +51,10 @@ ignore = [
   "app/repositories/clickhouse_analytics.py" = ["S608"]
   "app/repositories/signal_inputs.py" = ["S608"]
 
+[tool.ruff.lint.isort]
+# Monorepo packages stay first-party regardless of the runner working directory.
+known-first-party = ["app", "data_pipeline", "ml", "pilot"]
+
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
