@@ -43,7 +43,7 @@ function centerFor(name: string, code: string): [number, number] | null {
 }
 
 function statusFor(value: number | null, thresholds: [number, number]): "empty" | "normal" | "warning" | "critical" {
-  if (value === null || value === 0) return "empty";
+  if (value === null) return "empty";
   if (value >= thresholds[1]) return "critical";
   if (value >= thresholds[0]) return "warning";
   return "normal";

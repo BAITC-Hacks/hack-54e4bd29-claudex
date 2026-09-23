@@ -12,6 +12,7 @@ import hashlib
 import joblib
 from threadpoolctl import threadpool_limits
 from ml.monitoring import predict, alert_for
+from ml.risk import risk_context
 import os
 import threading
 from contextlib import asynccontextmanager
@@ -73,13 +74,14 @@ class Replay:
             observed = {name: values[:origin+1] for name, values in runtime['series'].items()}
             with threadpool_limits(limits=2):
                 predictions = predict(self.estimator, observed, dates, origin)
+                risks = self.estimator.risk_scores(observed, dates, origin) if hasattr(self.estimator, "risk_scores") else None
             alerts = []
             for name, values in observed.items():
                 alert = alert_for(name, values, dates, origin, predictions[name],
-                                  runtime['qualities'][name], self.bundle['report']['model_id'])
+                                  runtime['qualities'][name], self.bundle['report']['model_id'], risk=risk_context(self.estimator,name,risks))
                 if alert:
                     alerts.append(alert)
-            alerts.sort(key=lambda a: (-{'CRITICAL': 3, 'HIGH': 2, 'WARNING': 1}[a['severity']], -a['extra_referrals']))
+            alerts.sort(key=lambda a: (-{'CRITICAL': 3, 'HIGH': 2, 'WARNING': 1}[a['severity']], -a.get('risk_score', 0), -a['extra_referrals']))
             self.calculated[self.index] = {'as_of': dates[-1], 'new_records': runtime['daily_records'][origin],
                                           'hospitals_checked': len(observed), 'alerts': alerts}
         return self.calculated[self.index]

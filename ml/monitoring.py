@@ -126,16 +126,19 @@ def assess(model, series, dates, origins):
             'mean7': metrics(actual, mean), 'folds': folds}, by_hospital
 
 
-def alert_for(name, values, dates, origin, prediction, quality, model_id):
+def alert_for(name, values, dates, origin, prediction, quality, model_id, risk=None):
     reference = sum(values[origin-27:origin+1])/4
     total = sum(prediction)
     delta = total-reference
     growth = delta/reference*100 if reference else 0
-    if reference < 20 or delta < 10 or growth < 20:
+    if risk is None:
+        if reference < 20 or delta < 10 or growth < 20:
+            return None
+    elif reference < 20 or risk['score'] < risk['threshold']:
         return None
     severity = 'CRITICAL' if growth >= 50 else 'HIGH' if growth >= 35 else 'WARNING'
     signal_id = hashlib.sha256(f'{model_id}|{name}|{dates[origin]}'.encode()).hexdigest()[:20]
-    return {
+    result = {
         'id': signal_id, 'hospital': name, 'as_of': dates[origin], 'severity': severity,
         'title': f'Ожидается рост направлений на {growth:.0f}%',
         'description': f'На следующие 7 дней модель ожидает {total:.0f} направлений. Обычный недельный поток за последние 28 дней — {reference:.0f}.',
@@ -159,6 +162,15 @@ def alert_for(name, values, dates, origin, prediction, quality, model_id):
         'effect': 'Эффект на очередь не рассчитан: нужны вместимость, текущая очередь и история управленческих действий.',
         'trigger': 'Прогноз обученной модели ≥120% средней недели за 28 дней, прирост ≥10 направлений, обычный поток ≥20. Пороги пилотные, не медицинские нормативы.',
     }
+
+
+    if risk is not None:
+        result.update(risk_score=round(risk['score'],4),risk_threshold=round(risk['threshold'],4),
+          severity='WARNING',title='Риск существенного роста направлений',
+          description=f"Модель обнаружения роста: оценка {risk['score']:.2f}, порог {risk['threshold']:.2f}. Численный прогноз: {total:.0f} направлений за неделю, обычный поток {reference:.0f}. Эти модели решают разные задачи; точечный прогноз может не превышать порог роста.",
+          trigger='Обученный классификатор выявляет риск роста ≥20% и ≥10 направлений относительно средней недели за 28 дней. Его score — не калиброванная вероятность. Приоритет предварительный до проверки вместимости.')
+        result['actions'][0]['text']=f'Проверить план приёма и доступные места. Численный прогноз — {total:.0f}; сценарий существенного роста начинается примерно с {max(reference*1.2,reference+10):.0f} направлений за неделю.'
+    return result
 
 
 def train(source: Path, output: Path):

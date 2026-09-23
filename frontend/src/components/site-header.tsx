@@ -39,7 +39,7 @@ export function SiteHeader() {
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-1 rounded-xl border border-slate-200/80 bg-white/75 p-1 shadow-[0_8px_24px_-22px_rgba(15,46,68,.8)] lg:flex">
+          <nav className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200/80 bg-white/75 p-1 shadow-[0_8px_24px_-22px_rgba(15,46,68,.8)]">
             {NAVIGATION.map((item) => {
               const active = pathname === item.href || (item.href !== "/command-center" && pathname.startsWith(`${item.href}/`));
               return (
@@ -60,7 +60,7 @@ export function SiteHeader() {
 
         <div className="flex shrink-0 items-center gap-2">
           <span className="hidden items-center gap-1.5 rounded-full border border-cyan-100 bg-cyan-50/70 px-2.5 py-1.5 text-[9px] font-extrabold uppercase tracking-[.1em] text-cyan-800 sm:flex">
-            <ShieldCheck size={12} /> Минздрав РК
+            <ShieldCheck size={12} /> Исследовательский пилот
           </span>
           <span className="hidden rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-500 xl:block">{env.appEnv}</span>
           {process.env.NEXT_PUBLIC_PILOT_MODE === "true" ? (

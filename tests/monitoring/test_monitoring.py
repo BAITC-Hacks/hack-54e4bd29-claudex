@@ -90,3 +90,52 @@ def test_replay_end_and_decisions_survive_restart(tmp_path):
 def test_empty_install_never_returns_fabricated_results(tmp_path):
     with TestClient(create_app(tmp_path)) as client:
         assert client.get('/api/pilot/monitor').status_code==503
+
+
+def test_risk_features_and_labels_respect_cutoff():
+    from ml.risk import risk_features, risk_samples
+    values=[int(20+10*np.sin(i/5)) for i in range(90)]
+    future=values[:62]+[99999]*28
+    assert risk_features(values, dates(),61)==risk_features(future,dates(),61)
+    x,y=risk_samples({'a':values},dates(),61)
+    changed_x,changed_y=risk_samples({'a':future},dates(),61)
+    np.testing.assert_array_equal(x,changed_x)
+    np.testing.assert_array_equal(y,changed_y)
+    assert len(y)==28  # origins 27..54, last target 61, validation starts 62
+
+
+def test_risk_label_matches_original_event():
+    from ml.risk import growth_label
+    values=[10]*28+[13]*7
+    assert growth_label(values,27)==1
+    assert growth_label([10]*28+[11]*7,27)==0
+    assert growth_label([1]*28+[20]*7,27)==0  # insufficient reference volume
+
+
+def test_risk_alert_can_disagree_with_mean_without_claiming_growth():
+    a=alert_for('a',[10]*90,dates(),61,[8]*7,{},'v2',risk={'score':.8,'threshold':.7})
+    assert a is not None and a['extra_referrals']<0
+    assert a['title']=='Риск существенного роста направлений'
+    assert 'не калиброванная вероятность' in a['trigger']
+    assert 'больше обычного' not in a['actions'][0]['text']
+    assert alert_for('a',[10]*90,dates(),61,[100]*7,{},'v2',risk={'score':.2,'threshold':.7}) is None
+
+
+def test_threshold_budget_and_confusion_counts():
+    from ml.risk import choose_threshold,classification
+    y=[1,1,0,0,0,0,0,0]
+    p=[.9,.7,.8,.1,.2,.3,.1,.1]
+    threshold,m=choose_threshold(y,p)
+    assert m['alert_rate_percent']<=25
+    assert m['precision_percent']>=40
+    assert classification([1,1,0,0],[1,0,1,0])==dict(true_positive=1,false_positive=1,false_negative=1,true_negative=1,precision_percent=50.,recall_percent=50.,f1=.5,f2=.5,alert_count=2,alert_rate_percent=50.,cases=4)
+
+
+def test_runtime_uses_segment_threshold():
+    from ml.risk import risk_context
+    class Model:
+        groups={'a':'large'}
+        segment_thresholds={'large':.2}
+        threshold=.7
+    assert risk_context(Model(),'a',{'a':.3})=={'score':.3,'threshold':.2}
+    assert risk_context(Model(),'a',None) is None

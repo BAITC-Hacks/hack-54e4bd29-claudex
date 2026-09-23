@@ -17,9 +17,9 @@ export function MonitorPage() {
  const data = query.data;
  const alerts = data?.alerts.filter(a=>a.hospital.toLowerCase().includes(search.toLowerCase()) && (filter==='ALL'||a.status===filter)) ?? [];
  return <div className="mx-auto max-w-6xl space-y-6">
-  <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="mb-2 text-xs font-semibold uppercase tracking-widest text-teal-700">MedSignal · плановая госпитализация</p>
+  <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="mb-2 text-xs font-semibold uppercase tracking-widest text-teal-700">MedFlow · плановая госпитализация</p>
    <h1 className="text-3xl font-semibold tracking-tight">Где ожидается рост потока?</h1>
-   <p className="mt-2 max-w-2xl text-sm text-muted-foreground">Обученная модель прогнозирует направления на 7 дней. Откройте предупреждение, чтобы проверить основания и план действий.</p></div>
+   <p className="mt-2 max-w-2xl text-sm text-muted-foreground">Обученная модель выявляет риск роста потока на 7 дней. Откройте предупреждение, чтобы проверить основания и план действий.</p></div>
    <Link className={button} href="/monitor/model">Как проверена модель <ArrowRight size={16}/></Link></div>
   <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
    <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="font-semibold">Историческое воспроизведение · реальные данные</p>
@@ -42,10 +42,11 @@ export function MonitorPage() {
      <span className="rounded-full bg-secondary px-2.5 py-1">{status[alert.status]}</span>
      {alert.quality.status==='EXPERIMENTAL' && <span className="text-muted-foreground">На проверке по этой больнице простой прогноз точнее</span>}</div>
     <div className="mt-3 flex items-center justify-between gap-5"><div><h2 className="text-lg font-semibold">{alert.title}</h2><p className="mt-1 text-sm text-muted-foreground">{alert.hospital}</p></div><ArrowRight className="shrink-0 text-teal-700" size={20}/></div>
-    <p className="mt-3 text-sm"><strong>{number(alert.predicted_total)}</strong> направлений за неделю · обычно {number(alert.reference_total)} · прирост +{number(alert.extra_referrals)}</p>
+    <p className="mt-3 text-sm"><strong>{number(alert.predicted_total)}</strong> направлений за неделю · обычно {number(alert.reference_total)} · изменение {alert.extra_referrals > 0 ? "+" : ""}{number(alert.extra_referrals)}</p>
+    {alert.risk_score !== undefined && <p className="mt-2 text-xs text-muted-foreground">Оценка риска {alert.risk_score.toFixed(3)} · порог {(alert.risk_threshold ?? 0).toFixed(3)}. Это не вероятность. Численный прогноз может не показывать роста.</p>}
    </Link>)}</div>
    {alerts.length===0 && <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">{data.alerts.length?'По выбранным фильтрам предупреждений нет.':'Модель не обнаружила роста выше порога на эту дату.'}</div>}
-   <p className="text-xs text-muted-foreground">Критичность отражает размер прогнозируемого роста, а не подтверждённую опасность для пациентов. Очередь и свободные койки в этих данных не измеряются.</p>
+   <p className="text-xs text-muted-foreground">Приоритет предварительный: риск роста потока не означает подтверждённую перегрузку. Очередь и свободные койки в этих данных не измеряются.</p>
   </>}
  </div>;
 }
