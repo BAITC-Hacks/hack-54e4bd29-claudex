@@ -14,25 +14,29 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[2]
 NGINX_IMAGE = (
     "nginx:1.30.5-alpine@sha256:"
     "f2e97a6801f504129e8027ff7d49e27fa59ef4f1ebfd97197dac8b194831cf3d"
 )
+DOCKER = shutil.which("docker")
 
 
 def _docker(*args: str) -> str:
-    result = subprocess.run(
-        ["docker", *args], capture_output=True, text=True, check=True, timeout=30
+    assert DOCKER is not None
+    result = subprocess.run(  # noqa: S603 -- fixed local Docker CLI, argv without shell
+        [DOCKER, *args], capture_output=True, text=True, check=True, timeout=30
     )
     return result.stdout.strip()
 
 
 def _request(url: str) -> tuple[int, dict[str, str], bytes]:
-    request = Request(url, headers={"X-Request-ID": "p1-rate-contract"})
+    assert url.startswith("http://127.0.0.1:")
+    request = Request(  # noqa: S310 -- disposable loopback HTTP server only
+        url, headers={"X-Request-ID": "p1-rate-contract"}
+    )
     try:
-        with urlopen(request, timeout=10) as response:
+        with urlopen(request, timeout=10) as response:  # noqa: S310 -- loopback only
             return response.status, dict(response.headers), response.read()
     except HTTPError as error:
         return error.code, dict(error.headers), error.read()
@@ -42,15 +46,27 @@ def _request(url: str) -> tuple[int, dict[str, str], bytes]:
 def test_nginx_rate_limit_has_429_json_retry_and_request_id() -> None:
     """Missing Retry-After, request ID, or JSON must break this test."""
     name = f"medsignal-p1-rate-{uuid.uuid4().hex[:12]}"
+    nginx_config = ROOT / "infrastructure/nginx/nginx.conf"
+    nginx_routes = ROOT / "infrastructure/nginx/conf.d"
     try:
         _docker(
-            "run", "--detach", "--rm", "--name", name,
-            "--add-host", "backend:127.0.0.1",
-            "--add-host", "frontend:127.0.0.1",
-            "--add-host", "keycloak:127.0.0.1",
-            "--publish", "127.0.0.1::80",
-            "--volume", f"{ROOT / 'infrastructure/nginx/nginx.conf'}:/etc/nginx/nginx.conf:ro",
-            "--volume", f"{ROOT / 'infrastructure/nginx/conf.d'}:/etc/nginx/conf.d:ro",
+            "run",
+            "--detach",
+            "--rm",
+            "--name",
+            name,
+            "--add-host",
+            "backend:127.0.0.1",
+            "--add-host",
+            "frontend:127.0.0.1",
+            "--add-host",
+            "keycloak:127.0.0.1",
+            "--publish",
+            "127.0.0.1::80",
+            "--volume",
+            f"{nginx_config}:/etc/nginx/nginx.conf:ro",
+            "--volume",
+            f"{nginx_routes}:/etc/nginx/conf.d:ro",
             NGINX_IMAGE,
         )
         port = _docker("port", name, "80/tcp").rsplit(":", 1)[-1]
@@ -96,7 +112,11 @@ def test_nginx_rate_limit_has_429_json_retry_and_request_id() -> None:
         # Import has its own limit zone instead of exhausting auth's budget.
         assert _request(f"{base}/api/v1/data/import")[0] == 502
     finally:
-        subprocess.run(
-            ["docker", "rm", "--force", name],
-            capture_output=True, text=True, check=False, timeout=30,
+        assert DOCKER is not None
+        subprocess.run(  # noqa: S603 -- fixed local Docker CLI, bounded test container
+            [DOCKER, "rm", "--force", name],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
         )

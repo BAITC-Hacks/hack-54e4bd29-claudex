@@ -24,10 +24,9 @@ def test_product_edge_and_fastapi_exclude_pilot_routes(
 ) -> None:
     monkeypatch.setenv("APP_ENV", "local")
     monkeypatch.setenv("APP_SECRET", "synthetic-test-local_dev_only")
+    from app.api.v1.router import api_router
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-
-    from app.api.v1.router import api_router
 
     edge = (ROOT / "infrastructure/nginx/conf.d/default.conf").read_text(encoding="utf-8")
     assert "pilot-api" not in edge
