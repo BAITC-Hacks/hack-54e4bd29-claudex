@@ -232,12 +232,20 @@ ADMIN, область берётся из `user_data_scopes`.
 
 | Заголовок | Значение |
 |---|---|
-| `Strict-Transport-Security` | Длительный срок, включая поддомены |
-| `Content-Security-Policy` | Ограничение источников, запрет `unsafe-inline` для скриптов |
+| `Strict-Transport-Security` | Пока не включён: требуется реальный HTTPS на внешнем периметре |
+| `Content-Security-Policy` | Пока не включён: требует проверки Next.js и OIDC flow |
 | `X-Content-Type-Options` | `nosniff` |
 | `X-Frame-Options` | `DENY` |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` |
 | `Permissions-Policy` | Отключение неиспользуемых возможностей браузера |
+
+На edge Nginx `limit_req` возвращает `429` с `Retry-After`, JSON-контрактом
+и `X-Request-ID`; заголовки безопасности повторяются и на этом ответе.
+Локальные бюджеты по IP: обычный API и аналитика по 20 r/s с отдельными
+burst 40, Keycloak 5 r/s burst 20, импорт 5 r/s burst 5. Они не являются
+медицинскими нормативами или production SLA. За внешним WAF/LB адрес клиента
+нужно разрешать только через заранее утверждённые trusted proxy CIDR;
+произвольный `X-Forwarded-For` не даёт права изменить identity клиента.
 
 ### 6.2 CORS
 
