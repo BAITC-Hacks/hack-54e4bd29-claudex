@@ -47,3 +47,29 @@ def test_import_summary_aggregates_all_completed_dataset_parts(
     assert summary.completed_at == newest
     assert summary.rows_loaded == 300
     assert summary.warnings_count == 30
+
+
+def test_hospital_names_loads_metadata_in_one_query() -> None:
+    first = uuid.uuid4()
+    second = uuid.uuid4()
+    session = MagicMock()
+    session.execute.return_value.all.return_value = [
+        (first, "Hospital A"),
+        (second, "Hospital B"),
+    ]
+    session_factory = MagicMock()
+    session_factory.return_value.__enter__.return_value = session
+    repository = SqlAlchemyAnalyticsMetadataRepository(session_factory)
+
+    result = repository.hospital_names((first, second))
+
+    assert result == {first: "Hospital A", second: "Hospital B"}
+    session.execute.assert_called_once()
+
+
+def test_hospital_names_skips_database_for_empty_input() -> None:
+    session_factory = MagicMock()
+    repository = SqlAlchemyAnalyticsMetadataRepository(session_factory)
+
+    assert repository.hospital_names(()) == {}
+    session_factory.assert_not_called()
