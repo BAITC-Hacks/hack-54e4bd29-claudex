@@ -253,3 +253,8 @@ produces signed operational admission, limited scope and rollback criteria.
 
 **Приёмка:** конкретный владелец процесса принял измеренный результат; при отказе
 работа остаётся полезным аналитическим пилотом с явно ограниченным ML.
+
+
+## Runtime follow-up — 2026-09-24
+
+See [runtime acceptance](../../acceptance/PILOT_RUNTIME_ACCEPTANCE_2026-09-24.md) for actual isolated migration/publication/concurrency, real signed-token workflow, Node22 production build and cross-store restore evidence. These close only the recorded technical checks, not owner admission or real M3 evidence. Backend image security and existing-deployment performance remain failed/open gates; no operational model was enabled.

@@ -98,19 +98,39 @@ SET LOCAL statement_timeout = '30s';
 CREATE TEMP TABLE recovery_inventory (payload jsonb);
 DO $body$
 DECLARE item record; n bigint; counts jsonb := '{}'::jsonb;
-        constraints jsonb; versions jsonb := '[]'::jsonb;
+        constraints jsonb := '[]'::jsonb; versions jsonb := '[]'::jsonb;
+        definition text;
 BEGIN
   FOR item IN SELECT tablename FROM pg_tables
               WHERE schemaname = 'public' ORDER BY tablename LOOP
     EXECUTE format('SELECT count(*) FROM public.%I', item.tablename) INTO n;
     counts := counts || jsonb_build_object(item.tablename, n);
   END LOOP;
-  SELECT coalesce(jsonb_agg(jsonb_build_object(
-      'table', c.relname, 'name', k.conname,
-      'definition', pg_get_constraintdef(k.oid), 'validated', k.convalidated
-    ) ORDER BY c.relname, k.conname), '[]'::jsonb) INTO constraints
+  FOR item IN SELECT c.relname, k.conname, k.contype, k.convalidated,
+                     pg_get_constraintdef(k.oid) AS definition
     FROM pg_constraint k JOIN pg_class c ON c.oid = k.conrelid
-    JOIN pg_namespace ns ON ns.oid = c.relnamespace WHERE ns.nspname = 'public';
+    JOIN pg_namespace ns ON ns.oid = c.relnamespace WHERE ns.nspname = 'public'
+    ORDER BY c.relname, k.conname LOOP
+    definition := item.definition;
+    IF item.contype = 'c' THEN
+      -- pg_dump/restore can move an array cast onto its elements. Reparse
+      -- CHECK DDL on an empty temporary table for stable server semantics;
+      -- retain all casts, constraint names and original validation flags.
+      EXECUTE format(
+        'CREATE TEMP TABLE recovery_constraint_normalization (LIKE public.%I)',
+        item.relname);
+      EXECUTE format(
+        'ALTER TABLE pg_temp.recovery_constraint_normalization '
+        'ADD CONSTRAINT recovery_check %s', definition);
+      SELECT pg_get_constraintdef(oid) INTO definition FROM pg_constraint
+        WHERE conrelid = 'pg_temp.recovery_constraint_normalization'::regclass
+          AND conname = 'recovery_check';
+      DROP TABLE pg_temp.recovery_constraint_normalization;
+    END IF;
+    constraints := constraints || jsonb_build_array(jsonb_build_object(
+      'table', item.relname, 'name', item.conname,
+      'definition', definition, 'validated', item.convalidated));
+  END LOOP;
   IF to_regclass('public.alembic_version') IS NOT NULL THEN
     SELECT coalesce(jsonb_agg(version_num ORDER BY version_num), '[]'::jsonb)
       INTO versions FROM public.alembic_version;

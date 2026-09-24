@@ -111,7 +111,7 @@ def test_minio_empty_bucket_is_explicit_and_missing_bucket_is_failure(tmp_path):
         common.object_inventory(tmp_path, ["missing"])
 
 
-def _complete_backup(tmp_path):
+def _complete_backup(tmp_path, source_database="synthetic"):
     from scripts.operations.backup import MINIO_BUCKETS
 
     (tmp_path / "postgres.dump").write_bytes(b"synthetic-pg")
@@ -119,7 +119,8 @@ def _complete_backup(tmp_path):
     ch.mkdir()
     for name in ["schema_migrations", "synthetic_events"]:
         (ch / f"{name}.sql").write_text(
-            f"CREATE TABLE synthetic.{name} (id UInt64) ENGINE=MergeTree ORDER BY id"
+            f"CREATE TABLE `{source_database}`.{name} "
+            "(id UInt64) ENGINE=MergeTree ORDER BY id"
         )
         (ch / f"{name}.native").write_bytes(b"synthetic-ch")
     minio = tmp_path / "minio"
@@ -131,7 +132,7 @@ def _complete_backup(tmp_path):
         "postgres_inventory": _pg(),
         "minio_objects": common.object_inventory(minio, list(MINIO_BUCKETS)),
         "minio_buckets": list(MINIO_BUCKETS),
-        "clickhouse_database": "synthetic",
+        "clickhouse_database": source_database,
         "clickhouse_tables": ["schema_migrations", "synthetic_events"],
         "clickhouse_kinds": {"schema_migrations": "TABLE", "synthetic_events": "TABLE"},
         "clickhouse_checks": {
@@ -147,14 +148,15 @@ def _complete_backup(tmp_path):
     return stores
 
 
+@pytest.mark.parametrize("source_database", ["synthetic", "phase8-runtime-20260924"])
 @pytest.mark.parametrize(
     "failure", [None, "pg_rows", "ch_checksum", "object_hash", "mirror_error"]
 )
 def test_restore_orchestration_gates_success_on_all_store_checks(
-    tmp_path, monkeypatch, failure
+    tmp_path, monkeypatch, failure, source_database
 ):
     # A synthetic transport replaces unavailable Docker, not the verification logic.
-    stores = _complete_backup(tmp_path)
+    stores = _complete_backup(tmp_path, source_database)
     commands = []
 
     def fake_compose(_project, *args, **_kwargs):
@@ -175,6 +177,9 @@ def test_restore_orchestration_gates_success_on_all_store_checks(
         return actual
 
     def fake_ch(_project, query, input_bytes=None):
+        if query.startswith("CREATE TABLE"):
+            assert query.startswith("CREATE TABLE `phase8_restored_clickhouse`.")
+            assert f"`{source_database}`." not in query
         if "SELECT version, checksum" in query:
             # schema_migrations is ordinary MergeTree, which rejects FINAL.
             assert "FINAL" not in query.upper().split(), query
@@ -260,3 +265,17 @@ def test_nested_object_named_manifest_is_verified(tmp_path):
         json.dumps(common.build_manifest(tmp_path, source_project="phase8-source"))
     )
     common.verify_manifest(tmp_path)
+
+
+@pytest.mark.parametrize("database", ["bad`name", "bad;name", "bad name", "../outside"])
+def test_restore_rejects_unsafe_source_database_before_target_writes(
+    tmp_path, monkeypatch, database
+):
+    _complete_backup(tmp_path, database)
+
+    def no_target_writes(*args, **kwargs):
+        pytest.fail("unsafe source database reached a target write")
+
+    monkeypatch.setattr(restore_verify, "compose", no_target_writes)
+    with pytest.raises(ValueError, match="unsafe ClickHouse database"):
+        restore_verify.restore_and_verify(tmp_path, "phase8-restored", "phase8-target")

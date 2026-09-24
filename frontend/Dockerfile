@@ -40,6 +40,9 @@ RUN npm run build
 FROM base AS production
 ENV NODE_ENV=production
 
+# Apply security updates from the base image's configured Alpine release.
+RUN apk upgrade --no-cache
+
 # The standalone server does not invoke npm. Removing the bundled package
 # manager eliminates its transitive packages from the runtime attack surface.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx

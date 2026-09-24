@@ -258,3 +258,8 @@ Existing period/source/generated_at/limitations fields remain compatible.
 
 **Приёмка:** один и тот же факт не исчезает из GLOBAL analytics из-за NULL Hospital;
 restricted users видят только подтверждённую область; dates не меняют смысл.
+
+
+## Runtime follow-up — 2026-09-24
+
+See [runtime acceptance](../../acceptance/PILOT_RUNTIME_ACCEPTANCE_2026-09-24.md) for actual isolated migration/publication/concurrency, real signed-token workflow, Node22 production build and cross-store restore evidence. These close only the recorded technical checks, not owner admission or real M3 evidence. Backend image security and existing-deployment performance remain failed/open gates; no operational model was enabled.

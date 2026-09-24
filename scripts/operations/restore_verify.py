@@ -22,6 +22,8 @@ from scripts.operations.common import (
 )
 
 TABLE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# Source databases may contain hyphens when quoted by SHOW CREATE TABLE.
+DATABASE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 
 
 def _is_materialized_view(ddl: str) -> bool:
@@ -74,7 +76,7 @@ def restore_and_verify(backup: Path, namespace: str, project: str) -> dict[str, 
         stores["minio_objects"],
         object_inventory(backup / "minio", stores["minio_buckets"]),
     )
-    if not TABLE.fullmatch(stores["clickhouse_database"]):
+    if not DATABASE.fullmatch(stores["clickhouse_database"]):
         raise ValueError("unsafe ClickHouse database name")
     for table in stores["clickhouse_tables"]:
         if not TABLE.fullmatch(table):
@@ -115,7 +117,7 @@ def restore_and_verify(backup: Path, namespace: str, project: str) -> dict[str, 
     clickhouse_db = _safe_database(namespace, "clickhouse")
     _clickhouse(project, f"CREATE DATABASE `{clickhouse_db}`")
     source_db = stores["clickhouse_database"]
-    if not TABLE.fullmatch(source_db):
+    if not DATABASE.fullmatch(source_db):
         raise ValueError("unsafe ClickHouse database name")
     definitions: dict[str, str] = {}
     for table in stores["clickhouse_tables"]:

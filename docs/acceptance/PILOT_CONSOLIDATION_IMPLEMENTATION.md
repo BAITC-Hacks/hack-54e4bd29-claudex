@@ -1,5 +1,7 @@
 # Pilot consolidation — D / M / R
 
+> **2026-09-24 follow-up:** [Runtime recheck](PILOT_RUNTIME_ACCEPTANCE_2026-09-24.md) supersedes the historical runtime NOT TESTED rows below for completed container, migration, live-role and restore checks. Backend image findings and performance failures still block release. The following dated register is retained as historical evidence; operational admission remains unsigned.
+
 Date: 2026-09-23. Branch: `codex/pilot-reproducibility`; baseline: `d965aff`.
 
 **Operational release is not admitted.** This document separates implementation from runtime and external acceptance. No real datasets were read, imported, copied or sent externally during this change. Current application volumes and accepted PG0001–0006 / CH001–005 migrations were preserved.

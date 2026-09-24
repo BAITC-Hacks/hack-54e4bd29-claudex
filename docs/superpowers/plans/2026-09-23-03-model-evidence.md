@@ -208,3 +208,8 @@ delivery and D2 mapping. Produces model manifest, report, admission decision and
 **Приёмка:** PASS либо честный FAIL/INSUFFICIENT_DATA. При отрицательном результате
 основной продукт остаётся descriptive analytics + rule-based quality/freshness;
 research replay не становится operational forecast.
+
+
+## Runtime follow-up — 2026-09-24
+
+See [runtime acceptance](../../acceptance/PILOT_RUNTIME_ACCEPTANCE_2026-09-24.md) for actual isolated migration/publication/concurrency, real signed-token workflow, Node22 production build and cross-store restore evidence. These close only the recorded technical checks, not owner admission or real M3 evidence. Backend image security and existing-deployment performance remain failed/open gates; no operational model was enabled.

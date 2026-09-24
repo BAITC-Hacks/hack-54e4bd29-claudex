@@ -1,5 +1,7 @@
 # Pilot release acceptance — 2026-09-23
 
+> **2026-09-24 follow-up:** [Runtime recheck](PILOT_RUNTIME_ACCEPTANCE_2026-09-24.md) supersedes the historical runtime NOT TESTED rows below for completed container, migration, live-role and restore checks. Backend image findings and performance failures still block release. The following dated register is retained as historical evidence; operational admission remains unsigned.
+
 **NOT ADMITTED. Frozen evidence/gate register; no signed admission.** R3-R5 were checked in the existing reproducibility worktree against the integration plan/spec. Source baseline d965aff plus concurrent uncommitted changes; parent performs final integration verification.
 
 | Control | Status | Evidence / outstanding gate |
