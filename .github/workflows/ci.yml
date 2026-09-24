@@ -362,7 +362,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install contract-test dependencies
-        run: pip install pytest pyyaml httpx
+        run: pip install --requirement backend/requirements.txt pytest pyyaml httpx
 
       - name: Security, recovery, performance and safe-reset contracts
         env:
