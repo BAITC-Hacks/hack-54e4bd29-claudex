@@ -458,10 +458,19 @@ class AnalyticsService:
             p90_days=_exact(raw.p90_days),
         )
 
-    def _organization_summary(self, raw: RawOrganization) -> OrganizationSummary:
+    def _organization_summary(
+        self,
+        raw: RawOrganization,
+        *,
+        hospital_names: dict[uuid.UUID, str] | None = None,
+    ) -> OrganizationSummary:
         if raw.canonical_hospital_id is not None:
             identity = OrganizationIdentity.canonical(raw.canonical_hospital_id)
-            name = self._metadata.hospital_name(raw.canonical_hospital_id)
+            name = (
+                hospital_names.get(raw.canonical_hospital_id)
+                if hospital_names is not None
+                else self._metadata.hospital_name(raw.canonical_hospital_id)
+            )
             label = name
         else:
             identity = OrganizationIdentity.source(
@@ -500,12 +509,23 @@ class AnalyticsService:
                 limit=page_size,
                 offset=(page - 1) * page_size,
             )
+        hospital_ids = tuple(
+            dict.fromkeys(
+                row.canonical_hospital_id
+                for row in rows
+                if row.canonical_hospital_id is not None
+            )
+        )
+        hospital_names = self._metadata.hospital_names(hospital_ids)
         watermark = self._watermark()
         return OrganizationSummariesResult(
             metadata=self._metadata_for(
                 filters, watermark, limitations=(MAPPING_LIMITATION,)
             ),
-            organizations=tuple(self._organization_summary(row) for row in rows),
+            organizations=tuple(
+                self._organization_summary(row, hospital_names=hospital_names)
+                for row in rows
+            ),
             page=page,
             page_size=page_size,
             total=total,
