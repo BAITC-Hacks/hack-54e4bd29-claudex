@@ -67,6 +67,12 @@ services:
       APP_DEBUG: "false"
       FORCE_HTTPS: "true"
 
+  minio-init:
+    # The bootstrap refuses local_dev_only credentials even if the operator
+    # accidentally supplies the local .env.example with this overlay.
+    environment:
+      APP_ENV: production
+
   keycloak:
     # The development realm and fixed demonstration credentials are never
     # mounted in this overlay. The operator must provision the approved realm
