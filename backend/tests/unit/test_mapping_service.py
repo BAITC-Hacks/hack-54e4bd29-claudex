@@ -122,3 +122,28 @@ def test_publication_failure_never_switches_active_pointer(setup):
         service.publish(ctx(), "mapping-1")
     repo.activate.assert_not_called()
     uow.commit.assert_not_called()
+
+
+def test_review_requires_global_mapping_permission(setup):
+    service, repo, _, _ = setup
+    with pytest.raises(ForbiddenError):
+        service.review(ctx(Role.HOSPITAL_ANALYST), kind="ORGANIZATION")
+    repo.review.assert_not_called()
+
+
+def test_review_bounds_results_and_never_approves_profiles(setup):
+    service, repo, uow, _ = setup
+    repo.review.return_value = ([], 192)
+    result = service.review(ctx(), kind="PROFILE", status="UNMAPPED", limit=1000)
+    assert result == ([], 192)
+    repo.review.assert_called_once_with(kind="PROFILE", status="UNMAPPED", limit=100)
+    uow.commit.assert_not_called()
+
+
+def test_review_rejects_unknown_kind_or_status(setup):
+    service, repo, _, _ = setup
+    with pytest.raises(ValidationError):
+        service.review(ctx(), kind="PATIENT")
+    with pytest.raises(ValidationError):
+        service.review(ctx(), kind="REGION", status="ANY")
+    repo.review.assert_not_called()

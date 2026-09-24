@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 from collections.abc import Sequence
+from dataclasses import asdict
 from typing import cast
 from uuid import UUID
 
@@ -39,6 +41,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             command.add_argument("--target-id", type=UUID, required=True)
     publish = commands.add_parser("publish")
     publish.add_argument("--version", required=True)
+    review = commands.add_parser("review")
+    review.add_argument(
+        "--kind", choices=["ORGANIZATION", "REGION", "PROFILE"], required=True
+    )
+    review.add_argument("--status", choices=["UNMAPPED", "MAPPED", "REVIEW_REQUIRED"])
+    review.add_argument("--limit", type=int, default=100)
     args = parser.parse_args(argv)
     context = SecurityContext(
         user_id=args.actor, roles=frozenset({Role.ADMIN}), scope=DataScope.global_scope()
@@ -48,7 +56,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         get_authorization_service(),
         ClickHouseMappingRepository(cast(ProjectionClient, get_client())),
     )
-    if args.command == "register":
+    if args.command == "review":
+        items, total = service.review(
+            context, kind=args.kind, status=args.status, limit=args.limit
+        )
+        print(
+            json.dumps(
+                {
+                    "kind": args.kind,
+                    "status": args.status,
+                    "total": total,
+                    "items": [asdict(item) for item in items],
+                    "suggestions": "NOT_AVAILABLE_NO_OFFICIAL_REFERENCE",
+                },
+                ensure_ascii=False,
+                default=str,
+            )
+        )
+    elif args.command == "register":
         print(
             service.register(
                 context,

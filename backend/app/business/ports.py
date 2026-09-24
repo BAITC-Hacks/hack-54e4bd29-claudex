@@ -51,7 +51,7 @@ from app.shared.filters import (
     ScenarioFilter,
     SignalFilter,
 )
-from app.shared.mapping import MappingReadiness, MappingSnapshot
+from app.shared.mapping import MappingReadiness, MappingReviewItem, MappingSnapshot
 from app.shared.pagination import PageRequest
 
 # Псевдонимы нужны потому, что внутри протоколов имя `list`
@@ -383,6 +383,9 @@ class DeliveryRepository(Protocol):
 class MappingRepository(Protocol):
     def lock(self) -> None: ...
     def readiness(self) -> MappingReadiness: ...
+    def review(
+        self, *, kind: str, status: str | None, limit: int
+    ) -> tuple[list[MappingReviewItem], int]: ...
     def get_alias(
         self, alias_id: uuid.UUID, kind: str = "ORGANIZATION"
     ) -> OrganizationAlias | RegionAlias | None: ...

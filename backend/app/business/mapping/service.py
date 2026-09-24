@@ -17,7 +17,12 @@ from app.models.enums import AuditAction, AuditEntityType, MappingMethod, Mappin
 from app.security.authorization import AuthorizationService
 from app.security.context import SecurityContext
 from app.security.permissions import Permission
-from app.shared.mapping import ORGANIZATION_SPACES, REGION_SPACES, MappingSnapshot
+from app.shared.mapping import (
+    ORGANIZATION_SPACES,
+    REGION_SPACES,
+    MappingReviewItem,
+    MappingSnapshot,
+)
 
 
 class MappingService:
@@ -35,6 +40,25 @@ class MappingService:
         self._authz.require_permission(context, Permission.MAPPING_MANAGE)
         if not context.scope.resolved or not context.scope.is_global:
             raise ForbiddenError("GLOBAL_SCOPE_REQUIRED")
+
+    def review(
+        self,
+        context: SecurityContext,
+        *,
+        kind: str,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> tuple[list[MappingReviewItem], int]:
+        """List exact source identities for a human reviewer; never infer a match."""
+        self._authorize(context)
+        if kind not in {"ORGANIZATION", "REGION", "PROFILE"}:
+            raise ValidationError("INVALID_MAPPING_KIND")
+        if status not in {None, "UNMAPPED", "MAPPED", "REVIEW_REQUIRED"}:
+            raise ValidationError("INVALID_MAPPING_STATUS")
+        if limit < 1:
+            raise ValidationError("INVALID_REVIEW_LIMIT")
+        with self._uow_factory() as uow:
+            return uow.mappings.review(kind=kind, status=status, limit=min(limit, 100))
 
     def register(
         self,

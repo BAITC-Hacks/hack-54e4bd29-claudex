@@ -103,3 +103,23 @@ See [ADR-0019](../ADR/0019-versioned-mapping-projection.md). Existing aliases be
 ClickHouse `mapping_projection` stores immutable version, kind, identity_space, source_key, canonical_id. Its organization canonical_id is resolved as hospital_id before aggregation. A candidate is inserted under the PG mapping lock, then count+digest verified; only then may the PG active pointer move. A lost acknowledgement retries missing exact rows and verifies; duplicates/conflicting rows fail closed. The active version is unavailable immediately after any decision, including revocation. A previous cached response cannot restore the old entitlement.
 
 No real dictionary, evidence or approval was created by this implementation. Current owner confirmation is EXTERNAL DEPENDENCY. Historical counts above are historical audit evidence, not current runtime verification.
+
+## Operator review queue
+
+An operator with privileged container/CLI access can run
+`python -m app.cli.mapping --actor <operator-subject> review --kind ORGANIZATION --status UNMAPPED --limit 100`
+(or `REGION` / `PROFILE`). The command returns a bounded list and total count,
+ordered by occurrence count. Each row carries the exact source identity space,
+source identifier, occurrence count, status, canonical target if approved,
+alias version and the latest approval's actor, timestamp, evidence reference and
+mapping version when an approval audit event exists. There is no suggested match
+or confidence score without an owner-approved reference. Profiles remain
+**review-only** because no canonical profile dimension has been approved.
+
+The CLI is an **operator-only, locally privileged** interface: `--actor` records
+the operator-supplied subject but is not OIDC authentication. Do not expose this
+command through a web endpoint or delegate its container/database credentials to
+ordinary users. Production operation requires an access-controlled operator
+environment and independent review of the evidence before `approve`/`publish`.
+The list contains organization/region/profile source identifiers only; do not
+paste any output into general application logs or public issue trackers.

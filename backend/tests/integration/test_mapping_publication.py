@@ -11,6 +11,7 @@ import pytest
 from app.business.mapping.service import MappingService
 from app.core.exceptions import ConflictError
 from app.models.directory import Hospital, Region
+from app.models.mapping import ProfileAlias
 from app.repositories.clickhouse_mapping import ClickHouseMappingRepository
 from app.security.authorization import AuthorizationService
 from app.shared.mapping import MappingSnapshot
@@ -68,6 +69,55 @@ def test_corrupt_candidate_does_not_publish():
     client.rows = [("mapping-1", *snapshot.rows()[0])] * 2
     with pytest.raises(ConflictError, match="CORRUPT"):
         repo.publish(snapshot)
+
+
+def test_operator_review_lists_exact_identity_and_approval_evidence(
+    database,  # noqa: F811 - imported pytest fixture
+):
+    sessions, factory = database
+    service = MappingService(factory, AuthorizationService(), Mock())
+    context = replace(admin_context(), internal_user_id=None)
+    region_id, hospital_id = uuid4(), uuid4()
+    with sessions.begin() as session:
+        session.add(Region(id=region_id, code="synthetic-region", name="Synthetic"))
+        session.add(
+            Hospital(
+                id=hospital_id,
+                code="synthetic-hospital",
+                name="Synthetic hospital",
+                region_id=region_id,
+            )
+        )
+        session.add(
+            ProfileAlias(
+                source_system="ИС БГ",
+                source_value="synthetic-profile",
+                normalized_value="synthetic-profile",
+            )
+        )
+    alias_id = service.register(
+        context,
+        kind="ORGANIZATION",
+        source_system="IS_BG",
+        identity_space="IS_BG:REFERRALS:RECEIVING",
+        source_key="synthetic-org-code",
+    )
+    unmapped, total = service.review(context, kind="ORGANIZATION", status="UNMAPPED")
+    assert total == 1
+    assert unmapped[0].source_identifier == "synthetic-org-code"
+    assert unmapped[0].canonical_id is None
+    version = service.approve(context, alias_id, hospital_id, "synthetic-evidence", 0)
+    mapped, total = service.review(context, kind="ORGANIZATION", status="MAPPED")
+    assert total == 1
+    assert mapped[0].canonical_id == hospital_id
+    assert mapped[0].approved_mapping_version == version
+    assert mapped[0].approved_by == context.user_id
+    assert mapped[0].approved_at is not None
+    assert mapped[0].evidence_ref == "synthetic-evidence"
+    profiles, total = service.review(context, kind="PROFILE", status="UNMAPPED")
+    assert total == 1
+    assert profiles[0].canonical_id is None
+    assert profiles[0].approved_by is None
 
 
 def test_identity_spaces_revocation_stale_version_and_audit_rollback(

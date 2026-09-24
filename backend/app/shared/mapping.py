@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import datetime
 from hashlib import sha256
 from uuid import UUID
 
@@ -46,6 +47,26 @@ class MappingReadiness:
     version: str | None = None
     generation: int = 0
     verified: bool = False
+
+
+@dataclass(frozen=True)
+class MappingReviewItem:
+    """Bounded operator-only review row; no patient or clinical fields."""
+
+    alias_id: UUID
+    kind: str
+    source_system: str
+    identity_space: str | None
+    source_identifier: str
+    occurrences: int
+    mapping_status: str
+    mapping_method: str | None
+    canonical_id: UUID | None
+    alias_version: int | None
+    approved_mapping_version: str | None
+    approved_by: str | None
+    approved_at: datetime | None
+    evidence_ref: str | None
 
 
 @dataclass(frozen=True)
