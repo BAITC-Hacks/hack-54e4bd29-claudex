@@ -98,6 +98,10 @@ class AnalyticsMetadataRepository(Protocol):
 
     def hospital_name(self, hospital_id: uuid.UUID) -> str | None: ...
 
+    def hospital_names(
+        self, hospital_ids: tuple[uuid.UUID, ...]
+    ) -> dict[uuid.UUID, str]: ...
+
 
 class AnalyticsCache(Protocol):
     def get_overview(self, key: str) -> RawOverview | None: ...
