@@ -378,6 +378,55 @@ jobs:
       - name: Secret scan without emitting matched values
         run: python -m scripts.security.scan_secrets --root . --history
 
+  image-scan:
+    name: Current image scan — ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            image_ref: medsignal-backend:ci
+          - image: frontend
+            image_ref: medsignal-frontend:ci
+          - image: worker
+            image_ref: medsignal-worker:ci
+          - image: mlflow
+            image_ref: medsignal-mlflow:ci
+          - image: nginx
+            image_ref: nginx:1.30.5-alpine@sha256:f2e97a6801f504129e8027ff7d49e27fa59ef4f1ebfd97197dac8b194831cf3d
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build or pull current image
+        run: |
+          case "${{ matrix.image }}" in
+            backend)  docker build --pull --target production -f backend/Dockerfile -t "${{ matrix.image_ref }}" backend ;;
+            frontend) docker build --pull --target production -f frontend/Dockerfile -t "${{ matrix.image_ref }}" frontend ;;
+            worker)   docker build --pull --target production -f infrastructure/ml/Dockerfile -t "${{ matrix.image_ref }}" . ;;
+            mlflow)   docker build --pull -f infrastructure/docker/mlflow.Dockerfile -t "${{ matrix.image_ref }}" infrastructure/docker ;;
+            nginx)    docker pull "${{ matrix.image_ref }}" ;;
+          esac
+
+      - name: Trivy scan and policy gate
+        run: >-
+          python -m scripts.security.image_scan
+          --image "${{ matrix.image_ref }}"
+          --output "image-scan/${{ matrix.image }}/report.json"
+
+      - name: Preserve machine and human evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-scan-${{ matrix.image }}
+          path: image-scan/${{ matrix.image }}/
+          if-no-files-found: warn
+
   compose:
     name: Конфигурация Docker Compose
     runs-on: ubuntu-latest
