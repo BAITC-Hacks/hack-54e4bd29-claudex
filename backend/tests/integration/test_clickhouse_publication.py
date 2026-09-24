@@ -174,3 +174,44 @@ def test_approved_projection_scope_publication_and_daily_equality(isolated_ch):
     )
     assert revoked_rows == ()
     assert revoked_total == 0
+
+
+def test_failed_import_rows_are_invisible_before_clickhouse_cleanup(isolated_ch):
+    client = isolated_ch
+    published, failed = uuid4(), uuid4()
+    day = datetime(2025, 1, 1, tzinfo=UTC)
+    client.insert(
+        "fact_referral_events",
+        [
+            ("synthetic-published", day, "published-org", published, "ИС БГ", day),
+            ("synthetic-failed", day, "failed-org", failed, "ИС БГ", day),
+        ],
+        column_names=[
+            "event_key",
+            "registration_dt",
+            "receiving_org_key",
+            "import_id",
+            "source_system",
+            "ingested_at",
+        ],
+    )
+    assert client.query("SELECT count() FROM fact_referral_events").result_rows == [(2,)]
+    scope = QueryScope((), True, True, "mapping-1", (published,))
+    filters = AnalyticsFilter(day, datetime(2025, 1, 2, tzinfo=UTC))
+    repository = ClickHouseAnalyticsRepository(client)
+
+    assert repository.overview(filters, scope).referrals_total == 1
+    assert sum(p.value for p in repository.referral_timeseries(filters, scope)) == 1
+    rows, total = repository.organizations(filters, scope, limit=20, offset=0)
+    assert total == 1
+    assert rows[0].source_value == "published-org"
+
+    # A failed import remains physically present while an asynchronous DELETE
+    # may still be running. Revoking publication blocks it immediately.
+    revoked = replace(scope, published_import_ids=())
+    assert repository.overview(filters, revoked).referrals_total == 0
+    revoked_rows, revoked_total = repository.organizations(
+        filters, revoked, limit=20, offset=0
+    )
+    assert revoked_rows == ()
+    assert revoked_total == 0
