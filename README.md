@@ -169,6 +169,13 @@ Runbooks: [operator](docs/runbooks/OPERATOR.md),
 [backup/restore](docs/runbooks/BACKUP_RESTORE.md) и
 [demo](docs/runbooks/DEMO.md).
 
+Текущая feature-ветка добавляет HTTP 429 контракт, ограниченный cache списка
+организаций, MinIO service identities, CI Trivy gate и операторский просмотр
+mapping. Результаты проверки образов и нерешённые HIGH findings:
+[image security](docs/security/IMAGE_RISK_ACCEPTANCE.md). Сравнимый benchmark
+на реальном масштабе **ещё не выполнен**; synthetic probe отделён от
+[исторического real-data baseline](docs/analytics/PERFORMANCE_RECHECK.md).
+
 Цель PHASE 5A — ежедневное число направлений на глобальном уровне ([ADR-0016](docs/ADR/0016-experimental-short-horizon-referral-forecast.md)). Три месяца истории не позволяют подтвердить годовую сезонность и прогноз перегрузки; метрики относятся только к walk-forward проверке внутри доступного квартала.
 
 ## Быстрый старт

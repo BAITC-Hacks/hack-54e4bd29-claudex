@@ -187,3 +187,18 @@ Clean acceptance использовал отдельный project `phase8-clean
 volumes и подтвердил PostgreSQL `0001–0006`, ClickHouse `001–005`, controlled
 import, analytics и human workflow. Инструкции: [operator
 runbook](runbooks/OPERATOR.md) и [backup/restore](runbooks/BACKUP_RESTORE.md).
+
+Это исторический acceptance для прежнего commit. Текущая ветка применяет
+PostgreSQL `0001–0008` и ClickHouse `001–006`. Отдельный синтетический
+`phase8-p3-drill-20260925` подтвердил `alembic check` и восстановление
+трёх хранилищ; результаты и ограничения находятся в
+[runbook восстановления](runbooks/BACKUP_RESTORE.md). Этот drill не заменяет
+controlled import, полноценный production E2E или нагрузочный тест на реальных
+данных текущего commit.
+
+CI собирает и сканирует текущие production images pinned Trivy. CRITICAL
+блокируют всегда, HIGH блокируют без отдельного решения для точного image ID
+и vulnerability ID. Локальный прогон нашёл нерешённые HIGH; см.
+[image security](security/IMAGE_RISK_ACCEPTANCE.md). До устранения этих
+находок и provisioning TLS/WAF/corporate IdP deployment не принимается как
+production-ready.

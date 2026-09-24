@@ -50,7 +50,9 @@ data/audit/*
 # --- ML артефакты ----------------------------------------------------------
 mlruns/
 mlartifacts/
-/artifacts/phase8-*/
+# Backups, restore evidence and scanner output are always local. A single
+# JSON evidence file at the root is just as sensitive as an artifact directory.
+/artifacts/
 # Шаблон привязан к конкретным каталогам намеренно. Запись `models/`
 # без ведущего слеша совпадает с любым каталогом `models` на любой
 # глубине, включая backend/app/models/ — это исходный код ORM-моделей,
