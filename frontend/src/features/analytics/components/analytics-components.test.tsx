@@ -3,6 +3,7 @@ import { Building2 } from "lucide-react";
 import { describe, expect, it } from "vitest";
 
 import { DataFreshnessBadge } from "@/features/analytics/components/data-freshness-badge";
+import { DataFreshnessDetails } from "@/features/analytics/components/data-freshness-details";
 import { KpiCard } from "@/features/analytics/components/kpi-card";
 import { SuppressedValue } from "@/features/analytics/components/suppressed-value";
 import { EmptyState, ErrorState, LoadingState } from "@/features/analytics/components/states";
@@ -52,5 +53,27 @@ describe("analytics presentation states", () => {
   it("labels unknown freshness explicitly", () => {
     render(<DataFreshnessBadge status="UNKNOWN" />);
     expect(screen.getByText("Не определено")).toBeInTheDocument();
+  });
+
+  it("shows source, import, completeness and cadence as separate evidence", () => {
+    render(<DataFreshnessDetails item={{
+      dataset_type: "REFERRALS",
+      event_period_start: "2025-01-01",
+      event_period_end: "2025-03-31",
+      source_load_date: "2025-04-01",
+      last_successful_import: "2026-09-18T09:01:21Z",
+      confirmed_complete_through: null,
+      cadence_known: false,
+      completeness: "UNKNOWN",
+      forecast_available: false,
+      status: "UNKNOWN",
+      explanation: "Периодичность поставки данных не определена.",
+    }} />);
+    expect(screen.getByText(/Период событий:/)).toBeInTheDocument();
+    expect(screen.getByText(/Загрузка источника:/)).toBeInTheDocument();
+    expect(screen.getByText(/Последний успешный импорт:/)).toBeInTheDocument();
+    expect(screen.getByText(/Полнота поставки: не подтверждена/)).toBeInTheDocument();
+    expect(screen.getByText(/Полнота до: не подтверждена/)).toBeInTheDocument();
+    expect(screen.getByText(/Периодичность: не определена/)).toBeInTheDocument();
   });
 });

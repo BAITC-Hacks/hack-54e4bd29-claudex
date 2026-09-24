@@ -7,6 +7,7 @@ import { useState } from "react";
 import { AuthGate } from "@/features/auth/auth-gate";
 import { useAuth } from "@/features/auth/auth-context";
 import { DataFreshnessBadge } from "@/features/analytics/components/data-freshness-badge";
+import { DataFreshnessDetails } from "@/features/analytics/components/data-freshness-details";
 import { FilterBar } from "@/features/analytics/components/filter-bar";
 import { KpiCard } from "@/features/analytics/components/kpi-card";
 import { OrganizationTable } from "@/features/analytics/components/organization-table";
@@ -14,7 +15,7 @@ import { QualityIndicator } from "@/features/analytics/components/quality-indica
 import { EmptyState, ErrorState, LoadingState } from "@/features/analytics/components/states";
 import { TimeSeriesChart } from "@/features/analytics/components/time-series-chart";
 import { WaitingAgeSummary } from "@/features/analytics/components/waiting-age-summary";
-import { formatDate, formatPeriod } from "@/features/analytics/format";
+import { formatPeriod } from "@/features/analytics/format";
 import { useSituationCenter } from "@/features/analytics/hooks";
 import type { AnalyticsQuery } from "@/features/analytics/types";
 import { ReferralForecastCard } from "@/features/forecasting/components/referral-forecast-card";
@@ -186,15 +187,11 @@ export default function DashboardPage() {
                 <div className="mt-4 space-y-3">
                   {freshness.data.map((item) => (
                     <div key={item.dataset_type} className="flex items-start justify-between gap-3 border-b pb-3 last:border-0">
-                      <div><p className="text-sm font-medium">{item.dataset_type}</p><p className="text-xs text-muted-foreground">Период до {formatDate(item.event_period_end)}</p><p className="text-xs text-muted-foreground">Импорт: {formatDate(item.last_successful_import)}</p></div>
+                      <DataFreshnessDetails item={item} />
                       <DataFreshnessBadge status={item.status} mappingAvailable={freshness.meta.mapping_publication_available} />
                     </div>
                   ))}
                 </div>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  Периодичность поставки данных не определена, поэтому
-                  операционная актуальность отмечена как неизвестная.
-                </p>
               </section>
             </div>
             <ul className="space-y-1 text-xs text-muted-foreground">
