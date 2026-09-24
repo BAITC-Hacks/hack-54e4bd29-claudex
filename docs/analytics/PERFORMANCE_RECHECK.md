@@ -1,5 +1,21 @@
 # Performance recheck — 2026-09-24
 
+## 2026-09-25 branch probe — not a real-data comparison
+
+The new organization repository was executed read-only from the current
+worktree against the isolated `phase8-runtime-20260924` stack: 3 iterations,
+latencies **94.22 / 55.38 / 54.40 ms**, median **55.38 ms**, first page 1 row,
+total 1 organization, 1 published import. A separate read-only count proved
+that this stack holds only **30 referral facts** and no waiting/refusal/treated
+facts. These numbers are a small synthetic smoke measurement, **not** evidence
+of a speedup at the real 3-million-row scale. The existing `medsignal` stack
+contains the real facts but its PostgreSQL/ClickHouse schema predates delivery
+and mapping publication. Migrating or rewriting its volumes merely to run a
+benchmark was deliberately avoided. A comparable before/after real-data
+benchmark remains **NOT TESTED**; run it after a controlled deployment/import
+of the current migrations, with identical scope, watermark, date filters,
+concurrency, cache state, success-only latencies and error accounting.
+
 **R3: EXISTING DEPLOYMENT BASELINE RECORDED. NEW-BRANCH D/M/R ACCEPTANCE: NOT TESTED.** This is a bounded real-data baseline of the original `medsignal` development deployment, not production SLA acceptance. Every endpoint had errors under this workload. The mixed-status percentiles below do not establish successful-request latency targets.
 
 ## Deployment and data provenance
