@@ -6,7 +6,7 @@ param(
         "medsignal-frontend:ci",
         "medsignal-worker:ci",
         "medsignal-mlflow:ci",
-        "nginx:1.30.5-alpine@sha256:f2e97a6801f504129e8027ff7d49e27fa59ef4f1ebfd97197dac8b194831cf3d"
+        "medsignal-nginx:ci"
     )
 )
 

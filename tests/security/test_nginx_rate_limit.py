@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -15,7 +16,7 @@ from urllib.request import Request, urlopen
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-NGINX_IMAGE = (
+NGINX_IMAGE = os.environ.get("MEDSIGNAL_NGINX_TEST_IMAGE") or (
     "nginx:1.30.5-alpine@sha256:"
     "f2e97a6801f504129e8027ff7d49e27fa59ef4f1ebfd97197dac8b194831cf3d"
 )

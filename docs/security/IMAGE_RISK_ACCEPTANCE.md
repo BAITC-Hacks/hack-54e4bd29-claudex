@@ -60,11 +60,22 @@ Worker and MLflow unique IDs: `CVE-2025-69720`, `CVE-2026-16742`,
 `CVE-2026-78409`, `CVE-2026-78410`, `CVE-2026-9538`.
 
 The nginx finding is `CVE-2026-93990` in `libexpat` (`2.8.4-r0`);
-Trivy reports fixed version `2.8.5-r0`. Replacing the pinned nginx image
-with a verified patched digest is the preferred remediation. Image/Dockerfile
-changes belong to a separate task and were not made here. The other HIGH
-findings had no fixed version reported by this scanner database; that does
-not mean they are accepted or harmless.
+Trivy reports fixed version `2.8.5-r0`. The targeted image build below
+remediates it. The other HIGH findings had no fixed version reported by this
+scanner database; that does not mean they are accepted or harmless.
+
+## Nginx remediation in this branch (2026-09-25)
+
+The pinned upstream Nginx digest is retained as the base in
+`infrastructure/nginx/Dockerfile`; the image build installs exactly
+`libexpat=2.8.5-r0`. `docker build --pull` produced local image ID
+`sha256:a617a8595c0b2a0fa20d41c44fc416a084d681fd67ce3c0ad1bcbec57bc48e9f`.
+Pinned Trivy 0.58.2 scanned **that built image** and reported **0 HIGH, 0
+CRITICAL; gate PASS**. CI now builds and scans `medsignal-nginx:ci`, rather
+than scanning the vulnerable upstream base. The earlier table records the
+pre-fix scan and remains historical evidence. Backend/worker/MLflow HIGH
+findings are still unresolved; no acceptance has been recorded. A future
+base/package change must be rebuilt and rescanned before acceptance.
 
 Example **synthetic schema only** (not an approval):
 

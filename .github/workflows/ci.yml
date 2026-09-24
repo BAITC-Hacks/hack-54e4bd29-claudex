@@ -395,7 +395,7 @@ jobs:
           - image: mlflow
             image_ref: medsignal-mlflow:ci
           - image: nginx
-            image_ref: nginx:1.30.5-alpine@sha256:f2e97a6801f504129e8027ff7d49e27fa59ef4f1ebfd97197dac8b194831cf3d
+            image_ref: medsignal-nginx:ci
     steps:
       - uses: actions/checkout@v4
 
@@ -410,7 +410,7 @@ jobs:
             frontend) docker build --pull --target production -f frontend/Dockerfile -t "${{ matrix.image_ref }}" frontend ;;
             worker)   docker build --pull --target production -f infrastructure/ml/Dockerfile -t "${{ matrix.image_ref }}" . ;;
             mlflow)   docker build --pull -f infrastructure/docker/mlflow.Dockerfile -t "${{ matrix.image_ref }}" infrastructure/docker ;;
-            nginx)    docker pull "${{ matrix.image_ref }}" ;;
+            nginx)    docker build --pull -f infrastructure/nginx/Dockerfile -t "${{ matrix.image_ref }}" infrastructure/nginx ;;
           esac
 
       - name: Trivy scan and policy gate

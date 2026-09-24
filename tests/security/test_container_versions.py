@@ -5,12 +5,16 @@ from pathlib import Path
 
 def test_security_patched_runtime_versions_are_pinned() -> None:
     compose = Path("docker-compose.yml").read_text(encoding="utf-8")
+    nginx_dockerfile = Path("infrastructure/nginx/Dockerfile").read_text(encoding="utf-8")
     ml_requirements = Path("ml/requirements.txt").read_text(encoding="utf-8")
     mlflow_dockerfile = Path("infrastructure/docker/mlflow.Dockerfile").read_text(
         encoding="utf-8"
     )
 
-    assert "nginx:1.30.5-alpine@sha256:" in compose
+    assert "medsignal-nginx:local" in compose
+    assert "infrastructure/nginx" in compose
+    assert "nginx:1.30.5-alpine@sha256:" in nginx_dockerfile
+    assert "libexpat=2.8.5-r0" in nginx_dockerfile
     assert "mlflow==3.16.1" in ml_requirements
     assert "FROM python:3.12-slim" in mlflow_dockerfile
     assert "mlflow==3.16.1" in mlflow_dockerfile
