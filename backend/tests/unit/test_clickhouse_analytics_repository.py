@@ -6,12 +6,15 @@ import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+from prometheus_client import REGISTRY
+
 from app.business.analytics.contracts import (
     AnalyticsFilter,
     Granularity,
     OrganizationIdentity,
 )
 from app.business.analytics.ports import QueryScope
+from app.core.analytics_metrics import clickhouse_query_duration_seconds
 from app.repositories.clickhouse_analytics import ClickHouseAnalyticsRepository
 from app.shared.organization_ref import source_organization_digest
 
@@ -60,6 +63,31 @@ def test_referral_timeseries_uses_aggregates_and_parameterizes_profile() -> None
     assert profile not in query
     assert parameters["profile"] == profile
     assert "GROUP BY" in query
+
+
+def test_clickhouse_query_duration_records_only_bounded_operation_label() -> None:
+    client = RecordingClient({"analytics:referral-timeseries": []})
+    repository = ClickHouseAnalyticsRepository(client)
+    clickhouse_query_duration_seconds.labels(operation="fact_read")
+    before = (
+        REGISTRY.get_sample_value(
+            "medsignal_clickhouse_query_duration_seconds_count",
+            {"operation": "fact_read"},
+        )
+        or 0
+    )
+
+    repository.referral_timeseries(
+        filters(), QueryScope((), all_canonical=True, include_unmapped=True)
+    )
+
+    assert (
+        REGISTRY.get_sample_value(
+            "medsignal_clickhouse_query_duration_seconds_count",
+            {"operation": "fact_read"},
+        )
+        == before + 1
+    )
 
 
 def test_bounded_scope_is_passed_as_uuid_array_and_never_interpolated() -> None:

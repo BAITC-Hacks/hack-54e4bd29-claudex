@@ -18,7 +18,7 @@ from celery import Task
 from app.business.ports import UnitOfWorkFactory
 from app.business.signals.evaluation import SignalEvaluationService
 from app.business.system.operations import OperationService
-from app.core.http_metrics import record_background_job
+from app.core.http_metrics import observe_background_job, record_background_job
 from app.core.logging import get_logger
 from app.core.request_context import get_request_id
 from app.repositories.unit_of_work import create_unit_of_work
@@ -96,7 +96,8 @@ def train_referral_forecast() -> dict[str, str]:
     from app.adapters.forecasting import build_forecast_training_service
 
     try:
-        forecast_id = build_forecast_training_service().run_referral_forecast()
+        with observe_background_job("ml.train_referral_forecast"):
+            forecast_id = build_forecast_training_service().run_referral_forecast()
         record_background_job("ml.train_referral_forecast", "completed")
         return {"forecast_id": str(forecast_id)}
     except Exception:
@@ -169,7 +170,8 @@ def forecast_organization(
         horizon_days=horizon_days,
     )
     try:
-        result = build_organization_forecast_service().run(request)
+        with observe_background_job("ml.forecast_organization"):
+            result = build_organization_forecast_service().run(request)
         record_background_job("ml.forecast_organization", str(result["status"]).lower())
         return result
     except Exception:

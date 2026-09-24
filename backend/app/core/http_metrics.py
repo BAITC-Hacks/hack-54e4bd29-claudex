@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Iterator, Mapping
+from contextlib import contextmanager
 from typing import Any
 
 from prometheus_client import Counter, Histogram
@@ -26,6 +27,12 @@ background_jobs_total = Counter(
     "Background jobs by bounded task name and outcome",
     ("task", "outcome"),
 )
+background_job_duration_seconds = Histogram(
+    "medsignal_background_job_duration_seconds",
+    "Background job execution duration by bounded task name",
+    ("task",),
+    buckets=(0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600),
+)
 
 
 def route_label(scope: Mapping[str, Any]) -> str:
@@ -37,6 +44,13 @@ def route_label(scope: Mapping[str, Any]) -> str:
 
 def record_background_job(task: str, outcome: str) -> None:
     background_jobs_total.labels(task=task, outcome=outcome).inc()
+
+
+@contextmanager
+def observe_background_job(task: str) -> Iterator[None]:
+    """Measure a fixed Celery task name, never a model or patient identifier."""
+    with background_job_duration_seconds.labels(task=task).time():
+        yield
 
 
 class HttpMetricsMiddleware(BaseHTTPMiddleware):

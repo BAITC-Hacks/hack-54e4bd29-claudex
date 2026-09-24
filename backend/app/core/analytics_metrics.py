@@ -24,6 +24,12 @@ analytics_cache_access_total = Counter(
     "Analytics cache access by result",
     ("endpoint", "result"),
 )
+clickhouse_query_duration_seconds = Histogram(
+    "medsignal_clickhouse_query_duration_seconds",
+    "ClickHouse client query duration for bounded analytics operations",
+    ("operation",),
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5),
+)
 
 
 @contextmanager
@@ -45,3 +51,10 @@ def observe_analytics_query(operation: str) -> Iterator[None]:
 
 def record_analytics_cache(endpoint: str, result: str) -> None:
     analytics_cache_access_total.labels(endpoint, result).inc()
+
+
+@contextmanager
+def observe_clickhouse_query(operation: str) -> Iterator[None]:
+    """Measure ClickHouse calls with fixed operation labels, never query values."""
+    with clickhouse_query_duration_seconds.labels(operation=operation).time():
+        yield

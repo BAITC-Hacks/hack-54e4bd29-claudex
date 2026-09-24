@@ -6,6 +6,7 @@ import math
 from dataclasses import replace
 from typing import Any, Protocol
 
+from app.core.analytics_metrics import observe_clickhouse_query
 from app.shared.analytics_contracts import (
     AnalyticsFilter,
     Granularity,
@@ -201,7 +202,8 @@ class ClickHouseAnalyticsRepository:
             mapping_version=scope.mapping_version or "",
             published_import_ids=[str(i) for i in scope.published_import_ids or ()],
         )
-        return self._client.query(query, parameters=params)
+        with observe_clickhouse_query("fact_read"):
+            return self._client.query(query, parameters=params)
 
     def _series(
         self,
@@ -626,7 +628,8 @@ class ClickHouseAnalyticsRepository:
         )
         # Publication filtering precedes aggregation; mapping follows it. The
         # generic fact rewrite joins every source row and is slower for lists.
-        rows = self._client.query(query, parameters=parameters).result_rows
+        with observe_clickhouse_query("organizations"):
+            rows = self._client.query(query, parameters=parameters).result_rows
         total = int(rows[0][8]) if rows else 0
         organizations = tuple(
             RawOrganization(
