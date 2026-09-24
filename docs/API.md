@@ -343,8 +343,13 @@ Save добавляет `client_request_id`. Для `FORECAST` вместо пе
 | GET | `/api/v1/analytics/observed-waiting/summary` | Наблюдаемое ожидание завершённых госпитализаций |
 | GET | `/api/v1/analytics/organizations` | Постраничные source/canonical organizations |
 | GET | `/api/v1/analytics/organizations/{organization_ref}` | Карточка identity space организации |
-| GET | `/api/v1/analytics/data-freshness` | Периоды, load date и последний импорт |
+| GET | `/api/v1/analytics/data-freshness` | Период событий, source load date, последний успешный импорт, подтверждённая полнота, cadence и CURRENT/STALE/UNKNOWN/PARTIAL |
 | GET | `/api/v1/analytics/data-quality` | Агрегированные итоги quality rules |
 | GET | `/api/v1/analytics/refusals/breakdown` | Разрешённый разрез с small-cell suppression |
 
 Ответ имеет поля `data` и `meta`. В `meta` входят фактический период, granularity, источники, время генерации, watermark/IDs импортов и ограничения интерпретации. Поддержаны только именованные query parameters `date_from`, `date_to`, `granularity`, `region`, `organization`, `profile`; произвольные сортировка, SQL и выбор столбцов отсутствуют.
+
+`/organizations` возвращает только ограниченную страницу агрегатов. Ключ кэша
+включает scope, filters, pagination, mapping version и published import
+watermark; активность публикации перепроверяется до выдачи результата. Карточка
+source organization ищется прямым bounded запросом, не перебором страниц.
