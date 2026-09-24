@@ -44,7 +44,8 @@ services:
     build:
       context: .
       dockerfile: pilot/Dockerfile
-    command: ["python", "-m", "ml.monitoring"]
+    command: ["python", "-m", "ml.improve"]
     volumes:
+      - ./data/monitoring-v1:/app/data/monitoring-v1
       - ./data/incoming:/app/data/incoming:ro
       - ./data/monitoring:/app/data/monitoring
