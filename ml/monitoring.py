@@ -235,6 +235,8 @@ def alert_for(
     prediction: list[float],
     quality: dict[str, Any],
     model_id: str,
+    *,
+    risk: dict[str, float] | None = None,
 ) -> dict[str, Any] | None:
     reference = sum(values[origin - 27 : origin + 1]) / 4
     total = sum(prediction)
@@ -246,7 +248,7 @@ def alert_for(
     signal_id = hashlib.sha256(f"{model_id}|{name}|{dates[origin]}".encode()).hexdigest()[
         :20
     ]
-    return {
+    alert: dict[str, Any] = {
         "id": signal_id,
         "hospital": name,
         "as_of": dates[origin],
@@ -324,6 +326,11 @@ def alert_for(
             "направлений, обычный поток ≥20. Пороги пилотные, не медицинские нормативы."
         ),
     }
+    if risk is not None:
+        # Research ranking score only; never a calibrated overload probability.
+        alert["risk_score"] = risk["score"]
+        alert["risk_threshold"] = risk["threshold"]
+    return alert
 
 
 def prepare_approved_experiment(

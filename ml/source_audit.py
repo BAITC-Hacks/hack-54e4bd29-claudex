@@ -7,13 +7,13 @@ from collections import Counter
 from pathlib import Path
 
 
-def main():
+def main() -> None:
     seen = set()
     codes = set()
     duplicates = code_repeats = rows = 0
-    missing = Counter()
-    daily = Counter()
-    org = Counter()
+    missing: Counter[str] = Counter()
+    daily: Counter[str] = Counter()
+    org: Counter[str] = Counter()
     for path in sorted(Path("data/incoming").glob("referrals_part_*.csv")):
         with path.open(encoding="utf-8-sig", newline="") as f:
             for r in csv.DictReader(f):

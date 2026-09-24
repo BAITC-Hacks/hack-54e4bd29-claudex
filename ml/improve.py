@@ -3,8 +3,10 @@
 import copy
 import hashlib
 import json
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import joblib
 import numpy as np
@@ -24,9 +26,19 @@ from ml.risk import (
 )
 
 
-def evaluated(estimator, series, dates, origins, threshold=None):
-    y, p, names = [], [], []
-    folds = []
+def evaluated(
+    estimator: Any,
+    series: Mapping[str, Sequence[int]],
+    dates: Sequence[str],
+    origins: Iterable[int],
+    threshold: float | None = None,
+) -> tuple[
+    float, dict[str, float | int], list[int], list[float], list[str], list[dict[str, Any]]
+]:
+    y: list[int] = []
+    p: list[float] = []
+    names: list[str] = []
+    folds: list[dict[str, Any]] = []
     for origin in origins:
         s = scores(estimator, series, dates, origin)
         a = [growth_label(v, origin) for v in series.values()]
@@ -42,7 +54,7 @@ def evaluated(estimator, series, dates, origins, threshold=None):
     return threshold, result, y, p, names, folds
 
 
-def main():
+def main() -> None:
     root = Path("data/monitoring")
     old = Path("data/monitoring-v1")
     if not (old / "bundle.json").exists():
@@ -63,7 +75,7 @@ def main():
         with (Path("data/incoming") / file["name"]).open("rb") as f:
             assert hashlib.file_digest(f, "sha256").hexdigest() == file["sha256"]
     x, y = risk_samples(series, dates, train_end)
-    trials = []
+    trials: list[dict[str, Any]] = []
     trained = {}
     for name, model in candidates().items():
         model.fit(x, y)
@@ -161,8 +173,8 @@ def main():
             random_state=42,
         ),
     }
-    numeric = []
-    validations = {}
+    numeric: list[dict[str, Any]] = []
+    validations: dict[str, Any] = {}
     for name, reg in regressors.items():
         if name != "v1_poisson":
             reg.fit(rx, ry)
@@ -187,7 +199,7 @@ def main():
         detector, series, dates, [valid_end, valid_end + 7], threshold
     )
 
-    def decisions(names, probabilities):
+    def decisions(names: Sequence[str], probabilities: Sequence[float]) -> list[bool]:
         return [
             score >= model.segment_thresholds.get(groups[name], threshold)
             for name, score in zip(names, probabilities, strict=False)

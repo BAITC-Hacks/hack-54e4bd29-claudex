@@ -1,6 +1,10 @@
 """Past-only learned growth detection; score is not a calibrated probability."""
 
+from collections.abc import Mapping, Sequence
+from typing import Any
+
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
 from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
@@ -28,7 +32,9 @@ RISK_FEATURES = [
 ]
 
 
-def risk_features(values, dates, origin):
+def risk_features(
+    values: Sequence[int], dates: Sequence[str], origin: int
+) -> list[float]:
     from datetime import date
 
     h = np.asarray(values[origin - 27 : origin + 1], dtype=float)
@@ -65,13 +71,15 @@ def risk_features(values, dates, origin):
     ]
 
 
-def growth_label(values, origin):
+def growth_label(values: Sequence[int], origin: int) -> int:
     ref = sum(values[origin - 27 : origin + 1]) / 4
     total = sum(values[origin + 1 : origin + 8])
     return int(ref >= 20 and total - ref >= 10 and total >= ref * 1.2)
 
 
-def risk_samples(series, dates, cutoff):
+def risk_samples(
+    series: Mapping[str, Sequence[int]], dates: Sequence[str], cutoff: int
+) -> tuple[NDArray[Any], NDArray[Any]]:
     x, y = [], []
     for values in series.values():
         for origin in range(27, cutoff - 6):
@@ -80,7 +88,7 @@ def risk_samples(series, dates, cutoff):
     return np.asarray(x), np.asarray(y)
 
 
-def candidates():
+def candidates() -> dict[str, Any]:
     result = {}
     for balanced in (False, True):
         weight = "balanced" if balanced else None
@@ -112,7 +120,12 @@ def candidates():
     return result
 
 
-def scores(estimator, series, dates, origin):
+def scores(
+    estimator: Any,
+    series: Mapping[str, Sequence[int]],
+    dates: Sequence[str],
+    origin: int,
+) -> dict[str, float]:
     names = list(series)
     x = np.asarray([risk_features(series[n], dates, origin) for n in names])
     if isinstance(estimator, list):
@@ -125,7 +138,7 @@ def scores(estimator, series, dates, origin):
     }
 
 
-def classification(y, p):
+def classification(y: ArrayLike, p: ArrayLike) -> dict[str, float | int]:
     y = np.asarray(y, dtype=bool)
     p = np.asarray(p, dtype=bool)
     tp = int((y & p).sum())
@@ -153,7 +166,7 @@ def classification(y, p):
     }
 
 
-def choose_threshold(y, p):
+def choose_threshold(y: ArrayLike, p: ArrayLike) -> tuple[float, dict[str, float | int]]:
     options = [
         (float(t), classification(y, np.asarray(p) >= t))
         for t in np.arange(0.05, 0.901, 0.025)
@@ -176,19 +189,23 @@ def choose_threshold(y, p):
 
 
 class MonitoringModel:
-    def __init__(self, regressor, detector, threshold):
+    def __init__(self, regressor: Any, detector: Any, threshold: float) -> None:
         self.regressor = regressor
         self.detector = detector
         self.threshold = threshold
 
-    def predict(self, x):
+    def predict(self, x: ArrayLike) -> NDArray[Any]:
         return self.regressor.predict(x)
 
-    def risk_scores(self, series, dates, origin):
+    def risk_scores(
+        self, series: Mapping[str, Sequence[int]], dates: Sequence[str], origin: int
+    ) -> dict[str, float]:
         return scores(self.detector, series, dates, origin)
 
 
-def risk_context(model, name, predictions):
+def risk_context(
+    model: Any, name: str, predictions: Mapping[str, float] | None
+) -> dict[str, float] | None:
     if predictions is None:
         return None
     group = model.groups[name]

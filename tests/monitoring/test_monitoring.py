@@ -52,6 +52,21 @@ def test_alert_is_model_forecast_compared_with_history_not_baseline_disagreement
     assert len(alert["actions"]) == 3
 
 
+def test_research_alert_carries_uncalibrated_risk_context_when_requested():
+    args = ("synthetic-hospital", [10] * 90, dates(), 61)
+    alert = alert_for(
+        *args,
+        [20] * 7,
+        {},
+        "research-model",
+        risk={"score": 0.72, "threshold": 0.65},
+    )
+    assert alert is not None
+    assert alert["risk_score"] == 0.72
+    assert alert["risk_threshold"] == 0.65
+    assert "probability" not in alert
+
+
 def test_missing_source_day_is_rejected(tmp_path):
     path = tmp_path / "source.csv"
     path.write_text("hospital_mo,registration_dt\nA,2025-01-01\nA,2025-01-03\n")
