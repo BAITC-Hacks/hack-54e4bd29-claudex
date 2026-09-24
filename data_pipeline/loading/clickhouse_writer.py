@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, Protocol
@@ -60,9 +60,8 @@ class ClickHouseClient(Protocol):
     def insert(
         self,
         table: str,
-        data: Any,
-        column_names: Any = None,
-        **kwargs: Any,
+        data: Sequence[Sequence[Any]],
+        column_names: str | Iterable[str],
     ) -> Any: ...
 
 

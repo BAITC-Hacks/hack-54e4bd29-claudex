@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from app.business.ingestion.ports import SourceFileRef
@@ -79,7 +79,7 @@ class PipelineAdapter:
         """Число строк набора по отчёту Data Audit, если оно известно."""
         return get_contract(dataset_type).audit_row_count
 
-    def discover(self, dataset_type: str) -> list[SourceFileRef]:
+    def discover(self, dataset_type: str) -> Sequence[SourceFileRef]:
         return discover(self._source_root, get_contract(dataset_type))
 
     def fingerprint(self, file: SourceFileRef) -> str:
