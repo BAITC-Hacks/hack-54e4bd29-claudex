@@ -196,7 +196,7 @@ class ImportService:
     ) -> list[SourceFileRef]:
         """Файлы набора, найденные в каталоге источника."""
         self._authz.require_permission(context, Permission.DATA_IMPORT_READ)
-        return self._pipeline.discover(dataset_type.value)
+        return list(self._pipeline.discover(dataset_type.value))
 
     def _import_file(
         self,

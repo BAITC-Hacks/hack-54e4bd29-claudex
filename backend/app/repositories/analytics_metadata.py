@@ -148,13 +148,11 @@ class SqlAlchemyAnalyticsMetadataRepository:
         with self._session_factory() as session:
             return session.scalar(select(Hospital.name).where(Hospital.id == hospital_id))
 
-    def hospital_names(
-        self, hospital_ids: tuple[uuid.UUID, ...]
-    ) -> dict[uuid.UUID, str]:
+    def hospital_names(self, hospital_ids: tuple[uuid.UUID, ...]) -> dict[uuid.UUID, str]:
         if not hospital_ids:
             return {}
         with self._session_factory() as session:
             rows = session.execute(
                 select(Hospital.id, Hospital.name).where(Hospital.id.in_(hospital_ids))
             ).all()
-        return {hospital_id: name for hospital_id, name in rows}
+        return {row[0]: row[1] for row in rows}

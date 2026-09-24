@@ -14,6 +14,7 @@ import uuid
 from collections.abc import Callable
 from pathlib import Path
 
+from app.business.ingestion.ports import SourceFileRef
 from app.business.ingestion.results import (
     PipelineFileResult,
     QualityFinding,
@@ -22,8 +23,9 @@ from app.business.ingestion.results import (
 from app.core.config import Settings
 from app.core.logging import get_logger
 from app.shared.delivery import DeliveryEvidence
+from data_pipeline.common.hashing import sha256_file
 from data_pipeline.contracts import get_contract
-from data_pipeline.ingestion.discovery import SourceFile, discover, fingerprint
+from data_pipeline.ingestion.discovery import discover
 from data_pipeline.loading.clickhouse_writer import (
     ClickHouseClient,
     ClickHouseLoader,
@@ -77,11 +79,11 @@ class PipelineAdapter:
         """Число строк набора по отчёту Data Audit, если оно известно."""
         return get_contract(dataset_type).audit_row_count
 
-    def discover(self, dataset_type: str) -> list[SourceFile]:
+    def discover(self, dataset_type: str) -> list[SourceFileRef]:
         return discover(self._source_root, get_contract(dataset_type))
 
-    def fingerprint(self, file: SourceFile) -> str:
-        return fingerprint(file).sha256
+    def fingerprint(self, file: SourceFileRef) -> str:
+        return sha256_file(file.path)
 
     # ------------------------------------------------------------------
 
@@ -89,7 +91,7 @@ class PipelineAdapter:
         self,
         *,
         dataset_type: str,
-        file: SourceFile,
+        file: SourceFileRef,
         file_hash: str,
         import_id: uuid.UUID,
         dry_run: bool,

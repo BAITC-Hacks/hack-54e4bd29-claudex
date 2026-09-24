@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol
 
@@ -35,7 +36,7 @@ class IngestionPipeline(Protocol):
         self, dataset_type: str, import_ids: tuple[uuid.UUID, ...]
     ) -> DeliveryEvidence | None: ...
 
-    def discover(self, dataset_type: str) -> list[SourceFileRef]: ...
+    def discover(self, dataset_type: str) -> Sequence[SourceFileRef]: ...
 
     def fingerprint(self, file: SourceFileRef) -> str: ...
 

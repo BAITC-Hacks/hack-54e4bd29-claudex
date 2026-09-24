@@ -73,9 +73,7 @@ class FakeMetadataRepository:
     def hospital_name(self, hospital_id: uuid.UUID) -> str | None:
         return self.hospital_names((hospital_id,)).get(hospital_id)
 
-    def hospital_names(
-        self, hospital_ids: tuple[uuid.UUID, ...]
-    ) -> dict[uuid.UUID, str]:
+    def hospital_names(self, hospital_ids: tuple[uuid.UUID, ...]) -> dict[uuid.UUID, str]:
         return {hospital_id: f"Hospital {hospital_id}" for hospital_id in hospital_ids}
 
 

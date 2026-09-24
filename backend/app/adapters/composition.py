@@ -19,6 +19,12 @@ from app.core.config import get_settings
 from app.database.clickhouse import get_client as get_clickhouse_client
 from app.database.object_storage import get_object_storage
 from app.security.authorization import get_authorization_service
+from data_pipeline.loading.clickhouse_writer import ClickHouseClient
+
+
+def _clickhouse_writer_client() -> ClickHouseClient:
+    """Adapt the cached driver client to the import writer's narrow contract."""
+    return get_clickhouse_client()
 
 
 def build_import_service(source_root: Path | None = None) -> ImportService:
@@ -33,7 +39,7 @@ def build_import_service(source_root: Path | None = None) -> ImportService:
     adapter = PipelineAdapter(
         settings=settings,
         source_root=source_root or Path(settings.data_source_dir),
-        clickhouse_client_factory=get_clickhouse_client,
+        clickhouse_client_factory=_clickhouse_writer_client,
         object_storage=get_object_storage(),
     )
     return ImportService(get_unit_of_work_factory(), get_authorization_service(), adapter)
