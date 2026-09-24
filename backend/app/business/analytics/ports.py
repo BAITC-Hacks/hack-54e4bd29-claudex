@@ -107,3 +107,14 @@ class AnalyticsCache(Protocol):
     def get_overview(self, key: str) -> RawOverview | None: ...
 
     def set_overview(self, key: str, value: RawOverview, ttl_seconds: int) -> None: ...
+
+    def get_organizations(
+        self, key: str
+    ) -> tuple[tuple[RawOrganization, ...], int] | None: ...
+
+    def set_organizations(
+        self,
+        key: str,
+        value: tuple[tuple[RawOrganization, ...], int],
+        ttl_seconds: int,
+    ) -> None: ...

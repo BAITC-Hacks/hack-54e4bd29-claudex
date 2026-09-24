@@ -502,13 +502,32 @@ class AnalyticsService:
         page_size: int,
     ) -> OrganizationSummariesResult:
         self._authorize(context, filters)
-        with observe_analytics_query("organizations"):
-            rows, total = self._repository.organizations(
-                filters,
-                self._query_scope(context, filters),
-                limit=page_size,
-                offset=(page - 1) * page_size,
+        scope = self._query_scope(context, filters)
+        watermark = self._watermark()
+        key = self._cache_key(
+            f"organizations:{page}:{page_size}", filters, scope, watermark
+        )
+        try:
+            cached = self._cache.get_organizations(key)
+        except Exception:
+            logger.warning("analytics_cache_read_failed")
+            record_analytics_cache("organizations", "error")
+            cached = None
+        else:
+            record_analytics_cache(
+                "organizations", "hit" if cached is not None else "miss"
             )
+        if cached is None:
+            with observe_analytics_query("organizations"):
+                rows, total = self._repository.organizations(
+                    filters, scope, limit=page_size, offset=(page - 1) * page_size
+                )
+            try:
+                self._cache.set_organizations(key, (rows, total), self._cache_ttl_seconds)
+            except Exception:
+                logger.warning("analytics_cache_write_failed")
+        else:
+            rows, total = cached
         hospital_ids = tuple(
             dict.fromkeys(
                 row.canonical_hospital_id
@@ -517,7 +536,6 @@ class AnalyticsService:
             )
         )
         hospital_names = self._metadata.hospital_names(hospital_ids)
-        watermark = self._watermark()
         return OrganizationSummariesResult(
             metadata=self._metadata_for(
                 filters, watermark, limitations=(MAPPING_LIMITATION,)

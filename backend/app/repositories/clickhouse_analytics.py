@@ -9,6 +9,7 @@ from typing import Any, Protocol
 from app.shared.analytics_contracts import (
     AnalyticsFilter,
     Granularity,
+    OrganizationIdentity,
     OrganizationIdentitySpace,
 )
 from app.shared.analytics_data import (
@@ -490,28 +491,28 @@ class ClickHouseAnalyticsRepository:
         limit: int,
         offset: int,
     ) -> tuple[tuple[RawOrganization, ...], int]:
-        referral_scope, referral_params = _scope_sql("receiving_hospital_id", scope)
-        waiting_scope, waiting_params = _scope_sql("hospital_id", scope)
-        refusal_scope, refusal_params = _scope_sql("hospital_id", scope)
+        referral_scope, referral_params = _scope_sql("m.resolved_id", scope)
+        waiting_scope, waiting_params = _scope_sql("m.resolved_id", scope)
+        refusal_scope, refusal_params = _scope_sql("m.resolved_id", scope)
         referral_identity, referral_identity_params = _organization_sql(
             filters,
             identity_space="IS_BG:REFERRALS:RECEIVING",
             source_column="receiving_org_key",
-            hospital_column="receiving_hospital_id",
+            hospital_column="m.resolved_id",
             parameter_prefix="referral_filter",
         )
         waiting_identity, waiting_identity_params = _organization_sql(
             filters,
             identity_space="IS_BG:WAITING:DESTINATION",
             source_column="hospital_source",
-            hospital_column="hospital_id",
+            hospital_column="m.resolved_id",
             parameter_prefix="waiting_filter",
         )
         refusal_identity, refusal_identity_params = _organization_sql(
             filters,
             identity_space="IS_BG:REFUSALS:INCOMING",
             source_column="hospital_source",
-            hospital_column="hospital_id",
+            hospital_column="m.resolved_id",
             parameter_prefix="refusal_filter",
         )
         duration = (
@@ -528,42 +529,79 @@ class ClickHouseAnalyticsRepository:
                     'IS_BG:REFERRALS:RECEIVING' AS identity_space,
                     source_system,
                     receiving_org_key AS source_value,
-                    receiving_hospital_id AS canonical_hospital_id,
-                    count() AS referrals_total,
+                    m.resolved_id AS canonical_hospital_id,
+                    referrals_total,
                     toUInt64(0) AS waiting_records,
                     toUInt64(0) AS refusals_total,
-                    quantileTDigestIf(0.5)({duration},
-                        hospitalization_dt IS NOT NULL
-                        AND hospitalization_dt >= registration_dt)
-                        AS observed_waiting_median_days
-                FROM fact_referral_events
-                WHERE registration_dt >= {{date_from:DateTime64(3)}}
-                  AND registration_dt <= {{date_to:DateTime64(3)}}
-                  AND {referral_scope}
-                  AND {referral_identity}
-                  AND {_profile_sql(filters)}
-                GROUP BY source_system, receiving_org_key, receiving_hospital_id
+                    observed_waiting_median_days
+                FROM (
+                    SELECT f.source_system, f.receiving_org_key,
+                           count() AS referrals_total,
+                           quantileTDigestIf(0.5)({duration},
+                               f.hospitalization_dt IS NOT NULL
+                               AND f.hospitalization_dt >= f.registration_dt)
+                               AS observed_waiting_median_days
+                    FROM fact_referral_events AS f
+                    WHERE f.import_id IN {{published_import_ids:Array(UUID)}}
+                      AND f.registration_dt >= {{date_from:DateTime64(3)}}
+                      AND f.registration_dt <= {{date_to:DateTime64(3)}}
+                      AND {_profile_sql(filters, 'f.profile_source')}
+                    GROUP BY source_system, receiving_org_key
+                ) AS grouped
+                LEFT JOIN (
+                    SELECT source_key, toNullable(canonical_id) AS resolved_id
+                    FROM mapping_projection
+                    WHERE version = {{mapping_version:String}}
+                      AND kind = 'ORGANIZATION'
+                      AND identity_space = 'IS_BG:REFERRALS:RECEIVING'
+                ) AS m ON grouped.receiving_org_key = m.source_key
+                    AND grouped.source_system = 'ИС БГ'
+                WHERE {referral_scope} AND {referral_identity}
                 UNION ALL
                 SELECT
                     'IS_BG:WAITING:DESTINATION', source_system, hospital_source,
-                    hospital_id, toUInt64(0), count(), toUInt64(0), NULL
-                FROM fact_waiting_events
-                WHERE registration_dt >= {{date_from:DateTime64(3)}}
-                  AND registration_dt <= {{date_to:DateTime64(3)}}
-                  AND {waiting_scope}
-                  AND {waiting_identity}
-                  AND {_profile_sql(filters)}
-                GROUP BY source_system, hospital_source, hospital_id
+                    m.resolved_id, toUInt64(0), waiting_records, toUInt64(0), NULL
+                FROM (
+                    SELECT f.source_system, f.hospital_source,
+                           count() AS waiting_records
+                    FROM fact_waiting_events AS f
+                    WHERE f.import_id IN {{published_import_ids:Array(UUID)}}
+                      AND f.registration_dt >= {{date_from:DateTime64(3)}}
+                      AND f.registration_dt <= {{date_to:DateTime64(3)}}
+                      AND {_profile_sql(filters, 'f.profile_source')}
+                    GROUP BY source_system, hospital_source
+                ) AS grouped
+                LEFT JOIN (
+                    SELECT source_key, toNullable(canonical_id) AS resolved_id
+                    FROM mapping_projection
+                    WHERE version = {{mapping_version:String}}
+                      AND kind = 'ORGANIZATION'
+                      AND identity_space = 'IS_BG:WAITING:DESTINATION'
+                ) AS m ON grouped.hospital_source = m.source_key
+                    AND grouped.source_system = 'ИС БГ'
+                WHERE {waiting_scope} AND {waiting_identity}
                 UNION ALL
                 SELECT
                     'IS_BG:REFUSALS:INCOMING', source_system, hospital_source,
-                    hospital_id, toUInt64(0), toUInt64(0), count(), NULL
-                FROM fact_refusal_events
-                WHERE refuse_dt >= {{date_from:DateTime64(3)}}
-                  AND refuse_dt <= {{date_to:DateTime64(3)}}
-                  AND {refusal_scope}
-                  AND {refusal_identity}
-                GROUP BY source_system, hospital_source, hospital_id
+                    m.resolved_id, toUInt64(0), toUInt64(0), refusals_total, NULL
+                FROM (
+                    SELECT f.source_system, f.hospital_source,
+                           count() AS refusals_total
+                    FROM fact_refusal_events AS f
+                    WHERE f.import_id IN {{published_import_ids:Array(UUID)}}
+                      AND f.refuse_dt >= {{date_from:DateTime64(3)}}
+                      AND f.refuse_dt <= {{date_to:DateTime64(3)}}
+                    GROUP BY source_system, hospital_source
+                ) AS grouped
+                LEFT JOIN (
+                    SELECT source_key, toNullable(canonical_id) AS resolved_id
+                    FROM mapping_projection
+                    WHERE version = {{mapping_version:String}}
+                      AND kind = 'ORGANIZATION'
+                      AND identity_space = 'IS_BG:REFUSALS:INCOMING'
+                ) AS m ON grouped.hospital_source = m.source_key
+                    AND grouped.source_system = 'ИС БГ'
+                WHERE {refusal_scope} AND {refusal_identity}
             )
             ORDER BY referrals_total + waiting_records + refusals_total DESC,
                      identity_space, source_value
@@ -577,9 +615,18 @@ class ClickHouseAnalyticsRepository:
             | referral_identity_params
             | waiting_identity_params
             | refusal_identity_params
-            | {"limit": limit, "offset": offset}
+            | {
+                "limit": limit,
+                "offset": offset,
+                "mapping_version": scope.mapping_version or "",
+                "published_import_ids": [
+                    str(item) for item in scope.published_import_ids or ()
+                ],
+            }
         )
-        rows = self._query(scope, query, parameters=parameters).result_rows
+        # Publication filtering precedes aggregation; mapping follows it. The
+        # generic fact rewrite joins every source row and is slower for lists.
+        rows = self._client.query(query, parameters=parameters).result_rows
         total = int(rows[0][8]) if rows else 0
         organizations = tuple(
             RawOrganization(
@@ -675,15 +722,17 @@ class ClickHouseAnalyticsRepository:
                 return None
             return raw, self._treated_snapshot(raw.canonical_hospital_id, narrowed)
 
-        candidates, _ = self.organizations(filters, scope, limit=20_000, offset=0)
         digest = identity_key.removeprefix("source:")
-        for item in candidates:
-            if (
-                source_organization_digest(item.identity_space, item.source_value)
-                == digest
-            ):
-                return item, self._treated_snapshot(item.canonical_hospital_id, scope)
-        return None
+        narrowed_filters = replace(
+            filters, organization_ids=(OrganizationIdentity.source(digest),)
+        )
+        candidates, _ = self.organizations(narrowed_filters, scope, limit=1, offset=0)
+        if not candidates:
+            return None
+        item = candidates[0]
+        if source_organization_digest(item.identity_space, item.source_value) != digest:
+            return None
+        return item, self._treated_snapshot(item.canonical_hospital_id, scope)
 
     def dataset_coverage(self, scope: QueryScope) -> tuple[RawDatasetCoverage, ...]:
         specs = (

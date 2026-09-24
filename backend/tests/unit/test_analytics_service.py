@@ -15,6 +15,7 @@ from app.business.analytics.contracts import (
 from app.business.analytics.ports import (
     ImportWatermark,
     QueryScope,
+    RawOrganization,
     RawOverview,
 )
 from app.business.analytics.service import AnalyticsService
@@ -32,6 +33,7 @@ DATE_FILTER = AnalyticsFilter(
 class FakeAnalyticsRepository:
     def __init__(self) -> None:
         self.overview_scopes: list[QueryScope] = []
+        self.organization_calls: list[tuple[QueryScope, int, int]] = []
 
     def overview(self, _filters: AnalyticsFilter, scope: QueryScope) -> RawOverview:
         self.overview_scopes.append(scope)
@@ -44,6 +46,17 @@ class FakeAnalyticsRepository:
             represented_organizations=4,
             represented_regions=2,
         )
+
+    def organizations(
+        self,
+        _filters: AnalyticsFilter,
+        scope: QueryScope,
+        *,
+        limit: int,
+        offset: int,
+    ) -> tuple[tuple[RawOrganization, ...], int]:
+        self.organization_calls.append((scope, limit, offset))
+        return (), 0
 
 
 class FakeMetadataRepository:
@@ -82,6 +95,8 @@ class FakeCache:
         self.values: dict[str, RawOverview] = {}
         self.read_keys: list[str] = []
         self.write_keys: list[str] = []
+        self.organization_values: dict[str, tuple[tuple[RawOrganization, ...], int]] = {}
+        self.organization_read_keys: list[str] = []
 
     def get_overview(self, key: str) -> RawOverview | None:
         self.read_keys.append(key)
@@ -91,6 +106,21 @@ class FakeCache:
         assert ttl_seconds == 60
         self.write_keys.append(key)
         self.values[key] = value
+
+    def get_organizations(
+        self, key: str
+    ) -> tuple[tuple[RawOrganization, ...], int] | None:
+        self.organization_read_keys.append(key)
+        return self.organization_values.get(key)
+
+    def set_organizations(
+        self,
+        key: str,
+        value: tuple[tuple[RawOrganization, ...], int],
+        ttl_seconds: int,
+    ) -> None:
+        assert ttl_seconds == 60
+        self.organization_values[key] = value
 
 
 def context(
@@ -253,3 +283,28 @@ def test_cached_overview_avoids_second_clickhouse_query() -> None:
     assert second.referrals_total.value == 20
     assert len(repository.overview_scopes) == 1
     assert cache.read_keys[0] == cache.read_keys[1]
+
+
+def test_organizations_cache_isolated_by_page_scope_and_publication() -> None:
+    hospital_a, hospital_b = uuid.uuid4(), uuid.uuid4()
+    repository = FakeAnalyticsRepository()
+    metadata = FakeMetadataRepository(())
+    cache = FakeCache()
+    service = make_service(repository, metadata, cache)
+
+    context_a = context(Role.HOSPITAL_ANALYST, hospital_ids=(hospital_a,))
+    context_b = context(Role.HOSPITAL_ANALYST, hospital_ids=(hospital_b,))
+    service.organizations(context_a, DATE_FILTER, page=1, page_size=10)
+    service.organizations(context_a, DATE_FILTER, page=1, page_size=10)
+    service.organizations(context_a, DATE_FILTER, page=2, page_size=10)
+    service.organizations(context_b, DATE_FILTER, page=1, page_size=10)
+    metadata.watermark = replace(metadata.watermark, mapping_generation=2)
+    service.organizations(context_a, DATE_FILTER, page=1, page_size=10)
+    metadata.watermark = replace(
+        metadata.watermark,
+        import_ids=(uuid.UUID("00000000-0000-0000-0000-000000000002"),),
+    )
+    service.organizations(context_a, DATE_FILTER, page=1, page_size=10)
+
+    assert len(repository.organization_calls) == 5
+    assert len(set(cache.organization_read_keys)) == 5

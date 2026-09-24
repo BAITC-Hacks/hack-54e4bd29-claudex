@@ -15,6 +15,7 @@ from app.repositories.clickhouse_mapping import ClickHouseMappingRepository
 from app.shared.analytics_contracts import AnalyticsFilter
 from app.shared.analytics_data import QueryScope
 from app.shared.mapping import MappingSnapshot
+from app.shared.organization_ref import source_organization_digest
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("D_TEST_CLICKHOUSE_HOST"),
@@ -46,6 +47,8 @@ def isolated_ch():
         apply_all(
             client, Path(__file__).resolve().parents[3] / "database/clickhouse/migrations"
         )
+        assert client.query("SELECT currentDatabase()").result_rows[0][0] == database
+        assert ("fact_referral_events",) in client.query("SHOW TABLES").result_rows
         yield client
     finally:
         client.close()
@@ -77,12 +80,37 @@ def test_approved_projection_scope_publication_and_daily_equality(isolated_ch):
             "ingested_at",
         ],
     )
+    client.insert(
+        "fact_waiting_events",
+        [("synthetic-patient-key", day2, day2, "same-code", published, "ИС БГ", day2)],
+        column_names=[
+            "patient_key",
+            "registration_dt",
+            "snapshot_dt",
+            "hospital_source",
+            "import_id",
+            "source_system",
+            "ingested_at",
+        ],
+    )
+    client.insert(
+        "fact_refusal_events",
+        [(day2, "same-code", published, "ИС БГ", day2)],
+        column_names=[
+            "refuse_dt",
+            "hospital_source",
+            "import_id",
+            "source_system",
+            "ingested_at",
+        ],
+    )
     projection = ClickHouseMappingRepository(client)
     snapshot = MappingSnapshot.from_rows(
         "mapping-1",
         [
             ("ORGANIZATION", "IS_BG:REFERRALS:RECEIVING", "same-code", str(hospital)),
             ("ORGANIZATION", "IS_BG:WAITING:DESTINATION", "same-code", str(other)),
+            ("ORGANIZATION", "IS_BG:REFUSALS:INCOMING", "same-code", str(hospital)),
         ],
     )
     projection.publish(snapshot)
@@ -108,6 +136,28 @@ def test_approved_projection_scope_publication_and_daily_equality(isolated_ch):
         ).referrals_total
         == 3
     )
+    mapped_rows, mapped_total = repository.organizations(
+        filters, scope, limit=20, offset=0
+    )
+    assert mapped_total == 2
+    assert sum(row.referrals_total for row in mapped_rows) == 2
+    assert sum(row.refusals_total for row in mapped_rows) == 1
+    assert sum(row.waiting_records for row in mapped_rows) == 0
+    global_scope = replace(scope, all_canonical=True, include_unmapped=True)
+    global_rows, global_total = repository.organizations(
+        filters, global_scope, limit=20, offset=0
+    )
+    assert global_total == 4
+    assert sum(row.referrals_total for row in global_rows) == 3
+    assert sum(row.waiting_records for row in global_rows) == 1
+    assert sum(row.refusals_total for row in global_rows) == 1
+    source_ref = "source:" + source_organization_digest(
+        "IS_BG:REFERRALS:RECEIVING", "unmapped"
+    )
+    source_result = repository.organization_detail(source_ref, filters, global_scope)
+    assert source_result is not None
+    assert source_result[0].referrals_total == 1
+    assert repository.organization_detail(source_ref, filters, scope) is None
     revoked = MappingSnapshot.from_rows(
         "mapping-2",
         [("ORGANIZATION", "IS_BG:WAITING:DESTINATION", "same-code", str(other))],
@@ -119,3 +169,8 @@ def test_approved_projection_scope_publication_and_daily_equality(isolated_ch):
         ).referrals_total
         == 0
     )
+    revoked_rows, revoked_total = repository.organizations(
+        filters, replace(scope, mapping_version="mapping-2"), limit=20, offset=0
+    )
+    assert revoked_rows == ()
+    assert revoked_total == 0

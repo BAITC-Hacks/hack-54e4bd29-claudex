@@ -13,6 +13,7 @@ from app.business.analytics.contracts import (
 )
 from app.business.analytics.ports import QueryScope
 from app.repositories.clickhouse_analytics import ClickHouseAnalyticsRepository
+from app.shared.organization_ref import source_organization_digest
 
 
 class RecordingClient:
@@ -218,3 +219,73 @@ def test_organization_list_converts_nan_waiting_median_to_none() -> None:
 
     assert total == 1
     assert organizations[0].observed_waiting_median_days is None
+
+
+def test_source_organization_detail_filters_digest_in_clickhouse() -> None:
+    source_value = "source-org-17"
+    digest = source_organization_digest("IS_BG:WAITING:DESTINATION", source_value)
+    client = RecordingClient(
+        {
+            "analytics:organizations": [
+                (
+                    "IS_BG:WAITING:DESTINATION",
+                    "IS_BG",
+                    source_value,
+                    None,
+                    0,
+                    12,
+                    0,
+                    None,
+                    1,
+                )
+            ]
+        }
+    )
+    repository = ClickHouseAnalyticsRepository(client)
+
+    result = repository.organization_detail(
+        f"source:{digest}",
+        filters(),
+        QueryScope((), all_canonical=True, include_unmapped=True),
+    )
+
+    assert result is not None
+    assert result[0].source_value == source_value
+    assert len(client.calls) == 1
+    query, parameters = client.calls[0]
+    assert "SHA256" in query
+    assert source_value not in query
+    assert parameters["waiting_filter_source_digests"] == [digest]
+    assert parameters["limit"] == 1
+    assert parameters["offset"] == 0
+
+
+def test_organizations_aggregate_by_source_before_mapping_and_filter_publication() -> (
+    None
+):
+    client = RecordingClient({"analytics:organizations": []})
+    repository = ClickHouseAnalyticsRepository(client)
+    published_id = uuid.uuid4()
+
+    repository.organizations(
+        filters(),
+        QueryScope(
+            (),
+            all_canonical=True,
+            include_unmapped=True,
+            mapping_version="mapping-42",
+            published_import_ids=(published_id,),
+        ),
+        limit=20,
+        offset=0,
+    )
+
+    query, parameters = client.calls[0]
+    assert "FROM fact_referral_events AS f" in query
+    assert "FROM fact_waiting_events AS f" in query
+    assert "FROM fact_refusal_events AS f" in query
+    assert "GROUP BY source_system, receiving_org_key" in query
+    assert "LEFT JOIN" in query
+    assert "f.import_id IN {published_import_ids:Array(UUID)}" in query
+    assert parameters["published_import_ids"] == [str(published_id)]
+    assert parameters["mapping_version"] == "mapping-42"
