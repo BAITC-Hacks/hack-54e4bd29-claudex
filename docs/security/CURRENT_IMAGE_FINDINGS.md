@@ -1,0 +1,69 @@
+# Current image findings — 2026-09-26
+
+Status: **FAIL**. This is a triage and one verified reduction in the production
+backend image, not image admission or an acceptance of residual vulnerabilities.
+
+## Evidence and method
+
+The baseline is GitHub Actions [run 36050773275](https://github.com/zzhassyn/govtech_case1/actions/runs/36050773275)
+for main commit `307339fcd4cddea6f5d4f0acd157da7e4053bf67`. Its preserved image
+artifacts report backend 52 HIGH, worker 44 HIGH, MLflow 44 HIGH, all with 0
+CRITICAL. The CI reports were generated on 2026-09-24; the artifact format does
+not record its vulnerability DB update time. The image IDs below identify those
+exact CI builds, not the changed branch.
+
+For the branch image, `docker build --pull --no-cache --target production` rebuilt
+the backend from `python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f`.
+Pinned Trivy `0.58.2` (`aquasec/trivy@sha256:665030f4d33a82c1e8d9d5e0453365842236723c1ee5cc3becca698268e66a56`)
+scanned exported image archives without a Docker socket. The local scanner DB
+was updated at `2026-09-26T01:14:39Z`, downloaded at `04:40:06Z`. Raw local
+reports are in ignored `tmp/security-local/`; they are not a Git artifact.
+
+| Build | Content ID | HIGH | CRITICAL | Gate |
+|---|---|---:|---:|---|
+| CI backend | `sha256:39a8600bdaa9a083bdcbb182b47289d3de7ef8cea53cb90343d5d2ae30d00947` | 52 | 0 | FAIL |
+| CI worker | `sha256:3d5112d4adf394af7beeb23ca9a03aedb781a90460ddbf0fe720e1adbd0c80bb` | 44 | 0 | FAIL |
+| CI MLflow | `sha256:085cdf3320b78236383ecbb8eefc9e45b03d8781cbe0af5f6807087ef417287e` | 44 | 0 | FAIL |
+| Branch backend before change, fresh DB | `sha256:2f4c8facc2a8b7bb050644ccf41232b6d425eb207d2a70afc8953b1a4d0ceabf` | 52 | 0 | FAIL |
+| Branch backend after change, fresh DB | `sha256:41e6b7d8623f8be5b9208c6525f4c92378e446b81edc721fedeb86478711ac12` | 44 | 0 | FAIL |
+
+The backend-only difference was the production installation of `curl` and its
+libraries for a liveness check. Production now uses Python's standard library;
+the Compose development target still installs `curl` because its existing
+Compose healthcheck calls it. The production healthcheck was exercised in a
+network-isolated disposable container with a synthetic loopback HTTP server:
+Docker reported `healthy`, exit code 0, and user `medsignal`. This checks the
+healthcheck mechanism, not full backend readiness.
+
+## Remaining findings in the rebuilt backend
+
+The 44 HIGH rows are **8 distinct advisories**, repeated across related Debian
+binary packages. Trivy reported no fixed Debian version for these findings in
+the 2026-09-26 DB and no HIGH/CRITICAL Python package finding in this image.
+The current CI worker and MLflow reports show the same 8 advisories, but those
+images have not been rebuilt or rescanned from this branch.
+
+| Advisory | Scanner rows | Representative package/version | Disposition |
+|---|---:|---|---|
+| CVE-2025-69720 | 4 | `libncursesw6 6.5+20250216-2` | Open |
+| CVE-2026-16742 | 2 | `libsystemd0 257.13-1~deb13u1` | Open |
+| CVE-2026-54369 | 1 | `libacl1 2.3.2-2+b1` | Open |
+| CVE-2026-76642 | 9 | `bsdutils 1:2.41.5-0+deb13u1` | Open |
+| CVE-2026-78408 | 9 | `bsdutils 1:2.41.5-0+deb13u1` | Open |
+| CVE-2026-78409 | 9 | `bsdutils 1:2.41.5-0+deb13u1` | Open |
+| CVE-2026-78410 | 9 | `bsdutils 1:2.41.5-0+deb13u1` | Open |
+| CVE-2026-9538 | 1 | `perl-base 5.40.1-6+deb13u1` | Open |
+
+Debian's [util-linux tracker](https://security-tracker.debian.org/tracker/source-package/util-linux)
+and individual [CVE-2026-76642](https://security-tracker.debian.org/tracker/CVE-2026-76642)
+entry list supported bookworm/trixie as vulnerable and a fix in forky/sid.
+The [CVE-2026-9538 tracker](https://security-tracker.debian.org/tracker/CVE-2026-9538)
+also lists bookworm/trixie as vulnerable. Moving the production image to an
+unstable distribution, suppressing findings, or recording an unapproved risk
+acceptance would not satisfy the project security gate. Recheck vendor updates
+and rebuild/rescan exact final images when fixes become available.
+
+The acceptance manifest remains empty. **U1-04 is not activated by these scan
+results:** none of the reported blocking findings is in a Python package.
+No new requirements pins were changed. Worker/MLflow rebuild, runtime tests,
+and a clean gate remain **NOT TESTED / FAIL**, respectively, for this branch.

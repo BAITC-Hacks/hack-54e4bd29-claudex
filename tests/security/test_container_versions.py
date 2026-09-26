@@ -35,3 +35,15 @@ def test_frontend_runtime_removes_unused_npm_package_manager() -> None:
     dockerfile = Path("frontend/Dockerfile").read_text(encoding="utf-8")
 
     assert "/usr/local/lib/node_modules/npm" in dockerfile
+
+
+def test_backend_production_healthcheck_does_not_install_curl() -> None:
+    dockerfile = Path("backend/Dockerfile").read_text(encoding="utf-8")
+    base, development = dockerfile.split("FROM base AS deps", maxsplit=1)
+    development, production = development.split("FROM deps AS production", maxsplit=1)
+
+    assert "apt-get install --no-install-recommends -y curl" not in base
+    assert "apt-get install --no-install-recommends -y curl" in development
+    assert "HEALTHCHECK" in production
+    assert "CMD python -c" in production
+    assert "curl" not in production
