@@ -349,9 +349,33 @@ jobs:
       - name: Production build
         run: npm run build
 
+  keycloak-realm-access:
+    name: Keycloak realm mount — isolated preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ACCEPTANCE_PROJECT: phase8-keycloak-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Check real image user, read-only realm mount and OIDC import
+        run: >-
+          python -m scripts.operations.keycloak_realm_probe
+          --project "$ACCEPTANCE_PROJECT"
+      - name: Preserve sanitized Keycloak read/import evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keycloak-realm-probe
+          path: tmp/keycloak-probe/${{ env.ACCEPTANCE_PROJECT }}/summary.json
+          if-no-files-found: ignore
+
   browser-acceptance:
     name: Synthetic browser acceptance — real OIDC/API
     runs-on: ubuntu-latest
+    needs: keycloak-realm-access
     timeout-minutes: 120
     env:
       ACCEPTANCE_PROJECT: phase8-ci-${{ github.run_id }}-${{ github.run_attempt }}
