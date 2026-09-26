@@ -362,6 +362,19 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Probe exact public images on this Docker runner
+        run: >-
+          python -m scripts.operations.probe_public_images
+          --output "tmp/acceptance/$ACCEPTANCE_PROJECT/registry-probe.json"
+
+      - name: Preserve sanitized registry evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-registry-probe
+          path: tmp/acceptance/${{ env.ACCEPTANCE_PROJECT }}/registry-probe.json
+          if-no-files-found: ignore
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
