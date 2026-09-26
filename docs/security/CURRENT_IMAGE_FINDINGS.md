@@ -1,7 +1,51 @@
 # Current image findings — 2026-09-26
 
-Status: **FAIL**. This is a triage and one verified reduction in the production
-backend image, not image admission or an acceptance of residual vulnerabilities.
+Status: **FAIL**. Current-branch evidence below does not admit the three Python
+images or accept their residual vulnerabilities.
+
+## Current branch recheck — `452873bb453e2bf310cad90909e68c24b6b3c300`
+
+The five production images were built with `docker build --pull` from the
+ownership-corrected branch HEAD above. The backend, worker and MLflow images were rebuilt
+and scanned **independently**; no CI result from a prior branch substitutes for
+these scans. Pinned Trivy `0.58.2` image digest
+`sha256:665030f4d33a82c1e8d9d5e0453365842236723c1ee5cc3becca698268e66a56`
+used vulnerability DB v2, updated `2026-09-26T01:14:39Z` and downloaded
+`2026-09-26T04:40:06Z`. It scanned exported image archives without a Docker
+socket, with no ignorefile suppressions and no severity filtering. Raw local
+reports remain ignored under `tmp/security-current/`.
+
+| Image | Local image content digest | Base image digest | HIGH | CRITICAL | Gate |
+|---|---|---|---:|---:|---|
+| backend | `sha256:02e9bd31d19db775a30753368880237612b6f8364f6113259ee1e467955896fa` | `python:3.12-slim` platform `sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f` | 44 | 0 | FAIL |
+| worker | `sha256:9d7a51b617da3ebb555f9f762988d789f8565ca78b7345a29eb8b7088e1ad241` | same Python base | 44 | 0 | FAIL |
+| MLflow | `sha256:ed616d10c37574a20993989386125636887cdd453dd3c5701b91dbc3f956421e` | same Python base | 44 | 0 | FAIL |
+| frontend | `sha256:e8c6ecf17bad0249c46e61dffe5bd5d8ea2926b045c53ef86169112300cf6967` | `node:22-alpine` registry `sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32` | 0 | 0 | PASS for scanned image |
+| nginx | `sha256:466c3ae9215a070b9a95c86c6379c067fe8777aabdfe956c2656cd1862a5f4fc` | pinned `nginx:1.30.5-alpine` `sha256:f2e97a6801f504129e8027ff7d49e27fa59ef4f1ebfd97197dac8b194831cf3d` | 0 | 0 | PASS for scanned image |
+
+All 44 HIGH rows in each Python image are **Debian OS packages**. Trivy found
+zero HIGH/CRITICAL Python packages, so no Python dependency upgrade is indicated
+by this gate. The same eight CVEs and package versions occur in all three
+Python images. `—` means neither this Trivy DB nor the trixie security tracker
+offers a fixed package version within the selected stable base.
+
+| CVE | Affected installed packages and versions (OS packages) | Fixed in trixie | Remediation availability |
+|---|---|---|---|
+| [CVE-2025-69720](https://security-tracker.debian.org/tracker/CVE-2025-69720) | `libncursesw6`, `libtinfo6`, `ncurses-base`, `ncurses-bin` at `6.5+20250216-2` | — | Forky/sid source `6.6+20260608-2`; incompatible release, not adopted |
+| [CVE-2026-16742](https://security-tracker.debian.org/tracker/CVE-2026-16742) | `libsystemd0`, `libudev1` at `257.13-1~deb13u1` | — | Forky source `261.2-1`; incompatible release, not adopted |
+| [CVE-2026-54369](https://security-tracker.debian.org/tracker/CVE-2026-54369) | `libacl1` at `2.3.2-2+b1` | — | Forky/sid source `2.4.0-1`; ABI concerns, not adopted |
+| [CVE-2026-76642](https://security-tracker.debian.org/tracker/CVE-2026-76642), [78408](https://security-tracker.debian.org/tracker/CVE-2026-78408), [78409](https://security-tracker.debian.org/tracker/CVE-2026-78409), [78410](https://security-tracker.debian.org/tracker/CVE-2026-78410) | `bsdutils` `1:2.41.5-0+deb13u1`; `libblkid1`, `liblastlog2-2`, `libmount1`, `libsmartcols1`, `libuuid1`, `mount`, `util-linux` at `2.41.5-0+deb13u1`; `login` at `1:4.16.0-2+really2.41.5-0+deb13u1` | — | Forky/sid source `2.42.3-1`; incompatible release, not adopted |
+| [CVE-2026-9538](https://security-tracker.debian.org/tracker/CVE-2026-9538) | `perl-base` at `5.40.1-6+deb13u1` | — | Forky/sid source `5.42.3-1`; incompatible release, not adopted |
+
+The `--pull` build resolved the latest `python:3.12-slim` to platform digest
+`f77ac9e4…`. Explicitly pulling the compatible `python:3.12-slim-trixie`
+resolved to the **same digest**, so switching the tag would not reduce findings.
+No Dockerfile or Python pin change is justified. A build of these same images
+with a future patched stable base, followed by fresh Trivy, application tests
+and runtime smoke, is required before gate reassessment. This recheck does not
+claim runtime or acceptance-environment verification.
+
+## Earlier baseline and reduction
 
 ## Evidence and method
 
@@ -65,5 +109,6 @@ and rebuild/rescan exact final images when fixes become available.
 
 The acceptance manifest remains empty. **U1-04 is not activated by these scan
 results:** none of the reported blocking findings is in a Python package.
-No new requirements pins were changed. Worker/MLflow rebuild, runtime tests,
-and a clean gate remain **NOT TESTED / FAIL**, respectively, for this branch.
+No new requirements pins were changed. The current worker/MLflow rebuild and
+scan are recorded above; runtime acceptance remains separate and the overall
+gate remains **FAIL**.
