@@ -38,6 +38,8 @@ EXPECTED = {
     ),
 }
 SAFE_HASH = re.compile(r"[0-9a-f]{64}")
+UPSTREAM_VARIANT = "UNMODIFIED_UPSTREAM"
+PATCHED_VARIANT = "PATCHED_ACCEPTANCE"
 
 
 def validate_build_contract(manifest: dict[str, Any]) -> None:
@@ -60,6 +62,9 @@ def validate_build_contract(manifest: dict[str, Any]) -> None:
         )
     ):
         raise ValueError("MinIO source contract changed")
+    patches = manifest.get("patched_acceptance")
+    if not isinstance(patches, dict) or set(patches) != set(EXPECTED):
+        raise ValueError("MinIO acceptance patch contract changed")
     for name, expected in EXPECTED.items():
         item = manifest.get(name)
         if (
@@ -71,6 +76,36 @@ def validate_build_contract(manifest: dict[str, Any]) -> None:
             != expected
         ):
             raise ValueError("MinIO source contract changed")
+        patch = patches.get(name)
+        expected_path = f"infrastructure/acceptance/patches/{name}-go-mod.patch"
+        if (
+            not isinstance(patch, dict)
+            or patch.get("path") != expected_path
+            or not isinstance(patch.get("sha256"), str)
+            or SAFE_HASH.fullmatch(patch["sha256"]) is None
+            or hashlib.sha256((ROOT / expected_path).read_bytes()).hexdigest()
+            != patch["sha256"]
+        ):
+            raise ValueError("MinIO acceptance patch contract changed")
+
+
+def _apply_acceptance_patch(name: str, source: Path, manifest: dict[str, Any]) -> str:
+    """Apply the reviewed module-only delta after signed-source verification."""
+    patch = manifest["patched_acceptance"][name]
+    patch_path = ROOT / patch["path"]
+    _run(["git", "apply", "--check", str(patch_path)], cwd=source)
+    _run(["git", "apply", str(patch_path)], cwd=source)
+    changed = set(_run(["git", "diff", "--name-only"], cwd=source).splitlines())
+    if changed != {"go.mod", "go.sum"}:
+        raise ValueError("Acceptance patch changed files beyond Go modules")
+    module = (source / "go.mod").read_text(encoding="utf-8")
+    if (
+        "go 1.24.0\n" not in module
+        or "google.golang.org/grpc v1.79.3" not in module
+        or (name == "server" and "github.com/rabbitmq/amqp091-go v1.13.0" not in module)
+    ):
+        raise ValueError("Acceptance patch omitted a fixed dependency")
+    return patch["sha256"]
 
 
 def _run(
@@ -164,7 +199,7 @@ def _image_id(tag: str) -> str:
 
 
 def _build_one(
-    name: str, project: str, item: dict[str, str], source: Path
+    name: str, project: str, item: dict[str, str], source: Path, *, patched: bool
 ) -> dict[str, str]:
     tag = f"{project}-minio-{name}:acceptance"
     dockerfile = ROOT / f"infrastructure/acceptance/minio-{name}.Dockerfile"
@@ -184,6 +219,8 @@ def _build_one(
             f"EXPECTED_COMMIT={item['commit_sha']}",
             "--build-arg",
             f"VERSION_TIMESTAMP={item['version_timestamp']}",
+            "--build-arg",
+            f"PATCH_VARIANT={'patched' if patched else 'upstream'}",
             str(source),
         ],
         timeout=3600,
@@ -201,6 +238,18 @@ def _build_one(
     )
     if identity != "linux/amd64 10001:10001":
         raise ValueError("Built image platform or runtime user mismatch")
+    label = _run(
+        [
+            "docker",
+            "image",
+            "inspect",
+            tag,
+            "--format",
+            '{{index .Config.Labels "org.medsignal.acceptance.variant"}}',
+        ]
+    )
+    if label != ("patched" if patched else "upstream"):
+        raise ValueError("Built image variant label mismatch")
     binary = "minio" if name == "server" else "mc"
     version = _run(
         ["docker", "run", "--rm", "--network", "none", tag, "--version"],
@@ -235,7 +284,7 @@ def _build_one(
     }
 
 
-def build(project: str) -> dict[str, Any]:
+def build(project: str, *, patched: bool = False) -> dict[str, Any]:
     """Verify signed source and build local images in one disposable namespace."""
     validate_project_name(project)
     manifest = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
@@ -243,15 +292,18 @@ def build(project: str) -> dict[str, Any]:
     project_dir = BUILD_ROOT / project
     project_dir.mkdir(parents=True, exist_ok=False)
     gpg_home = _trusted_key(project_dir, manifest)
-    images: dict[str, dict[str, str]] = {}
+    images: dict[str, dict[str, Any]] = {}
     for name in ("server", "client"):
         source = _source(name, manifest, project_dir, gpg_home)
-        images[name] = _build_one(name, project, manifest[name], source)
+        patch_sha = _apply_acceptance_patch(name, source, manifest) if patched else None
+        images[name] = _build_one(name, project, manifest[name], source, patched=patched)
+        images[name]["patch_sha256"] = patch_sha
         print(f"Project-built MinIO {name}: verified source, binary, local image ID")
     evidence = {
         "project": project,
         "build_contract_sha256": hashlib.sha256(CONTRACT_PATH.read_bytes()).hexdigest(),
         "purpose": "isolated-synthetic-acceptance-only",
+        "variant": PATCHED_VARIANT if patched else UPSTREAM_VARIANT,
         "platform": manifest["platform"],
         "go_version": manifest["go_version"],
         "builder_image": manifest["builder_image"],
@@ -273,9 +325,13 @@ def load_built_images(project: str) -> dict[str, str]:
     evidence = json.loads(
         (BUILD_ROOT / project / "source-images.json").read_text(encoding="utf-8")
     )
+    manifest = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    validate_build_contract(manifest)
     images = evidence.get("images")
+    variant = evidence.get("variant")
     if (
         evidence.get("project") != project
+        or variant not in (UPSTREAM_VARIANT, PATCHED_VARIANT)
         or evidence.get("build_contract_sha256")
         != hashlib.sha256(CONTRACT_PATH.read_bytes()).hexdigest()
         or not isinstance(images, dict)
@@ -291,11 +347,19 @@ def load_built_images(project: str) -> dict[str, str]:
             or row.get("tag") != tag
             or row.get("tag_object_sha") != EXPECTED[name][2]
             or row.get("commit_sha") != EXPECTED[name][3]
+            or row.get("patch_sha256")
+            != (
+                manifest["patched_acceptance"][name]["sha256"]
+                if variant == PATCHED_VARIANT
+                else None
+            )
             or not isinstance(row.get("image_id"), str)
             or DIGEST_PATTERN.fullmatch(row["image_id"]) is None
             or _image_id(tag) != row["image_id"]
         ):
-            raise ValueError("Project-built source image does not match recorded ID")
+            raise ValueError(
+                "Source image does not match recorded ID or patch provenance"
+            )
         result[name] = row["image_id"]
     return result
 
@@ -304,10 +368,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("build", "verify"))
     parser.add_argument("--project", required=True)
+    parser.add_argument("--patched-acceptance", action="store_true")
     args = parser.parse_args(argv)
     try:
         if args.action == "build":
-            build(args.project)
+            build(args.project, patched=args.patched_acceptance)
         else:
             load_built_images(args.project)
         print("Project-built MinIO source images: PASS")

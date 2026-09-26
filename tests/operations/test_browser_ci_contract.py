@@ -76,6 +76,7 @@ def test_browser_builds_and_scans_source_images_before_normal_start() -> None:
         i for i, command in enumerate(commands) if "bootstrap_synthetic" in command
     )
     assert build < scan < prepare < runtime < fixtures
+    assert "--patched-acceptance" in commands[build]
     assert "--minio-source-build" in commands[prepare]
     assert not any("probe_public_images" in command for command in commands)
     assert all(step.get("continue-on-error") is not True for step in steps)

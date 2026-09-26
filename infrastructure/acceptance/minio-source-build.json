@@ -8,6 +8,16 @@
   "signer_key_url": "https://github.com/minio-trusted.gpg",
   "signer_key_sha256": "1e0c6af3cb1bb9b7715062e0ed65f22f75fee3db303efbbf5a368dfbf2f6508a",
   "signer_fingerprint": "4405F3F0DDBA1B9E68A31D2512C74390F9AAC728",
+  "patched_acceptance": {
+    "server": {
+      "path": "infrastructure/acceptance/patches/server-go-mod.patch",
+      "sha256": "fe9e48ecf3c404a973d6e8157d79e0173f2392cbf927e13a41de70a666aa2c83"
+    },
+    "client": {
+      "path": "infrastructure/acceptance/patches/client-go-mod.patch",
+      "sha256": "bedeb31df444365620a8631d7613d921d48cda9168c37c974e62f0a718903c88"
+    }
+  },
   "server": {
     "repository": "https://github.com/minio/minio.git",
     "tag": "RELEASE.2024-11-07T00-52-20Z",

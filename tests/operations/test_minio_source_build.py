@@ -46,6 +46,48 @@ def test_provenance_manifest_pins_signed_tag_objects_commits_and_bases() -> None
         assert item["tag_object_sha"] != item["commit_sha"]
 
 
+def test_patched_variant_is_explicit_and_limits_changes_to_go_modules() -> None:
+    manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    patches = manifest["patched_acceptance"]
+    assert set(patches) == {"server", "client"}
+    for name in ("server", "client"):
+        entry = patches[name]
+        patch = ROOT / entry["path"]
+        assert patch.is_file()
+        assert hashlib.sha256(patch.read_bytes()).hexdigest() == entry["sha256"]
+        changed = {
+            line.removeprefix("diff --git a/").split(" b/", maxsplit=1)[0]
+            for line in patch.read_text(encoding="utf-8").splitlines()
+            if line.startswith("diff --git a/")
+        }
+        assert changed == {"go.mod", "go.sum"}
+        assert "+go 1.24.0" in patch.read_text(encoding="utf-8")
+        assert "+\tgoogle.golang.org/grpc v1.79.3" in patch.read_text(encoding="utf-8")
+    assert "+\tgithub.com/rabbitmq/amqp091-go v1.13.0" in (
+        ROOT / patches["server"]["path"]
+    ).read_text(encoding="utf-8")
+
+
+def test_patch_validation_accepts_windows_checkout_line_endings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "go.mod").write_bytes(
+        b"module github.com/minio/mc\r\ngo 1.24.0\r\ngoogle.golang.org/grpc v1.79.3\r\n"
+    )
+    monkeypatch.setattr(
+        minio_source_build,
+        "_run",
+        lambda args, **_kwargs: "go.mod\ngo.sum" if "--name-only" in args else "",
+    )
+    manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    assert (
+        minio_source_build._apply_acceptance_patch("client", source, manifest)
+        == (manifest["patched_acceptance"]["client"]["sha256"])
+    )
+
+
 @pytest.mark.parametrize("name", ["server", "client"])
 def test_acceptance_dockerfiles_build_readonly_modules_and_preserve_runtime(
     name: str,
@@ -61,6 +103,9 @@ def test_acceptance_dockerfiles_build_readonly_modules_and_preserve_runtime(
     assert "COPY LICENSE" in text
     assert "COPY NOTICE" in text
     assert "USER 10001:10001" in text
+    assert 'org.medsignal.acceptance.variant="${PATCH_VARIANT}"' in text
+    assert "apk upgrade --no-cache libcrypto3 libssl3" in text
+    assert 'google.golang.org/grpc)" = "v1.79.3"' in text
     assert "curl" in text if name == "server" else "/bin/sh" in text
 
 
@@ -124,6 +169,7 @@ def test_source_image_manifest_rejects_changed_local_image_id(
             "image_id": image_id,
             "tag_object_sha": minio_source_build.EXPECTED[name][2],
             "commit_sha": minio_source_build.EXPECTED[name][3],
+            "patch_sha256": None,
         }
         for name, image_id in expected.items()
     }
@@ -131,6 +177,7 @@ def test_source_image_manifest_rejects_changed_local_image_id(
         json.dumps(
             {
                 "project": PROJECT,
+                "variant": "UNMODIFIED_UPSTREAM",
                 "build_contract_sha256": hashlib.sha256(
                     CONTRACT.read_bytes()
                 ).hexdigest(),
@@ -158,6 +205,7 @@ def test_source_image_manifest_rejects_changed_local_image_id(
         json.dumps(
             {
                 "project": PROJECT,
+                "variant": "UNMODIFIED_UPSTREAM",
                 "build_contract_sha256": hashlib.sha256(
                     CONTRACT.read_bytes()
                 ).hexdigest(),
@@ -170,11 +218,55 @@ def test_source_image_manifest_rejects_changed_local_image_id(
         minio_source_build.load_built_images(PROJECT)
 
 
+def test_patched_image_manifest_rejects_missing_or_changed_patch_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    folder = tmp_path / PROJECT
+    folder.mkdir()
+    manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    ids = {"server": "sha256:" + "1" * 64, "client": "sha256:" + "2" * 64}
+    rows = {
+        name: {
+            "tag": f"{PROJECT}-minio-{name}:acceptance",
+            "image_id": image_id,
+            "tag_object_sha": minio_source_build.EXPECTED[name][2],
+            "commit_sha": minio_source_build.EXPECTED[name][3],
+            "patch_sha256": manifest["patched_acceptance"][name]["sha256"],
+        }
+        for name, image_id in ids.items()
+    }
+    evidence = {
+        "project": PROJECT,
+        "variant": "PATCHED_ACCEPTANCE",
+        "build_contract_sha256": hashlib.sha256(CONTRACT.read_bytes()).hexdigest(),
+        "images": rows,
+    }
+    (folder / "source-images.json").write_text(json.dumps(evidence), encoding="utf-8")
+    monkeypatch.setattr(minio_source_build, "BUILD_ROOT", tmp_path)
+    monkeypatch.setattr(
+        minio_source_build,
+        "_image_id",
+        lambda tag: ids["server"] if "server" in tag else ids["client"],
+    )
+    assert minio_source_build.load_built_images(PROJECT) == ids
+    rows["client"]["patch_sha256"] = "0" * 64
+    (folder / "source-images.json").write_text(json.dumps(evidence), encoding="utf-8")
+    with pytest.raises(ValueError, match="patch"):
+        minio_source_build.load_built_images(PROJECT)
+
+
 def test_source_manifest_rejects_unapproved_upstream_or_changed_commit() -> None:
     manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
     minio_source_build.validate_build_contract(manifest)
     manifest["server"]["repository"] = "https://github.com/someone/minio.git"
     with pytest.raises(ValueError, match="source contract"):
+        minio_source_build.validate_build_contract(manifest)
+
+
+def test_source_manifest_rejects_changed_acceptance_patch() -> None:
+    manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    manifest["patched_acceptance"]["client"]["sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="patch contract"):
         minio_source_build.validate_build_contract(manifest)
 
 

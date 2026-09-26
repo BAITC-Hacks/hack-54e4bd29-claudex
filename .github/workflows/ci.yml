@@ -362,10 +362,10 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build signed upstream MinIO source for isolated acceptance
+      - name: Build patched signed-source MinIO for isolated acceptance
         run: >-
           python -m scripts.operations.minio_source_build build
-          --project "$ACCEPTANCE_PROJECT"
+          --project "$ACCEPTANCE_PROJECT" --patched-acceptance
 
       - name: Scan both project-built images before startup
         run: >-
