@@ -46,7 +46,7 @@ APPLICATION_ADVISORY = (
 )
 FIX_COMMIT = "f246c9053f9603e610d98439799bdd2a6b293427"
 APP_PATCH_SHA256 = "26bd3d86e09b0fbf8b5fe472d43a20dc087c6f208a822f375ca67ce93de31de6"
-PATCHED_SERVER_TREE = "094a00c707fcf5e7a9a01cebea1158486c5ba553"
+PATCHED_SERVER_TREE = "7d6c6815bbb1a40ef285783d02dfd3291c357d33"
 APP_FILE = "cmd/admin-handlers-users.go"
 
 
@@ -251,6 +251,7 @@ def _source(
             "clone",
             "--depth",
             "1",
+            "--no-checkout",
             "--branch",
             item["tag"],
             "--",
@@ -260,6 +261,11 @@ def _source(
         env=clone_env,
         timeout=900,
     )
+    # The runner's global Git settings must not change source bytes or tree ID.
+    # Checkout only after setting LF behavior inside this disposable clone.
+    _run(["git", "config", "core.autocrlf", "false"], cwd=source)
+    _run(["git", "config", "core.eol", "lf"], cwd=source)
+    _run(["git", "checkout", "--quiet", "--detach", item["tag"]], cwd=source)
     tag_object = _run(["git", "rev-parse", f"refs/tags/{item['tag']}"], cwd=source)
     commit = _run(["git", "rev-parse", f"refs/tags/{item['tag']}^{{commit}}"], cwd=source)
     if tag_object != item["tag_object_sha"] or commit != item["commit_sha"]:

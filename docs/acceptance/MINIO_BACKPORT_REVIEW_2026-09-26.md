@@ -41,7 +41,7 @@ AFFECTED means the base falls before the published fix (or is within the stated 
 - Fix commit: [`f246c9053f9603e610d98439799bdd2a6b293427`](https://github.com/minio/minio/commit/f246c9053f9603e610d98439799bdd2a6b293427).
 - Exact `git show --format= --binary` patch SHA-256: `26bd3d86e09b0fbf8b5fe472d43a20dc087c6f208a822f375ca67ce93de31de6`.
 - Changed application file: `cmd/admin-handlers-users.go` only. Previously approved dependency metadata: `go.mod`, `go.sum`.
-- Patched source Git tree SHA-1 after both patches on a clean `core.autocrlf=false` checkout: `094a00c707fcf5e7a9a01cebea1158486c5ba553`.
+- Patched source Git tree SHA-1 after both patches on a fresh checkout with clone-local `core.autocrlf=false` and `core.eol=lf`: `7d6c6815bbb1a40ef285783d02dfd3291c357d33`.
 - `git apply --check` and `git apply` are used without fuzzy or three-way application; the exact added/deleted source lines and final tree are checked before build.
 
 ## Gate semantics

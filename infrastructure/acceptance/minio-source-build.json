@@ -26,7 +26,7 @@
     "path": "infrastructure/acceptance/patches/server-cve-2024-55949.patch",
     "sha256": "26bd3d86e09b0fbf8b5fe472d43a20dc087c6f208a822f375ca67ce93de31de6",
     "changed_files": ["cmd/admin-handlers-users.go"],
-    "patched_source_tree_sha1": "094a00c707fcf5e7a9a01cebea1158486c5ba553"
+    "patched_source_tree_sha1": "7d6c6815bbb1a40ef285783d02dfd3291c357d33"
   },
   "server": {
     "repository": "https://github.com/minio/minio.git",

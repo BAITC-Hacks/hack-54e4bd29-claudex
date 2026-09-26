@@ -95,6 +95,32 @@ def test_patch_validation_accepts_windows_checkout_line_endings(
     )
 
 
+def test_source_checkout_forces_lf_before_reading_signed_tag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str], **_kwargs: object) -> str:
+        calls.append(args)
+        if args[:2] == ["git", "rev-parse"]:
+            return (
+                manifest["server"]["commit_sha"]
+                if args[-1].endswith("^{commit}")
+                else manifest["server"]["tag_object_sha"]
+            )
+        return ""
+
+    monkeypatch.setattr(minio_source_build, "_run", fake_run)
+    minio_source_build._source("server", manifest, tmp_path, tmp_path / "gnupg")
+    clone = next(row for row in calls if "clone" in row)
+    assert "--no-checkout" in clone
+    config_lf = calls.index(["git", "config", "core.autocrlf", "false"])
+    checkout = next(i for i, row in enumerate(calls) if row[:2] == ["git", "checkout"])
+    assert config_lf < checkout
+    assert calls[config_lf + 1] == ["git", "config", "core.eol", "lf"]
+
+
 @pytest.mark.parametrize("name", ["server", "client"])
 def test_acceptance_dockerfiles_build_readonly_modules_and_preserve_runtime(
     name: str,
