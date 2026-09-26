@@ -17,12 +17,15 @@ explicitly named `PATCHED_ACCEPTANCE` in the build evidence and labelled
 `patched` in the image; the binary's upstream release string alone is not
 evidence of an unmodified release.
 
-The only source changes are reviewed `go.mod` and `go.sum` patches, with SHA-256
-values pinned in the build contract:
+The source changes are reviewed `go.mod`/`go.sum` patches **and**, for the
+server only, the exact upstream IAM-import security fix. SHA-256 values and the
+resulting source tree hash are pinned in the build contract. The separate
+[advisory review](MINIO_BACKPORT_REVIEW_2026-09-26.md) records all 27 official
+advisories and the remaining affected findings.
 
 | Image | Direct security targets | Additional changes |
 |---|---|---|
-| server | `github.com/rabbitmq/amqp091-go v1.13.0`; `google.golang.org/grpc v1.79.3` | Required transitive module upgrades and Go directive `1.24.0` |
+| server | `github.com/rabbitmq/amqp091-go v1.13.0`; `google.golang.org/grpc v1.79.3`; exact upstream `CVE-2024-55949` backport | Required transitive module upgrades and Go directive `1.24.0`; `cmd/admin-handlers-users.go` |
 | client | `google.golang.org/grpc v1.79.3` | Required transitive module upgrades and Go directive `1.24.0` |
 
 The runtime remains Alpine 3.22.2 at a pinned base digest. The patched build
@@ -37,21 +40,24 @@ real bootstrap, S3 policy, MLflow and browser acceptance checks.
 
 ## Gate and run order
 
-The CI browser job builds both patched images, records binary hashes and local
-image IDs, generates CycloneDX SBOM and Trivy JSON, and checks Go/stdlib
-inventory. **Any CRITICAL finding or missing Go inventory stops before Compose
-startup.** HIGH findings remain security-admission failures; they do not become
-suppressed. Only if the pre-start gate permits it does CI start the disposable
-Compose stack, verify `minio-init` and scoped S3/MLflow operations, then run
-the synthetic OIDC/browser journey. No failure is masked with
-`continue-on-error`.
+The CI browser job builds both patched images, checks the live official
+advisory feed against the reviewed set, records binary hashes and local image
+IDs, generates CycloneDX SBOM and Trivy JSON, and checks Go/stdlib inventory.
+**Any CRITICAL finding, changed/unreviewed advisory, or missing Go inventory
+stops before Compose startup.** A separate disposable no-port MinIO instance
+then tests unauthorized IAM import for limited and service-account identities,
+and authorized admin import. It is removed before the full Compose project.
+HIGH findings remain security-admission failures; they are never suppressed.
+Only if every pre-start gate permits it does CI start the disposable Compose
+stack, verify `minio-init` and scoped S3/MLflow operations, then run the
+synthetic OIDC/browser journey. No failure is masked with `continue-on-error`.
 
 Run-scoped machine evidence is uploaded as `minio-source-build-evidence` and
 `minio-source-runtime` on the Draft PR workflow. Record actual image IDs,
 binary hashes, package versions, scanner DB date, HIGH/CRITICAL counts and
 runtime results from those artifacts; do not infer them from this design.
 
-## Current result: application security hold
+## Previous result and current verification state
 
 The first patched CI run
 [`36247311226`](https://github.com/zzhassyn/govtech_case1/actions/runs/36247311226)
@@ -62,36 +68,14 @@ MinIO bootstrap, S3 policies, MLflow and OIDC/browser compatibility are all
 **NOT TESTED**. The cancellation was deliberate after finding a CRITICAL
 application-code advisory that dependency scanning may not surface.
 
-The [upstream MinIO security advisory
-GHSA-cwq8-g58r-32hg](https://github.com/minio/minio/security/advisories/GHSA-cwq8-g58r-32hg)
-rates `CVE-2024-55949` **Critical**. It says the IAM import API allows
-privilege escalation in releases before
-`RELEASE.2024-12-13T22-19-12Z`; the selected server base
-`RELEASE.2024-11-07T00-52-20Z` predates that fix. Our patches change only Go
-module metadata and runtime OpenSSL packages, so they do **not** repair the
-affected MinIO application code. The source-build helper now rejects this
-known server commit **before cloning, building, scanning or starting images**;
-preflight also refuses previously built image IDs. No bypass flag was added.
+The [upstream advisory](https://github.com/minio/minio/security/advisories/GHSA-cwq8-g58r-32hg)
+rates `CVE-2024-55949` Critical. The owner subsequently authorized the
+**exact upstream fix commit** `f246c9053f9603e610d98439799bdd2a6b293427`
+for isolated synthetic acceptance only. The source-build helper still rejects
+the unmodified base. The patched variant must pass source-tree, advisory,
+image-scan and IAM runtime gates before Compose. A pinned patch does not by
+itself prove functional or security acceptance.
 
-**FUNCTIONAL_ACCEPTANCE: BLOCKED / NOT TESTED. SECURITY_ADMISSION: FAIL.**
-The original unmodified image scan still shows dependency CRITICAL findings.
-The three existing backend, worker and MLflow image gates remain separate and
-unmodified. The patched build's Go/OS vulnerability counts are **unknown**,
-not zero.
-
-## Decision needed
-
-The approved dependency-only patch is insufficient. A separate decision is
-needed before any new runtime attempt:
-
-1. Select and authorize a newer, supported storage release/product for the
-   isolated acceptance environment, then pin its source/image provenance and
-   scan it, including known application advisories; or
-2. Explicitly authorize a reviewed application-code backport of upstream fix
-   commit `f246c9053f9603e610d98439799bdd2a6b293427` onto the exact 2024
-   server tag **for synthetic acceptance only**, plus a wider advisory review.
-   A backport would no longer be the unmodified upstream release.
-
-Until one option is approved and verified, leave the gate closed. An isolated
-synthetic environment does not turn this CRITICAL into production risk
-acceptance.
+**SECURITY_ADMISSION: FAIL** regardless of synthetic functional outcome; a
+supported production storage path has not been selected. The existing
+backend, worker and MLflow image gates remain separate and unmodified.

@@ -56,6 +56,23 @@ def test_browser_failure_artifact_contains_only_sanitized_diagnostics() -> None:
     assert artifact.get("if") == "always()"
 
 
+def test_minio_evidence_upload_excludes_credentials_and_iam_archives() -> None:
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    )
+    artifact = next(
+        step
+        for step in workflow["jobs"]["browser-acceptance"]["steps"]
+        if step.get("with", {}).get("name") == "minio-source-build-evidence"
+    )
+    paths = artifact["with"]["path"]
+    assert "iam-probe-summary.json" in paths
+    assert "advisory-gate.json" in paths
+    assert ".env" not in paths
+    assert ".zip" not in paths
+    assert "*.json" not in paths
+
+
 def test_browser_builds_and_scans_source_images_before_normal_start() -> None:
     workflow = yaml.safe_load(
         (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
@@ -66,6 +83,12 @@ def test_browser_builds_and_scans_source_images_before_normal_start() -> None:
         i for i, command in enumerate(commands) if "minio_source_build" in command
     )
     scan = next(i for i, command in enumerate(commands) if "minio_source_scan" in command)
+    advisory = next(
+        i for i, command in enumerate(commands) if "minio_advisory_gate" in command
+    )
+    iam_probe = next(
+        i for i, command in enumerate(commands) if "minio_cve_probe" in command
+    )
     prepare = next(
         i for i, command in enumerate(commands) if "prepare_acceptance prepare" in command
     )
@@ -75,7 +98,7 @@ def test_browser_builds_and_scans_source_images_before_normal_start() -> None:
     fixtures = next(
         i for i, command in enumerate(commands) if "bootstrap_synthetic" in command
     )
-    assert build < scan < prepare < runtime < fixtures
+    assert build < advisory < scan < iam_probe < prepare < runtime < fixtures
     assert "--patched-acceptance" in commands[build]
     assert "--minio-source-build" in commands[prepare]
     assert not any("probe_public_images" in command for command in commands)

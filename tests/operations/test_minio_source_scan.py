@@ -38,6 +38,7 @@ def test_critical_blocks_functional_start() -> None:
     result = classify_scan(raw, _sbom())
     assert result["critical"] == 1
     assert result["functional_may_continue"] is False
+    assert result["critical_findings"][0]["id"] == "CVE-X"
 
 
 def test_missing_go_components_is_not_a_clean_scan() -> None:
@@ -48,9 +49,10 @@ def test_missing_go_components_is_not_a_clean_scan() -> None:
 
 
 def test_scanner_version_extracts_cached_vulnerability_database_date() -> None:
-    version, updated = parse_scanner_version(
+    version, updated, db_version = parse_scanner_version(
         "Version: 0.58.2\nVulnerability DB:\n  Version: 2\n"
         "  UpdatedAt: 2026-09-26T10:00:00Z\n"
     )
     assert version == "0.58.2"
     assert updated == "2026-09-26T10:00:00Z"
+    assert db_version == "2"

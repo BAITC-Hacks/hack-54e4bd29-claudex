@@ -46,11 +46,29 @@ def classify_scan(scan: dict[str, Any], sbom: dict[str, Any]) -> dict[str, Any]:
         and (item.get("Class") == "lang-pkgs" or item.get("Type") == "gobinary")
     ]
     detected = bool(go_components)
+    os_components = [
+        item
+        for item in components
+        if isinstance(item, dict)
+        and isinstance(item.get("purl"), str)
+        and item["purl"].startswith("pkg:apk/")
+    ]
     return {
         "high": high,
         "critical": critical,
         "go_components_detected": detected,
         "go_component_count": len(go_components),
+        "os_package_count": len(os_components),
+        "critical_findings": [
+            {
+                "id": item.get("VulnerabilityID"),
+                "package": item.get("PkgName"),
+                "installed_version": item.get("InstalledVersion"),
+                "fixed_version": item.get("FixedVersion"),
+            }
+            for item in vulnerabilities
+            if item.get("Severity") == "CRITICAL"
+        ],
         "go_vulnerability_targets": len(go_results),
         "go_stdlib_detected": any(item.get("name") == "stdlib" for item in go_components),
         "security_admission": "NOT VERIFIED"
@@ -62,13 +80,15 @@ def classify_scan(scan: dict[str, Any], sbom: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def parse_scanner_version(output: str) -> tuple[str, str | None]:
+def parse_scanner_version(output: str) -> tuple[str, str | None, str | None]:
     """Read scanner and cached DB metadata without copying raw CLI text."""
     match = re.search(r"Version:\s*([0-9]+(?:\.[0-9]+){2})", output)
     db_match = re.search(r"UpdatedAt:\s*([^\n]+)", output)
+    db_version = re.search(r"Vulnerability DB:\s*Version:\s*([^\n]+)", output)
     return (
         match.group(1) if match else "NOT AVAILABLE",
         db_match.group(1).strip() if db_match else None,
+        db_version.group(1).strip() if db_version else None,
     )
 
 
@@ -99,6 +119,7 @@ def scan(project: str) -> dict[str, Any]:
     rows: dict[str, dict[str, Any]] = {}
     scanner_version = "NOT AVAILABLE"
     database_updated_at: str | None = None
+    database_version: str | None = None
     try:
         for name, image_id in images.items():
             archive = output / f"{name}.tar"
@@ -141,7 +162,9 @@ def scan(project: str) -> dict[str, Any]:
                 "--version",
             ]
         )
-        scanner_version, database_updated_at = parse_scanner_version(version_text)
+        scanner_version, database_updated_at, database_version = parse_scanner_version(
+            version_text
+        )
     finally:
         # This cache belongs only to this phase8-* project, never an existing stack.
         subprocess.run(  # noqa: S603 — scoped Docker CLI cleanup
@@ -158,13 +181,15 @@ def scan(project: str) -> dict[str, Any]:
         "scanner_image": TRIVY_IMAGE,
         "scanner_version": scanner_version,
         "vulnerability_database_updated_at": database_updated_at,
+        "vulnerability_database_version": database_version,
         "images": rows,
         "functional_acceptance_allowed": all(
             row["functional_may_continue"] for row in rows.values()
         ),
-        "security_admission": "PASS"
-        if all(row["security_admission"] == "PASS" for row in rows.values())
-        else "FAIL",
+        "security_admission": "FAIL",
+        "security_admission_reason": (
+            "PATCHED_ACCEPTANCE is not a supported production storage path"
+        ),
     }
     (output / "scan-summary.json").write_text(
         json.dumps(report, indent=2) + "\n", encoding="utf-8"

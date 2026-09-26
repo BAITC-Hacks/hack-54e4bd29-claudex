@@ -367,9 +367,21 @@ jobs:
           python -m scripts.operations.minio_source_build build
           --project "$ACCEPTANCE_PROJECT" --patched-acceptance
 
+      - name: Review current official MinIO advisories before runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python -m scripts.operations.minio_advisory_gate
+          --project "$ACCEPTANCE_PROJECT"
+
       - name: Scan both project-built images before startup
         run: >-
           python -m scripts.operations.minio_source_scan
+          --project "$ACCEPTANCE_PROJECT"
+
+      - name: Deny unauthorized IAM import on disposable MinIO before Compose
+        run: >-
+          python -m scripts.operations.minio_cve_probe
           --project "$ACCEPTANCE_PROJECT"
 
       - name: Preserve MinIO provenance, SBOM and security evidence
@@ -379,6 +391,8 @@ jobs:
           name: minio-source-build-evidence
           path: |
             tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/source-images.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/advisory-gate.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/iam-probe-summary.json
             tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/security/*-trivy.json
             tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/security/*-sbom.cdx.json
             tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/security/scan-summary.json
