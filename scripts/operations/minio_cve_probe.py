@@ -110,7 +110,7 @@ def _require_mc(result: subprocess.CompletedProcess[str], message: str) -> None:
         raise ProbeCommandError(result.returncode, "MC_COMMAND_FAILED", message)
 
 
-def _owned_partial_resource(kind: str, name: str, owner: str) -> bool:
+def _owned_partial_resource(kind: str, name: str, owner: str) -> bool | None:
     """Check a partially created Docker resource without exposing inspect output."""
     labels = ".Config.Labels" if kind == "container" else ".Labels"
     template = f'{{{{ index {labels} "org.medsignal.acceptance.probe" }}}}'
@@ -122,8 +122,10 @@ def _owned_partial_resource(kind: str, name: str, owner: str) -> bool:
     try:
         inspected = _command(*command, success=False, timeout=10)
     except (OSError, RuntimeError, subprocess.TimeoutExpired):
-        return False
-    return inspected.returncode == 0 and inspected.stdout.strip() == owner
+        return None
+    if inspected.returncode:
+        return None
+    return inspected.stdout.strip() == owner
 
 
 def _escalation_archive(original: Path, output: Path, limited_user: str) -> None:
@@ -283,7 +285,8 @@ def verify(project: str) -> dict[str, Any]:
             limited_user = "phase8limited"
             limited_secret = secrets.token_hex(24)
             service_user = "phase8service"
-            service_secret = secrets.token_hex(24)
+            # MinIO service-account credentials cap secret keys at 40 chars.
+            service_secret = secrets.token_hex(20)
             server_env = work / "server.env"
             _write_env(
                 server_env,
@@ -593,15 +596,31 @@ def verify(project: str) -> dict[str, Any]:
             result["primary_error"] = {"category": "IAM_ASSERTION_FAILED"}
     finally:
         result["cleanup_status"] = "PASS"
-        remove_container = started_container or (
-            attempted_container and _owned_partial_resource("container", container, owner)
+        partial_container = (
+            _owned_partial_resource("container", container, owner)
+            if attempted_container and not started_container
+            else False
         )
-        remove_volume = created_volume or (
-            attempted_volume and _owned_partial_resource("volume", volume, owner)
+        partial_volume = (
+            _owned_partial_resource("volume", volume, owner)
+            if attempted_volume and not created_volume
+            else False
         )
-        remove_network = created_network or (
-            attempted_network and _owned_partial_resource("network", network, owner)
+        partial_network = (
+            _owned_partial_resource("network", network, owner)
+            if attempted_network and not created_network
+            else False
         )
+        for kind, ownership in (
+            ("CONTAINER", partial_container),
+            ("VOLUME", partial_volume),
+            ("NETWORK", partial_network),
+        ):
+            if ownership is None:
+                result["cleanup_errors"].append(f"{kind}_OWNERSHIP_UNVERIFIED")
+        remove_container = started_container or partial_container is True
+        remove_volume = created_volume or partial_volume is True
+        remove_network = created_network or partial_network is True
         if remove_container:
             try:
                 if _command("rm", "--force", container, success=False).returncode:

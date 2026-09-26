@@ -251,6 +251,50 @@ def test_timed_out_create_removes_only_probe_owned_partial_resource(
     assert result["cleanup_status"] == "PASS"
 
 
+def test_unverifiable_partial_resource_blocks_cleanup_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / PROJECT / "security"
+    path.mkdir(parents=True)
+    (path / "scan-summary.json").write_text(
+        json.dumps(
+            {
+                "functional_acceptance_allowed": True,
+                "images": {"server": {"critical": 0}, "client": {"critical": 0}},
+            }
+        )
+    )
+    (path.parent / "advisory-gate.json").write_text(
+        json.dumps({"synthetic_functional_review": "PASS"})
+    )
+    monkeypatch.setattr(minio_cve_probe, "BUILD_ROOT", tmp_path)
+    monkeypatch.setattr(
+        minio_cve_probe,
+        "load_built_images",
+        lambda _: {
+            "server": "sha256:" + "1" * 64,
+            "client": "sha256:" + "2" * 64,
+        },
+    )
+    calls: list[tuple[str, ...]] = []
+
+    def fake_command(*args: str, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args[:2] == ("network", "create"):
+            raise subprocess.TimeoutExpired(["docker", "network", "create"], 90)
+        if args[:2] == ("network", "inspect"):
+            return subprocess.CompletedProcess([], 2, "", "private-value")
+        return subprocess.CompletedProcess([], 0, "", "")
+
+    monkeypatch.setattr(minio_cve_probe, "_command", fake_command)
+    with pytest.raises(subprocess.TimeoutExpired):
+        minio_cve_probe.verify(PROJECT)
+    assert not any(args[:2] == ("network", "rm") for args in calls)
+    summary = json.loads((path.parent / "iam-probe-summary.json").read_text())
+    assert summary["cleanup_status"] == "ERROR"
+    assert summary["cleanup_errors"] == ["NETWORK_OWNERSHIP_UNVERIFIED"]
+
+
 def test_mc_setup_failure_retains_exit_code_and_safe_stage(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -332,8 +376,15 @@ def test_cli_reports_safe_failure_stage_without_raw_error(
     assert "private-value" not in output
 
 
+@pytest.mark.parametrize(
+    ("allowed_identity", "failed_assertion"),
+    [(None, None), ("limited", "limited_import"), ("service", "service_import")],
+)
 def test_probe_cleans_resources_and_does_not_persist_credentials(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    allowed_identity: str | None,
+    failed_assertion: str | None,
 ) -> None:
     path = tmp_path / PROJECT / "security"
     path.mkdir(parents=True)
@@ -354,8 +405,9 @@ def test_probe_cleans_resources_and_does_not_persist_credentials(
         "load_built_images",
         lambda _p: {"server": "sha256:" + "1" * 64, "client": "sha256:" + "2" * 64},
     )
-    monkeypatch.setattr(minio_cve_probe.secrets, "token_hex", lambda _n: "fake-secret")
+    monkeypatch.setattr(minio_cve_probe.secrets, "token_hex", lambda n: "A" * (n * 2))
     commands: list[tuple[str, ...]] = []
+    service_secrets: list[str] = []
 
     def fake_command(*args: str, **_kwargs: object) -> subprocess.CompletedProcess[str]:
         commands.append(args)
@@ -364,6 +416,8 @@ def test_probe_cleans_resources_and_does_not_persist_credentials(
     def fake_mc(
         _image: str, _network: str, _env_file: Path, work: Path, *args: str
     ) -> subprocess.CompletedProcess[str]:
+        if "--secret-key" in args:
+            service_secrets.append(args[args.index("--secret-key") + 1])
         if "export" in args:
             with zipfile.ZipFile(work / "admin-iam-info.zip", "w") as archive:
                 archive.writestr("iam-assets/user_mappings.json", "{}")
@@ -372,6 +426,8 @@ def test_probe_cleans_resources_and_does_not_persist_credentials(
                 list(args), 0, '{"policyName":"readwrite"}', ""
             )
         if "import" in args and args[-2] in ("limited", "service"):
+            if args[-2] == allowed_identity:
+                return subprocess.CompletedProcess(list(args), 0, "{}", "")
             return subprocess.CompletedProcess(
                 list(args),
                 1,
@@ -394,23 +450,34 @@ def test_probe_cleans_resources_and_does_not_persist_credentials(
 
     monkeypatch.setattr(minio_cve_probe, "_command", fake_command)
     monkeypatch.setattr(minio_cve_probe, "_mc", fake_mc)
-    result = minio_cve_probe.verify(PROJECT)
-    assert result["limited_user_import"] == "DENIED"
-    assert result["service_account_import"] == "DENIED"
-    assert result["admin_import"] == "ALLOWED"
-    assert result["assertions"] == {
-        "limited_import": "PASS",
-        "service_import": "PASS",
-        "admin_import": "PASS",
-    }
-    assert result["permission_unchanged"] is True
-    assert result["stage_durations_seconds"]["create_network"] >= 0
-    assert result["stage_durations_seconds"]["admin_positive_control"] >= 0
+    if allowed_identity is None:
+        result = minio_cve_probe.verify(PROJECT)
+        assert result["limited_user_import"] == "DENIED"
+        assert result["service_account_import"] == "DENIED"
+        assert result["admin_import"] == "ALLOWED"
+        assert result["assertions"] == {
+            "limited_import": "PASS",
+            "service_import": "PASS",
+            "admin_import": "PASS",
+        }
+        assert result["permission_unchanged"] is True
+        assert result["stage_durations_seconds"]["create_network"] >= 0
+        assert result["stage_durations_seconds"]["admin_positive_control"] >= 0
+    else:
+        with pytest.raises(AssertionError, match="unexpectedly succeeded"):
+            minio_cve_probe.verify(PROJECT)
+        result = json.loads((tmp_path / PROJECT / "iam-probe-summary.json").read_text())
+        assert result["verdict"] == "FAIL"
+        assert result["assertions"][failed_assertion] == "FAIL"
+        assert result["admin_import"] == "NOT_RUN"
     network_create = next(row for row in commands if row[:2] == ("network", "create"))
     assert "--internal" in network_create
     assert all("--publish" not in row and "--privileged" not in row for row in commands)
     assert [row[0] for row in commands[-3:]] == ["rm", "volume", "network"]
+    assert len(service_secrets) == 1
+    assert 8 <= len(service_secrets[0]) <= 40
     assert not list((tmp_path / PROJECT).glob("*-iam-*"))
     assert (
-        "fake-secret" not in (tmp_path / PROJECT / "iam-probe-summary.json").read_text()
+        service_secrets[0]
+        not in (tmp_path / PROJECT / "iam-probe-summary.json").read_text()
     )
