@@ -81,7 +81,7 @@ def test_prepared_files_use_fresh_secrets_scoped_ports_and_pinned_images(
     assert "sha256:" + "a" * 64 in overlay
     assert "!reset []" in overlay
     assert realm["users"][0]["credentials"][0]["value"] != "old-demo"
-    assert realm["clients"][1]["secret"] != "old-demo"
+    assert realm["clients"][1]["secret"] != "old-demo"  # noqa: S105 — test fixture
     assert realm["clients"][0]["redirectUris"] == ["http://127.0.0.1:55123/*"]
     assert manifest["security_gate"] == "FAIL"
     assert "old-demo" not in manifest_text
@@ -132,6 +132,13 @@ def test_mounted_shell_scripts_use_unix_line_endings() -> None:
         if any(part in {".git", "tmp", "node_modules", ".venv"} for part in path.parts):
             continue
         assert b"\r" not in path.read_bytes(), f"CRLF in {path}"
+
+
+def test_mlflow_image_installs_driver_used_by_runtime() -> None:
+    dockerfile = (ROOT / "infrastructure/docker/mlflow.Dockerfile").read_text(
+        encoding="utf-8"
+    )
+    assert "psycopg[binary]==3.2.*" in dockerfile
 
 
 def test_minio_identity_probes_use_service_credentials_without_host_secrets(
