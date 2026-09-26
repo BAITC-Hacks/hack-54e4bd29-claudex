@@ -21,10 +21,12 @@ claims. Link the approved decision when one is required.
 
 ## Ownership and review
 
-Select reviewers from [CODEOWNERS](CODEOWNERS) for every changed zone. For a
+Select reviewers from [CODEOWNERS](CODEOWNERS) and
+[TEAM_OWNERSHIP.md](../docs/TEAM_OWNERSHIP.md) for every changed zone. For a
 cross-zone change, request each affected owner: U1 `@zzhassyn` (backend, data,
-ML, SQL/migrations, Python manifests), U2 `@Alim-Rakhmet` (infrastructure,
-CI, Compose, Dockerfiles), U3 `@aldabergenuly` (frontend and package manifests).
+ML, pilot code, SQL/migrations, Python manifests), U2 `@Alim-Rakhmet`
+(infrastructure, CI, Compose, Dockerfiles and shared operations), U3
+`@aldabergenuly` (frontend, browser E2E and package manifests).
 The additional account `@albqqd` has no assigned ownership zone. File-type
 exceptions in CODEOWNERS take precedence over their containing directory.
 

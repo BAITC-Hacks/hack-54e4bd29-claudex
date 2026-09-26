@@ -16,7 +16,7 @@
 - Do not weaken the HIGH image gate, suppress findings, or call an untested control PASS.
 - No real medical dataset use without an approved dataset/path. Keep acceptance synthetic and artifacts free of credentials, tokens and medical data.
 - Do not alter existing volumes; temporary resources use a `phase8-*` namespace.
-- `TEAM_OWNERSHIP.md` is absent from this checkout. Apply only the explicit ownership rules in the current user brief and record this limitation.
+- The user subsequently provided `TEAM_OWNERSHIP.md`; use its complete path matrix and preserve a repository copy at `docs/TEAM_OWNERSHIP.md`.
 
 ## Review focus
 

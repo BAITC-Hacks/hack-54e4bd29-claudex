@@ -1,25 +1,82 @@
-# Confirmed MedSignal ownership (U1/U2/U3). GitHub uses the last matching rule.
-# Base zones first; narrowly scoped file-type exceptions follow.
+# MedSignal ownership from docs/TEAM_OWNERSHIP.md (provided 2026-09-26).
+# GitHub uses the LAST matching pattern. Broad zones precede explicit exceptions.
+# One owner per line; cross-zone reviews must be requested in the PR template.
+
+# U2 owns root service files and shared operations by default.
+* @Alim-Rakhmet
+
+# Directory ownership.
 /backend/ @zzhassyn
 /data_pipeline/ @zzhassyn
 /ml/ @zzhassyn
+/pilot/ @zzhassyn
 /database/ @zzhassyn
-
+/data/ @zzhassyn
+/frontend/ @aldabergenuly
 /infrastructure/ @Alim-Rakhmet
 /.github/ @Alim-Rakhmet
+/tests/ @Alim-Rakhmet
+/scripts/ @Alim-Rakhmet
+/docs/ @Alim-Rakhmet
 
-/frontend/ @aldabergenuly
+# Mixed tests: Python workflow harness is distinct from browser E2E.
+/tests/audit/ @zzhassyn
+/tests/pipeline/ @zzhassyn
+/tests/monitoring/ @zzhassyn
+/tests/e2e/test_workflow_race_contract.py @zzhassyn
+/tests/performance/test_background_jobs.py @zzhassyn
+/tests/security/test_real_keycloak_roles.py @zzhassyn
 
-# Repository-wide exceptions: database migrations and dependency manifests.
+# Mixed scripts.
+/scripts/phase8_e2e.py @zzhassyn
+/scripts/phase7-smoke.sh @zzhassyn
+/scripts/performance/background_jobs.py @zzhassyn
+/scripts/performance/benchmark_organization_query.py @zzhassyn
+/scripts/performance/verify_analytics.py @zzhassyn
+
+# Mixed documentation.
+/docs/API.md @zzhassyn
+/docs/BUSINESS_LOGIC.md @zzhassyn
+/docs/DATABASE.md @zzhassyn
+/docs/DATA_ARCHITECTURE.md @zzhassyn
+/docs/ML_ARCHITECTURE.md @zzhassyn
+/docs/SIGNAL_ENGINE.md @zzhassyn
+/docs/SCENARIO_ANALYSIS.md @zzhassyn
+/docs/MODEL_EXPERIMENT_PROTOCOL.md @zzhassyn
+/docs/MODEL_IMPROVEMENT_V2.md @zzhassyn
+/docs/data/ @zzhassyn
+/docs/ml/ @zzhassyn
+/docs/analytics/ @zzhassyn
+/docs/analytics/SITUATION_CENTER.md @aldabergenuly
+/docs/acceptance/SHADOW_PILOT_PROTOCOL.md @zzhassyn
+/docs/acceptance/SHADOW_PILOT_REPORT.md @zzhassyn
+/docs/runbooks/DEMO.md @aldabergenuly
+/docs/frontend/USER_JOURNEY_AUDIT.md @aldabergenuly
+/docs/frontend/BROWSER_ACCEPTANCE.md @aldabergenuly
+/docs/ADR/ @zzhassyn
+/docs/ADR/0003* @Alim-Rakhmet
+/docs/ADR/0004* @Alim-Rakhmet
+/docs/ADR/0006* @Alim-Rakhmet
+/docs/ADR/0009* @Alim-Rakhmet
+/docs/PERSON_1_TASKS.md @zzhassyn
+/docs/PERSON_2_TASKS.md @Alim-Rakhmet
+/docs/PERSON_3_TASKS.md @aldabergenuly
+
+# Mandatory file-type exceptions override their containing directory.
 *.sql @zzhassyn
 requirements*.txt @zzhassyn
 pyproject.toml @zzhassyn
 poetry.lock @zzhassyn
 uv.lock @zzhassyn
+Pipfile @zzhassyn
+Pipfile.lock @zzhassyn
+setup.py @zzhassyn
+setup.cfg @zzhassyn
+/.importlinter @zzhassyn
+/ruff.toml @zzhassyn
+/mypy.ini @zzhassyn
 package.json @aldabergenuly
 package-lock.json @aldabergenuly
-
-# Container definitions and Compose overlays are infrastructure-owned.
 /docker-compose*.yml @Alim-Rakhmet
 Dockerfile @Alim-Rakhmet
 *.Dockerfile @Alim-Rakhmet
