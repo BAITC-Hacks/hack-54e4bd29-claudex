@@ -92,3 +92,17 @@ production frontend image was updated locally to test fast HTTP error handling
 The controlled ClickHouse outage verified a real `/ready` 503 and frontend
 error state; readiness returned after the `finally` restore. Docker Desktop
 was restarted after its daemon stopped responding; no volumes were deleted.
+
+The final local HEAD `4cc44083ac79c1c284f420593761027224c7ea4d` was
+rebuilt into a **fourth fresh project** `phase8-accept-20260926e`, with new
+project-scoped volumes. Migrations, four MinIO service identities, `/health`,
+`/ready`, Keycloak OIDC, production Next, and the fresh synthetic publication
+all passed. Two real-browser journeys passed; the separate controlled
+ClickHouse outage returned `/ready` 503, displayed the dashboard error, then
+restored readiness. The aggregate verifier passed the five-route publication
+contract (30 referrals, 22 waiting, 24 refusals); signed admin, region and
+hospital identities passed 30/22/24 and 15/11/12 scope counts. All five
+current-image digests are in the ignored project `manifest.json` and in
+`docs/security/CURRENT_IMAGE_FINDINGS.md`. The three Python images still fail
+the HIGH gate. No real medical data was used; the GitHub browser job itself
+has not run because this branch remains local.

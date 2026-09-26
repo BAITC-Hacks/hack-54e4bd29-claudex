@@ -86,3 +86,13 @@ browser failure test passed with ClickHouse stopped: `/ready` was 503, the
 dashboard displayed a meaningful error, and ClickHouse was restored. A strict
 reporter recorded only numeric counts (`planned=2, passed=2, skipped=0` for the
 normal run). No real-scale benchmark was authorized: **REAL SCALE NOT TESTED**.
+
+The latest fresh project `phase8-accept-20260926e` at HEAD
+`4cc44083ac79c1c284f420593761027224c7ea4d` repeated the synthetic
+publication and signed-token scope checks. The five-route aggregate verifier
+returned **PASS**: referral daily sum and overview both 30; refusal daily sum
+and overview both 24; waiting snapshot and overview both 22 with source
+`snapshot_at=2025-01-03T03:00:00`; organization page contract total 6.
+The report is ignored at
+`tmp/acceptance/phase8-accept-20260926e/analytics-verification.json`.
+No real dataset was touched, and real-scale latency remains **NOT TESTED**.

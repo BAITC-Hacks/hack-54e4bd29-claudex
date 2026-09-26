@@ -3,7 +3,34 @@
 Status: **FAIL**. Current-branch evidence below does not admit the three Python
 images or accept their residual vulnerabilities.
 
-## Current branch recheck — `452873bb453e2bf310cad90909e68c24b6b3c300`
+## Final local HEAD recheck — `4cc44083ac79c1c284f420593761027224c7ea4d`
+
+The isolated `phase8-accept-20260926e` project built and ran these five
+production images from the exact commit above. Pinned Trivy `0.58.2` image
+`sha256:665030f4d33a82c1e8d9d5e0453365842236723c1ee5cc3becca698268e66a56`
+scanned all five exported image archives independently on 2026-09-26, using
+vulnerability DB v2 updated `2026-09-26T01:14:39Z`. The scanner ran with no
+network access, no ignored findings and no severity filtering. Raw per-image
+reports remain in ignored `tmp/security-current/acceptance-e/`.
+
+| Image | Exact local image content digest | Base image content/digest | HIGH | CRITICAL | Gate |
+|---|---|---|---:|---:|---|
+| backend | `sha256:cbc87268c985e71b4ff12df17d8c1ea08e3e9f1da74c6e816b7d8a89d757da19` | `python:3.12-slim` `sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea` | 44 | 0 | FAIL |
+| worker | `sha256:f4ac54fd7a0ac506de0f0e5bfd03c3ef206218563acf366098305ebf56085b32` | same Python base | 44 | 0 | FAIL |
+| MLflow | `sha256:9bde97dca4aa6ba2bbf31739ddec94aa68a7f5d2d3c2998ef329b47127c06f99` | same Python base | 44 | 0 | FAIL |
+| frontend | `sha256:7a13cead9cfbd00bc89832459d8160cc5f8776da2f5b3b56549a8f221954cbff` | `node:22-alpine` `sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32` | 0 | 0 | PASS for scanned image |
+| nginx | `sha256:f87d949b38e93518b37fe6cb93ad5ab456ec3b60308d8a1a3d546fc2a8f45fe2` | pinned `nginx:1.30.5-alpine` `sha256:f2e97a6801f504129e8027ff7d49e27fa59ef4f1ebfd97197dac8b194831cf3d` | 0 | 0 | PASS for scanned image |
+
+Every blocking finding is a Debian OS-package row. The Python-package and
+Node-package result sets each contain **0 HIGH and 0 CRITICAL**. The 44 rows
+in each Python image represent the same eight CVEs and package versions listed
+below. Trivy reports no fixed version for them in this Debian stable base.
+No Python dependency upgrade is indicated by this scan. Neither image-policy
+suppression nor blanket risk acceptance was added. The local synthetic
+acceptance runtime passed separately; its success does **not** change this
+production image gate.
+
+## Earlier branch recheck — `452873bb453e2bf310cad90909e68c24b6b3c300`
 
 The five production images were built with `docker build --pull` from the
 ownership-corrected branch HEAD above. The backend, worker and MLflow images were rebuilt
@@ -84,8 +111,9 @@ healthcheck mechanism, not full backend readiness.
 The 44 HIGH rows are **8 distinct advisories**, repeated across related Debian
 binary packages. Trivy reported no fixed Debian version for these findings in
 the 2026-09-26 DB and no HIGH/CRITICAL Python package finding in this image.
-The current CI worker and MLflow reports show the same 8 advisories, but those
-images have not been rebuilt or rescanned from this branch.
+The original CI worker and MLflow reports showed the same eight advisories;
+at that point those images had not yet been rebuilt from this branch. The
+final HEAD scan above supersedes that gap.
 
 | Advisory | Scanner rows | Representative package/version | Disposition |
 |---|---:|---|---|
@@ -107,8 +135,8 @@ unstable distribution, suppressing findings, or recording an unapproved risk
 acceptance would not satisfy the project security gate. Recheck vendor updates
 and rebuild/rescan exact final images when fixes become available.
 
-The acceptance manifest remains empty. **U1-04 is not activated by these scan
-results:** none of the reported blocking findings is in a Python package.
-No new requirements pins were changed. The current worker/MLflow rebuild and
-scan are recorded above; runtime acceptance remains separate and the overall
-gate remains **FAIL**.
+The image-risk acceptance manifest remains empty. **U1-04 is not activated by
+these scan results:** none of the reported blocking findings is in a Python
+package. No new requirements pins were changed. The final worker/MLflow
+rebuild and scan are recorded above. Runtime acceptance is documented
+separately and the overall image gate remains **FAIL**.
