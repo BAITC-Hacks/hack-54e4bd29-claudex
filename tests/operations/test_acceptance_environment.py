@@ -373,10 +373,16 @@ def test_preflight_reports_all_six_local_images_and_matching_compose_refs(
         raising=False,
     )
     monkeypatch.setattr(
-        prepare_acceptance, "_check_daemon_primitives", lambda *_: None, raising=False
+        prepare_acceptance,
+        "_check_daemon_primitives",
+        lambda *_: pytest.fail("normal start must not create diagnostic resources"),
+        raising=False,
     )
     monkeypatch.setattr(
-        prepare_acceptance, "_probe_compose_create", lambda *_: None, raising=False
+        prepare_acceptance,
+        "_probe_compose_create",
+        lambda *_: pytest.fail("normal start must not run compose create/down"),
+        raising=False,
     )
     report: dict[str, object] = {}
 
@@ -708,172 +714,6 @@ def test_pull_failure_classifier_emits_only_fixed_categories(
         )
         == category
     )
-
-
-def test_daemon_primitives_create_and_cleanup_only_namespaced_resources(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[tuple[str, ...]] = []
-
-    def fake_run(
-        command: list[str], **_kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        calls.append(tuple(command))
-        return subprocess.CompletedProcess(command, 0, "opaque-id", "")
-
-    monkeypatch.setattr(prepare_acceptance.subprocess, "run", fake_run)
-    report: dict[str, object] = {}
-    prepare_acceptance._check_daemon_primitives(
-        "phase8-accept-abcd1234", IMAGES["nginx"], report
-    )
-
-    assert report["daemon_primitives"] == {
-        "volume_create": "PASS",
-        "network_create": "PASS",
-        "container_create": "PASS",
-    }
-    assert len(calls) == 6
-    assert all(
-        any("phase8-accept-abcd1234" in arg for arg in command) for command in calls
-    )
-    assert not any("--env" in command or "--mount" in command for command in calls)
-    assert any(command[:2] == ("docker", "rm") for command in calls)
-    assert any(command[:3] == ("docker", "network", "rm") for command in calls)
-    assert any(command[:3] == ("docker", "volume", "rm") for command in calls)
-    assert "opaque-id" not in json.dumps(report)
-
-
-def test_failed_network_probe_still_cleans_successful_volume_and_container(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[tuple[str, ...]] = []
-
-    def fake_run(
-        command: list[str], **_kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        calls.append(tuple(command))
-        if command[:3] == ["docker", "network", "create"]:
-            return subprocess.CompletedProcess(
-                command, 1, "", "POSTGRES_PASSWORD=private-value"
-            )
-        if command[:3] == ["docker", "network", "inspect"]:
-            return subprocess.CompletedProcess(command, 1, "", "not found")
-        return subprocess.CompletedProcess(command, 0, "opaque-id", "")
-
-    monkeypatch.setattr(prepare_acceptance.subprocess, "run", fake_run)
-    report: dict[str, object] = {}
-    with pytest.raises(prepare_acceptance.AcceptancePreflightError) as caught:
-        prepare_acceptance._check_daemon_primitives(
-            "phase8-accept-abcd1234", IMAGES["nginx"], report
-        )
-
-    assert caught.value.category == "NETWORK_CREATE_FAILED"
-    assert report["daemon_primitives"] == {
-        "volume_create": "PASS",
-        "network_create": "FAIL",
-        "container_create": "PASS",
-    }
-    assert any(command[:3] == ("docker", "volume", "rm") for command in calls)
-    assert any(command[:2] == ("docker", "rm") for command in calls)
-    assert "private-value" not in json.dumps(report) + str(caught.value)
-
-
-@pytest.mark.parametrize("create_succeeds", [True, False])
-def test_compose_create_captures_state_then_cleans_without_starting(
-    create_succeeds: bool, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    output, _config = _preflight_fixture(tmp_path)
-    calls: list[tuple[str, ...]] = []
-    monkeypatch.setattr(prepare_acceptance, "ARTIFACTS", tmp_path)
-    monkeypatch.setattr(
-        prepare_acceptance, "_compose_command", lambda *_: ["docker", "compose"]
-    )
-    monkeypatch.setattr(
-        prepare_acceptance, "_namespace_is_empty", lambda *_: True, raising=False
-    )
-    monkeypatch.setattr(
-        prepare_acceptance,
-        "_safe_services",
-        lambda *_: [
-            {
-                "service": "postgres",
-                "state": "created",
-                "exit_code": 0,
-                "health": "unknown",
-            }
-        ],
-    )
-
-    def fake_run(*command: str) -> str:
-        calls.append(command)
-        if command[-2:] == ("create", "--no-build") and not create_succeeds:
-            raise prepare_acceptance.AcceptanceCommandError(
-                "compose_create", 1, "DAEMON_ERROR"
-            )
-        return ""
-
-    monkeypatch.setattr(prepare_acceptance, "_run", fake_run)
-    report: dict[str, object] = {}
-    if create_succeeds:
-        prepare_acceptance._probe_compose_create(
-            "phase8-accept-abcd1234", output, IMAGES, report
-        )
-        assert report["compose_create"]["result"] == "PASS"
-    else:
-        with pytest.raises(prepare_acceptance.AcceptancePreflightError) as caught:
-            prepare_acceptance._probe_compose_create(
-                "phase8-accept-abcd1234", output, IMAGES, report
-            )
-        assert caught.value.stage == "compose_create"
-        assert report["compose_create"]["result"] == "FAIL"
-        assert report["compose_create"]["service_states"][0]["service"] == "postgres"
-    assert calls == [
-        ("docker", "compose", "create", "--no-build"),
-        ("docker", "compose", "down", "--volumes", "--remove-orphans"),
-    ]
-    assert report["compose_create"]["cleanup_succeeded"] is True
-
-
-def test_compose_create_command_failure_is_classified_without_raw_stderr(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    secret = "POSTGRES_PASSWORD=private-value"  # noqa: S105 — synthetic test canary
-
-    def fake_run(
-        command: list[str], **_kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(
-            command, 1, "", f"Error response from daemon {secret}"
-        )
-
-    monkeypatch.setattr(prepare_acceptance.subprocess, "run", fake_run)
-    with pytest.raises(prepare_acceptance.AcceptanceCommandError) as caught:
-        prepare_acceptance._run("docker", "compose", "create", "--no-build")
-
-    assert caught.value.command_category == "compose_create"
-    assert caught.value.docker_error_category == "DAEMON_ERROR"
-    assert secret not in str(caught.value) + "".join(capsys.readouterr())
-
-
-def test_compose_create_refuses_existing_namespace_without_down(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    output, _config = _preflight_fixture(tmp_path)
-    calls: list[tuple[str, ...]] = []
-    monkeypatch.setattr(prepare_acceptance, "_namespace_is_empty", lambda *_: False)
-    monkeypatch.setattr(
-        prepare_acceptance, "_run", lambda *command: calls.append(command) or ""
-    )
-    report: dict[str, object] = {}
-
-    with pytest.raises(prepare_acceptance.AcceptancePreflightError) as caught:
-        prepare_acceptance._probe_compose_create(
-            "phase8-accept-abcd1234", output, IMAGES, report
-        )
-
-    assert caught.value.category == "ACCEPTANCE_NAMESPACE_NOT_EMPTY"
-    assert calls == []
-    assert report["compose_create"]["result"] == "NOT_RUN"
 
 
 def test_named_pull_failure_artifact_contains_only_sanitized_state(
