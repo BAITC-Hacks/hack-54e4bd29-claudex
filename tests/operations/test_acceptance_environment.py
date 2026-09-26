@@ -125,6 +125,15 @@ def test_frontend_build_accepts_isolated_oidc_issuer() -> None:
     assert "NEXT_PUBLIC_OIDC_ISSUER=${NEXT_PUBLIC_OIDC_ISSUER}" in dockerfile
 
 
+def test_mounted_shell_scripts_use_unix_line_endings() -> None:
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+    assert "*.sh text eol=lf" in attributes
+    for path in ROOT.rglob("*.sh"):
+        if any(part in {".git", "tmp", "node_modules", ".venv"} for part in path.parts):
+            continue
+        assert b"\r" not in path.read_bytes(), f"CRLF in {path}"
+
+
 def test_minio_identity_probes_use_service_credentials_without_host_secrets(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

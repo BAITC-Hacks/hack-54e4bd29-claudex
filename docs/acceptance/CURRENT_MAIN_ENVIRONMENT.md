@@ -51,12 +51,21 @@ and the acceptance overlay.
 | Check | Status | Evidence required |
 |---|---|---|
 | Generated Compose structure, loopback port, new volume names | PASS | `tests/operations/test_acceptance_environment.py` and generated `docker compose config` check |
-| PostgreSQL and ClickHouse migrations on fresh volumes | NOT TESTED | One-shot `migrate` and `clickhouse-migrate` exit 0 on an actual fresh project |
-| HTTP health/ready and Keycloak OIDC | NOT TESTED | Loopback HTTP 200 from the actual project |
-| MinIO service identity bootstrap and effective access | NOT TESTED | `minio-init` success plus scoped access probes |
-| Production Next build in isolated project | NOT TESTED | Actual frontend image build and browser response |
+| PostgreSQL and ClickHouse migrations on fresh volumes | PASS | `phase8-accept-20260926a` one-shot `migrate` and `clickhouse-migrate` exited 0; services reached readiness |
+| HTTP health/ready and Keycloak OIDC | PASS | `prepare_acceptance start` reached HTTP 200 for all three through loopback nginx |
+| MinIO service identity bootstrap and effective access | PASS | `minio-init` exited 0; app, worker, pipeline and MLflow credential probes passed |
+| Production Next build in isolated project | PASS | Production frontend image `sha256:0823b31d3f4842888f9c2c0e3e217736f33cad071d03e4b8b6d48d9a48523129` built and started; browser E2E still NOT TESTED |
 | Image security gate | FAIL | Current Trivy evidence in `docs/security/CURRENT_IMAGE_FINDINGS.md` |
 | Real data, performance and production controls | NOT TESTED | Out of scope until explicitly approved |
 
 The table must be updated from command evidence, never from configuration
 presence alone. A local acceptance PASS does not override the image FAIL gate.
+
+The first start attempt failed in `minio-init` because Git on Windows checked
+out the bind-mounted `bootstrap.sh` with CRLF. `.gitattributes` now enforces LF
+for all shell scripts, and a regression test checks their working-tree bytes.
+The same namespaced project was then started successfully without deleting or
+reusing another project's volumes. Exact image digests and successful probes
+are recorded in ignored `tmp/acceptance/phase8-accept-20260926a/manifest.json`.
+This run has no synthetic analytical facts yet; authenticated workflow and
+browser tests remain separate pending checks.
