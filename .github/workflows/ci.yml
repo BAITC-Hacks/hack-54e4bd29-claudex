@@ -401,6 +401,19 @@ jobs:
           python -m scripts.operations.prepare_acceptance prepare --project "$ACCEPTANCE_PROJECT" --minio-source-build
           python -m scripts.operations.prepare_acceptance start --project "$ACCEPTANCE_PROJECT"
 
+      - name: Verify MinIO/mc bootstrap and scoped S3 operations
+        run: >-
+          python -m scripts.operations.verify_minio_source
+          --project "$ACCEPTANCE_PROJECT"
+
+      - name: Preserve numeric-only MinIO runtime result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minio-source-runtime
+          path: tmp/acceptance/${{ env.ACCEPTANCE_PROJECT }}/minio-runtime-summary.json
+          if-no-files-found: ignore
+
       - name: Load invented fixtures through the normal publication path
         run: python -m scripts.acceptance.bootstrap_synthetic --project "$ACCEPTANCE_PROJECT"
 
