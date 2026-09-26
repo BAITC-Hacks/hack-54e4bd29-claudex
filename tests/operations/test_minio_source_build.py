@@ -66,6 +66,13 @@ def test_patched_variant_is_explicit_and_limits_changes_to_go_modules() -> None:
     assert "+\tgithub.com/rabbitmq/amqp091-go v1.13.0" in (
         ROOT / patches["server"]["path"]
     ).read_text(encoding="utf-8")
+    backport = manifest["server_security_backport"]
+    assert backport["fix_commit_sha"] == minio_source_build.FIX_COMMIT
+    assert backport["changed_files"] == ["cmd/admin-handlers-users.go"]
+    assert hashlib.sha256((ROOT / backport["path"]).read_bytes()).hexdigest() == (
+        minio_source_build.APP_PATCH_SHA256
+    )
+    assert backport["patched_source_tree_sha1"] == minio_source_build.PATCHED_SERVER_TREE
 
 
 def test_patch_validation_accepts_windows_checkout_line_endings(
@@ -160,11 +167,9 @@ def test_default_prepare_does_not_replace_quay_images(tmp_path: Path) -> None:
 def test_source_image_manifest_rejects_changed_local_image_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        minio_source_build, "require_no_known_application_critical", lambda _: None
-    )
     folder = tmp_path / PROJECT
     folder.mkdir()
+    manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
     expected = {"server": "sha256:" + "1" * 64, "client": "sha256:" + "2" * 64}
     rows = {
         name: {
@@ -172,7 +177,17 @@ def test_source_image_manifest_rejects_changed_local_image_id(
             "image_id": image_id,
             "tag_object_sha": minio_source_build.EXPECTED[name][2],
             "commit_sha": minio_source_build.EXPECTED[name][3],
-            "patch_sha256": None,
+            "patch_sha256": manifest["patched_acceptance"][name]["sha256"],
+            "security_patch_sha256": (
+                minio_source_build.APP_PATCH_SHA256 if name == "server" else None
+            ),
+            "patched_source_tree_sha1": (
+                minio_source_build.PATCHED_SERVER_TREE if name == "server" else None
+            ),
+            "fix_commit_sha": minio_source_build.FIX_COMMIT if name == "server" else None,
+            "security_changed_files": [minio_source_build.APP_FILE]
+            if name == "server"
+            else None,
         }
         for name, image_id in expected.items()
     }
@@ -180,7 +195,7 @@ def test_source_image_manifest_rejects_changed_local_image_id(
         json.dumps(
             {
                 "project": PROJECT,
-                "variant": "UNMODIFIED_UPSTREAM",
+                "variant": "PATCHED_ACCEPTANCE",
                 "build_contract_sha256": hashlib.sha256(
                     CONTRACT.read_bytes()
                 ).hexdigest(),
@@ -208,7 +223,7 @@ def test_source_image_manifest_rejects_changed_local_image_id(
         json.dumps(
             {
                 "project": PROJECT,
-                "variant": "UNMODIFIED_UPSTREAM",
+                "variant": "PATCHED_ACCEPTANCE",
                 "build_contract_sha256": hashlib.sha256(
                     CONTRACT.read_bytes()
                 ).hexdigest(),
@@ -224,9 +239,6 @@ def test_source_image_manifest_rejects_changed_local_image_id(
 def test_patched_image_manifest_rejects_missing_or_changed_patch_provenance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        minio_source_build, "require_no_known_application_critical", lambda _: None
-    )
     folder = tmp_path / PROJECT
     folder.mkdir()
     manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
@@ -238,6 +250,16 @@ def test_patched_image_manifest_rejects_missing_or_changed_patch_provenance(
             "tag_object_sha": minio_source_build.EXPECTED[name][2],
             "commit_sha": minio_source_build.EXPECTED[name][3],
             "patch_sha256": manifest["patched_acceptance"][name]["sha256"],
+            "security_patch_sha256": (
+                minio_source_build.APP_PATCH_SHA256 if name == "server" else None
+            ),
+            "patched_source_tree_sha1": (
+                minio_source_build.PATCHED_SERVER_TREE if name == "server" else None
+            ),
+            "fix_commit_sha": minio_source_build.FIX_COMMIT if name == "server" else None,
+            "security_changed_files": [minio_source_build.APP_FILE]
+            if name == "server"
+            else None,
         }
         for name, image_id in ids.items()
     }
@@ -259,6 +281,11 @@ def test_patched_image_manifest_rejects_missing_or_changed_patch_provenance(
     (folder / "source-images.json").write_text(json.dumps(evidence), encoding="utf-8")
     with pytest.raises(ValueError, match="patch"):
         minio_source_build.load_built_images(PROJECT)
+    rows["client"]["patch_sha256"] = manifest["patched_acceptance"]["client"]["sha256"]
+    rows["server"]["patched_source_tree_sha1"] = "0" * 40
+    (folder / "source-images.json").write_text(json.dumps(evidence), encoding="utf-8")
+    with pytest.raises(ValueError, match="provenance"):
+        minio_source_build.load_built_images(PROJECT)
 
 
 def test_source_manifest_rejects_unapproved_upstream_or_changed_commit() -> None:
@@ -276,13 +303,21 @@ def test_source_manifest_rejects_changed_acceptance_patch() -> None:
         minio_source_build.validate_build_contract(manifest)
 
 
-def test_confirmed_minio_application_critical_blocks_before_build(
+def test_source_manifest_rejects_changed_application_backport() -> None:
+    manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    manifest["server_security_backport"]["sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="backport contract"):
+        minio_source_build.validate_build_contract(manifest)
+
+
+def test_known_critical_blocks_unmodified_build_but_exact_backport_is_allowed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A dependency-only patch cannot clear an application-code advisory."""
     manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
     with pytest.raises(RuntimeError, match="CVE-2024-55949"):
         minio_source_build.require_no_known_application_critical(manifest)
+    minio_source_build.require_no_known_application_critical(manifest, patched=True)
     monkeypatch.setattr(minio_source_build, "BUILD_ROOT", tmp_path)
     monkeypatch.setattr(
         minio_source_build,
@@ -290,7 +325,7 @@ def test_confirmed_minio_application_critical_blocks_before_build(
         lambda *_args: pytest.fail("build reached network/source stage"),
     )
     with pytest.raises(RuntimeError, match="CVE-2024-55949"):
-        minio_source_build.build(PROJECT, patched=True)
+        minio_source_build.build(PROJECT, patched=False)
     assert not (tmp_path / PROJECT).exists()
     folder = tmp_path / PROJECT
     folder.mkdir()
@@ -307,10 +342,7 @@ def test_confirmed_minio_application_critical_blocks_before_build(
 def test_cli_reports_known_application_critical_without_stack_or_secrets(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert (
-        minio_source_build.main(["build", "--project", PROJECT, "--patched-acceptance"])
-        == 2
-    )
+    assert minio_source_build.main(["build", "--project", PROJECT]) == 2
     output = capsys.readouterr()
     assert "BLOCKED_KNOWN_APPLICATION_CRITICAL CVE-2024-55949" in output.err
     assert "Traceback" not in output.err

@@ -44,6 +44,10 @@ KNOWN_APPLICATION_CRITICAL = "CVE-2024-55949"
 APPLICATION_ADVISORY = (
     "https://github.com/minio/minio/security/advisories/GHSA-cwq8-g58r-32hg"
 )
+FIX_COMMIT = "f246c9053f9603e610d98439799bdd2a6b293427"
+APP_PATCH_SHA256 = "26bd3d86e09b0fbf8b5fe472d43a20dc087c6f208a822f375ca67ce93de31de6"
+PATCHED_SERVER_TREE = "094a00c707fcf5e7a9a01cebea1158486c5ba553"
+APP_FILE = "cmd/admin-handlers-users.go"
 
 
 class KnownApplicationCriticalError(RuntimeError):
@@ -95,15 +99,77 @@ def validate_build_contract(manifest: dict[str, Any]) -> None:
             != patch["sha256"]
         ):
             raise ValueError("MinIO acceptance patch contract changed")
+    backport = manifest.get("server_security_backport")
+    if (
+        not isinstance(backport, dict)
+        or backport.get("advisory") != "GHSA-cwq8-g58r-32hg"
+        or backport.get("cve") != KNOWN_APPLICATION_CRITICAL
+        or backport.get("repository") != EXPECTED["server"][0]
+        or backport.get("fix_commit_sha") != FIX_COMMIT
+        or backport.get("path")
+        != "infrastructure/acceptance/patches/server-cve-2024-55949.patch"
+        or backport.get("sha256") != APP_PATCH_SHA256
+        or backport.get("changed_files") != [APP_FILE]
+        or backport.get("patched_source_tree_sha1") != PATCHED_SERVER_TREE
+        or hashlib.sha256((ROOT / backport["path"]).read_bytes()).hexdigest()
+        != APP_PATCH_SHA256
+    ):
+        raise ValueError("MinIO application backport contract changed")
 
 
-def require_no_known_application_critical(manifest: dict[str, Any]) -> None:
-    """Stop dependency-only builds of the vulnerable MinIO application code."""
-    if manifest["server"]["commit_sha"] == EXPECTED["server"][3]:
+def require_no_known_application_critical(
+    manifest: dict[str, Any], *, patched: bool = False
+) -> None:
+    """Only the exact reviewed backport may release the known application hold."""
+    if manifest["server"]["commit_sha"] == EXPECTED["server"][3] and not patched:
         raise KnownApplicationCriticalError(
             f"MinIO application CRITICAL {KNOWN_APPLICATION_CRITICAL} blocks acceptance; "
             f"see {APPLICATION_ADVISORY}"
         )
+
+
+def _edited_lines(diff: bytes) -> list[bytes]:
+    """Compare exact added/deleted lines while allowing expected hunk offsets."""
+    return [
+        line
+        for line in diff.splitlines(keepends=True)
+        if line.startswith((b"+", b"-")) and not line.startswith((b"+++", b"---"))
+    ]
+
+
+def _run_bytes(args: list[str], *, cwd: Path) -> bytes:
+    result = subprocess.run(  # noqa: S603 — fixed Git argv, no shell
+        args, cwd=cwd, capture_output=True, check=False
+    )
+    if result.returncode:
+        raise RuntimeError("Acceptance source diff verification failed")
+    return result.stdout
+
+
+def _apply_security_backport(source: Path, manifest: dict[str, Any]) -> dict[str, str]:
+    """Apply exact upstream patch, verify edit lines and deterministic Git tree."""
+    backport = manifest["server_security_backport"]
+    path = ROOT / backport["path"]
+    _run(["git", "apply", "--check", str(path)], cwd=source)
+    _run(["git", "apply", str(path)], cwd=source)
+    changed = set(_run(["git", "diff", "--name-only"], cwd=source).splitlines())
+    if changed != {APP_FILE, "go.mod", "go.sum"}:
+        raise ValueError("Unexpected application-code change in patched source")
+    actual_diff = _run_bytes(["git", "diff", "--binary", "--", APP_FILE], cwd=source)
+    if _edited_lines(actual_diff) != _edited_lines(path.read_bytes()):
+        raise ValueError("Security backport edits differ from upstream fix")
+    index = source.parent / "server-patched-tree.index"
+    env = {**os.environ, "GIT_INDEX_FILE": str(index)}
+    _run(["git", "read-tree", "HEAD"], cwd=source, env=env)
+    _run(
+        ["git", "-c", "core.autocrlf=false", "add", "--", APP_FILE, "go.mod", "go.sum"],
+        cwd=source,
+        env=env,
+    )
+    tree = _run(["git", "write-tree"], cwd=source, env=env)
+    if tree != PATCHED_SERVER_TREE:
+        raise ValueError("Patched MinIO source tree differs from reviewed tree")
+    return {"security_patch_sha256": APP_PATCH_SHA256, "patched_source_tree_sha1": tree}
 
 
 def _apply_acceptance_patch(name: str, source: Path, manifest: dict[str, Any]) -> str:
@@ -274,6 +340,7 @@ def _build_one(
     )
     if item["tag"] not in version:
         raise ValueError("Built binary release version mismatch")
+    match = re.search(r"\b(go[0-9]+\.[0-9]+(?:\.[0-9]+)?)\b", version)
     digest_line = _run(
         [
             "docker",
@@ -296,6 +363,10 @@ def _build_one(
         "image_id": image_id,
         "binary_sha256": binary_hash,
         "reported_version": item["tag"],
+        "binary_version_output": version[:500],
+        "binary_go_version": match.group(1) if match else "NOT REPORTED BY BINARY",
+        "upstream_repository": item["repository"],
+        "upstream_tag": item["tag"],
         "tag_object_sha": item["tag_object_sha"],
         "commit_sha": item["commit_sha"],
     }
@@ -306,7 +377,7 @@ def build(project: str, *, patched: bool = False) -> dict[str, Any]:
     validate_project_name(project)
     manifest = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     validate_build_contract(manifest)
-    require_no_known_application_critical(manifest)
+    require_no_known_application_critical(manifest, patched=patched)
     project_dir = BUILD_ROOT / project
     project_dir.mkdir(parents=True, exist_ok=False)
     gpg_home = _trusted_key(project_dir, manifest)
@@ -314,8 +385,17 @@ def build(project: str, *, patched: bool = False) -> dict[str, Any]:
     for name in ("server", "client"):
         source = _source(name, manifest, project_dir, gpg_home)
         patch_sha = _apply_acceptance_patch(name, source, manifest) if patched else None
+        backport = (
+            _apply_security_backport(source, manifest)
+            if patched and name == "server"
+            else {}
+        )
         images[name] = _build_one(name, project, manifest[name], source, patched=patched)
         images[name]["patch_sha256"] = patch_sha
+        images[name].update(backport)
+        if backport:
+            images[name]["fix_commit_sha"] = FIX_COMMIT
+            images[name]["security_changed_files"] = [APP_FILE]
         print(f"Project-built MinIO {name}: verified source, binary, local image ID")
     evidence = {
         "project": project,
@@ -345,9 +425,9 @@ def load_built_images(project: str) -> dict[str, str]:
     )
     manifest = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     validate_build_contract(manifest)
-    require_no_known_application_critical(manifest)
     images = evidence.get("images")
     variant = evidence.get("variant")
+    require_no_known_application_critical(manifest, patched=variant == PATCHED_VARIANT)
     if (
         evidence.get("project") != project
         or variant not in (UPSTREAM_VARIANT, PATCHED_VARIANT)
@@ -366,12 +446,30 @@ def load_built_images(project: str) -> dict[str, str]:
             or row.get("tag") != tag
             or row.get("tag_object_sha") != EXPECTED[name][2]
             or row.get("commit_sha") != EXPECTED[name][3]
+            or row.get("upstream_repository", EXPECTED[name][0]) != EXPECTED[name][0]
+            or row.get("upstream_tag", EXPECTED[name][1]) != EXPECTED[name][1]
             or row.get("patch_sha256")
             != (
                 manifest["patched_acceptance"][name]["sha256"]
                 if variant == PATCHED_VARIANT
                 else None
             )
+            or row.get("security_patch_sha256")
+            != (
+                APP_PATCH_SHA256
+                if variant == PATCHED_VARIANT and name == "server"
+                else None
+            )
+            or row.get("patched_source_tree_sha1")
+            != (
+                PATCHED_SERVER_TREE
+                if variant == PATCHED_VARIANT and name == "server"
+                else None
+            )
+            or row.get("fix_commit_sha")
+            != (FIX_COMMIT if variant == PATCHED_VARIANT and name == "server" else None)
+            or row.get("security_changed_files")
+            != ([APP_FILE] if variant == PATCHED_VARIANT and name == "server" else None)
             or not isinstance(row.get("image_id"), str)
             or DIGEST_PATTERN.fullmatch(row["image_id"]) is None
             or _image_id(tag) != row["image_id"]
