@@ -349,6 +349,19 @@ Save добавляет `client_request_id`. Для `FORECAST` вместо пе
 
 Ответ имеет поля `data` и `meta`. В `meta` входят фактический период, granularity, источники, время генерации, watermark/IDs импортов и ограничения интерпретации. Поддержаны только именованные query parameters `date_from`, `date_to`, `granularity`, `region`, `organization`, `profile`; произвольные сортировка, SQL и выбор столбцов отсутствуют.
 
+`GET /api/v1/analytics/waiting/summary` дополнительно возвращает в `data`
+`snapshot_at: datetime | null` и `snapshot_semantics_confirmed: boolean`.
+Прежние поля `waiting_records`, `median_days`, `p75_days`, `p90_days` и
+`oldest_days` сохранены. `snapshot_at` — дата/время выбранного опубликованного
+снимка из проверенного источника, а не время импорта или техническая дата
+загрузки. Если подтверждённого снимка нет, `snapshot_at=null`,
+`snapshot_semantics_confirmed=false`, а значения численности и возраста
+очереди неизвестны (`value=null`). Если подтверждённый снимок есть, но
+выборка по периоду регистрации или профилю пуста,
+`waiting_records.value=0`, а `snapshot_at` остаётся датой выбранного снимка.
+Сервер применяет один выбор снимка для summary, overview и организаций при
+совпадающих фильтрах и области доступа. Клиент не передаёт дату снимка.
+
 Для аналитических фильтров несколько значений одного параметра объединяются через
 **OR**, а параметры `region` и `organization` пересекаются между собой и с
 разрешённой областью `SecurityContext` через **AND**. Пустое пересечение

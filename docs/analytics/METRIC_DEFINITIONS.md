@@ -5,7 +5,7 @@
 | Метрика | Смысл | Источник и формула | Зерно | Ограничения |
 |---|---|---|---|---|
 | `REFERRALS_TOTAL` | Зарегистрированные направления | `count()` из `fact_referral_events` по `registration_dt` | организация источника × период | Считает события, не пациентов |
-| `WAITING_RECORDS` | Записи в предоставленном срезе ожидания | `count()` последнего `snapshot_dt` | снимок × организация источника | Не историческая очередь |
+| `WAITING_RECORDS` | Записи в подтверждённом срезе ожидания | `count()` одного последнего подтверждённого и опубликованного `snapshot_dt` при одинаковых filters/scope во всех ответах | снимок × организация источника | `null`, если нет подтверждённой поставки; не историческая очередь |
 | `REFUSALS_TOTAL` | События отказа | `count()` из `fact_refusal_events` по `refuse_dt` | организация источника × период | Отношение к направлениям не рассчитывается |
 | `OBSERVED_WAITING_MEAN_DAYS` | Среднее время до завершённой госпитализации | `avg(hospitalization_dt-registration_dt)` | период × организация | Чувствительно к выбросам; конфликты исключены |
 | `OBSERVED_WAITING_MEDIAN_DAYS` | Медианное наблюдаемое ожидание | TDigest P50 корректных завершённых записей | период × организация | Не прогноз |
@@ -29,4 +29,4 @@ Daily sums and overview counts must use identical period bounds, mapping version
 
 Freshness separates event period, source load date, last successful file import, owner-confirmed complete-through date, cadence and completeness. A new load of Q1 2025 facts cannot make their event coverage CURRENT. Unknown cadence/date is UNKNOWN; incomplete reservations/parts are PARTIAL. Cadence-based CURRENT only describes reviewed delivery recency; `forecast_available=false` in descriptive freshness does not approve any model. Model eligibility is a separate R/M gate.
 
-Queue age is null with SNAPSHOT_SEMANTICS_UNCONFIRMED until owner-confirmed snapshot semantics and observed single-snapshot evidence agree. Once confirmed, age queries use only that dataset's published reviewed imports; an unrelated approval does not validate a legacy snapshot. TREATED load time remains a source-load timestamp, never an inferred reporting period. Quality exact totals are global-only; partial totals are explicitly labeled.
+Queue age is null with SNAPSHOT_SEMANTICS_UNCONFIRMED until owner-confirmed snapshot semantics and observed snapshot evidence agree. Once confirmed, summary, overview and organization aggregates use the same latest eligible published snapshot for identical filters and scope. An unrelated approval does not validate a legacy snapshot. `snapshot_at` is null if no eligible snapshot exists; neither `source_load_date` nor `import_completed_at` is substituted. TREATED load time remains a source-load timestamp, never an inferred reporting period. Quality exact totals are global-only; partial totals are explicitly labeled.

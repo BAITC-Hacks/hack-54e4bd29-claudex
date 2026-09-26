@@ -231,6 +231,20 @@ class AnalyticsService:
             )
         )
 
+    def _waiting_scope(self, scope: QueryScope) -> QueryScope:
+        """Restrict queue counts to owner-reviewed published snapshot imports."""
+        approved = set(
+            self._metadata.delivery_readiness("WAITING").snapshot_approved_import_ids
+        )
+        return replace(
+            scope,
+            waiting_import_ids=tuple(
+                import_id
+                for import_id in scope.published_import_ids or ()
+                if import_id in approved
+            ),
+        )
+
     def _authorize(self, context: SecurityContext, filters: AnalyticsFilter) -> None:
         self._authorization.require_permission(context, Permission.ANALYTICS_READ)
         filters.validate(max_days=self._max_date_range_days)
@@ -274,6 +288,9 @@ class AnalyticsService:
                 "hospitals": sorted(str(item) for item in scope.canonical_hospital_ids),
                 "all_canonical": scope.all_canonical,
                 "include_unmapped": scope.include_unmapped,
+                "waiting_import_ids": sorted(
+                    str(item) for item in scope.waiting_import_ids or ()
+                ),
             },
             "watermark": {
                 "completed_at": (
@@ -316,7 +333,7 @@ class AnalyticsService:
         self, context: SecurityContext, filters: AnalyticsFilter
     ) -> OverviewResult:
         self._authorize(context, filters)
-        scope = self._query_scope(context, filters)
+        scope = self._waiting_scope(self._query_scope(context, filters))
         watermark = self._watermark()
         key = self._cache_key("overview", filters, scope, watermark)
         try:
@@ -340,7 +357,9 @@ class AnalyticsService:
                 filters, watermark, limitations=(MAPPING_LIMITATION,)
             ),
             referrals_total=_exact(raw.referrals_total),
-            waiting_records=_exact(raw.waiting_records),
+            waiting_records=_exact(
+                raw.waiting_records if scope.waiting_import_ids else None
+            ),
             refusals_total=_exact(raw.refusals_total),
             hospitalized_total=_exact(raw.hospitalized_total),
             unknown_records=_exact(raw.unknown_records),
@@ -403,18 +422,8 @@ class AnalyticsService:
         self, context: SecurityContext, filters: AnalyticsFilter
     ) -> WaitingAgeStatistics:
         self._authorize(context, filters)
-        readiness = self._metadata.delivery_readiness("WAITING")
-        scope = self._query_scope(context, filters)
-        snapshot_approved = bool(readiness.snapshot_approved_import_ids)
-        if snapshot_approved:
-            scope = replace(
-                scope,
-                published_import_ids=tuple(
-                    i
-                    for i in scope.published_import_ids or ()
-                    if i in readiness.snapshot_approved_import_ids
-                ),
-            )
+        scope = self._waiting_scope(self._query_scope(context, filters))
+        snapshot_approved = bool(scope.waiting_import_ids)
         with observe_analytics_query("waiting_summary"):
             raw = self._repository.waiting_summary(filters, scope)
         watermark = self._watermark()
@@ -424,13 +433,28 @@ class AnalyticsService:
                 watermark,
                 sources=("ИС БГ:WAITING",),
                 limitations=(WAITING_LIMITATION, MAPPING_LIMITATION)
-                + (() if snapshot_approved else ("SNAPSHOT_SEMANTICS_UNCONFIRMED",)),
+                + (
+                    ()
+                    if snapshot_approved and raw.snapshot_dt is not None
+                    else ("SNAPSHOT_SEMANTICS_UNCONFIRMED",)
+                ),
             ),
-            waiting_records=_exact(raw.waiting_records),
-            median_days=_exact(raw.median_days if snapshot_approved else None),
-            p75_days=_exact(raw.p75_days if snapshot_approved else None),
-            p90_days=_exact(raw.p90_days if snapshot_approved else None),
-            oldest_days=_exact(raw.oldest_days if snapshot_approved else None),
+            waiting_records=_exact(raw.waiting_records if snapshot_approved else None),
+            median_days=_exact(
+                raw.median_days if snapshot_approved and raw.snapshot_dt else None
+            ),
+            p75_days=_exact(
+                raw.p75_days if snapshot_approved and raw.snapshot_dt else None
+            ),
+            p90_days=_exact(
+                raw.p90_days if snapshot_approved and raw.snapshot_dt else None
+            ),
+            oldest_days=_exact(
+                raw.oldest_days if snapshot_approved and raw.snapshot_dt else None
+            ),
+            snapshot_at=raw.snapshot_dt if snapshot_approved else None,
+            snapshot_semantics_confirmed=snapshot_approved
+            and raw.snapshot_dt is not None,
         )
 
     @publication_snapshot
@@ -466,6 +490,7 @@ class AnalyticsService:
         raw: RawOrganization,
         *,
         hospital_names: dict[uuid.UUID, str] | None = None,
+        waiting_confirmed: bool = True,
     ) -> OrganizationSummary:
         if raw.canonical_hospital_id is not None:
             identity = OrganizationIdentity.canonical(raw.canonical_hospital_id)
@@ -487,7 +512,7 @@ class AnalyticsService:
             organization_name=name,
             region_id=None,
             referrals_total=_exact(raw.referrals_total),
-            waiting_records=_exact(raw.waiting_records),
+            waiting_records=_exact(raw.waiting_records if waiting_confirmed else None),
             refusals_total=_exact(raw.refusals_total),
             observed_waiting_median_days=_exact(raw.observed_waiting_median_days),
             source_system=raw.source_system,
@@ -505,7 +530,7 @@ class AnalyticsService:
         page_size: int,
     ) -> OrganizationSummariesResult:
         self._authorize(context, filters)
-        scope = self._query_scope(context, filters)
+        scope = self._waiting_scope(self._query_scope(context, filters))
         watermark = self._watermark()
         key = self._cache_key(
             f"organizations:{page}:{page_size}", filters, scope, watermark
@@ -544,7 +569,11 @@ class AnalyticsService:
                 filters, watermark, limitations=(MAPPING_LIMITATION,)
             ),
             organizations=tuple(
-                self._organization_summary(row, hospital_names=hospital_names)
+                self._organization_summary(
+                    row,
+                    hospital_names=hospital_names,
+                    waiting_confirmed=bool(scope.waiting_import_ids),
+                )
                 for row in rows
             ),
             page=page,
@@ -561,10 +590,9 @@ class AnalyticsService:
     ) -> OrganizationDetail:
         self._authorize(context, filters)
         self.require_organization_access(context, identity)
+        scope = self._waiting_scope(self._query_scope(context, filters))
         with observe_analytics_query("organization_detail"):
-            result = self._repository.organization_detail(
-                identity.key, filters, self._query_scope(context, filters)
-            )
+            result = self._repository.organization_detail(identity.key, filters, scope)
         if result is None:
             raise NotFoundError("Организация не найдена")
         raw, treated = result
@@ -575,7 +603,9 @@ class AnalyticsService:
                 watermark,
                 limitations=(MAPPING_LIMITATION, TREATED_LIMITATION),
             ),
-            organization=self._organization_summary(raw),
+            organization=self._organization_summary(
+                raw, waiting_confirmed=bool(scope.waiting_import_ids)
+            ),
             treated_snapshot=(
                 TreatedSnapshot(
                     snapshot_load_dt=treated.snapshot_load_dt,

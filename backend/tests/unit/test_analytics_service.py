@@ -168,7 +168,12 @@ def test_hospital_role_queries_only_explicit_canonical_hospitals() -> None:
     )
 
     assert [
-        replace(item, mapping_version=None, published_import_ids=None)
+        replace(
+            item,
+            mapping_version=None,
+            published_import_ids=None,
+            waiting_import_ids=None,
+        )
         for item in repository.overview_scopes
     ] == [
         QueryScope(
@@ -188,7 +193,10 @@ def test_regional_scope_is_resolved_to_hospitals_and_excludes_unmapped() -> None
     service.overview(context(Role.REGIONAL_ANALYST, region_ids=(region_id,)), DATE_FILTER)
 
     assert replace(
-        repository.overview_scopes[0], mapping_version=None, published_import_ids=None
+        repository.overview_scopes[0],
+        mapping_version=None,
+        published_import_ids=None,
+        waiting_import_ids=None,
     ) == QueryScope(
         canonical_hospital_ids=hospital_ids,
         all_canonical=False,
@@ -212,7 +220,10 @@ def test_region_and_canonical_organization_filters_intersect() -> None:
     )
 
     assert replace(
-        repository.overview_scopes[0], mapping_version=None, published_import_ids=None
+        repository.overview_scopes[0],
+        mapping_version=None,
+        published_import_ids=None,
+        waiting_import_ids=None,
     ) == QueryScope((), all_canonical=False, include_unmapped=False)
 
 
@@ -235,7 +246,10 @@ def test_multiple_organizations_are_or_within_region_filter() -> None:
     )
 
     assert replace(
-        repository.overview_scopes[0], mapping_version=None, published_import_ids=None
+        repository.overview_scopes[0],
+        mapping_version=None,
+        published_import_ids=None,
+        waiting_import_ids=None,
     ) == QueryScope((in_region,), all_canonical=False, include_unmapped=False)
 
 
@@ -263,7 +277,12 @@ def test_mixed_canonical_and_source_filters_keep_source_matches_in_scope() -> No
     )
 
     scopes = [
-        replace(item, mapping_version=None, published_import_ids=None)
+        replace(
+            item,
+            mapping_version=None,
+            published_import_ids=None,
+            waiting_import_ids=None,
+        )
         for item in repository.overview_scopes
     ]
     assert scopes == [
@@ -283,7 +302,10 @@ def test_health_authority_can_review_unmapped_but_canonical_scope_stays_bounded(
     service.overview(context(Role.HEALTH_AUTHORITY, region_ids=(region_id,)), DATE_FILTER)
 
     assert replace(
-        repository.overview_scopes[0], mapping_version=None, published_import_ids=None
+        repository.overview_scopes[0],
+        mapping_version=None,
+        published_import_ids=None,
+        waiting_import_ids=None,
     ) == QueryScope(
         canonical_hospital_ids=(hospital_id,),
         all_canonical=False,
@@ -298,7 +320,10 @@ def test_unresolved_scope_fails_closed() -> None:
     service.overview(context(Role.REGIONAL_ANALYST, resolved=False), DATE_FILTER)
 
     assert replace(
-        repository.overview_scopes[0], mapping_version=None, published_import_ids=None
+        repository.overview_scopes[0],
+        mapping_version=None,
+        published_import_ids=None,
+        waiting_import_ids=None,
     ) == QueryScope(
         canonical_hospital_ids=(), all_canonical=False, include_unmapped=False
     )

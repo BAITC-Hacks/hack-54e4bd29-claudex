@@ -1,8 +1,9 @@
 # Current-branch analytics validation
 
 Status on 2026-09-26: **NOT TESTED at real-data scale**. This branch contains
-the C1 filter fix and a synthetic-only read-only verifier. No new acceptance
-deployment, real-data import, authenticated real-data query, or benchmark was
+the C1 filter fix, the C2 waiting-snapshot contract and a synthetic-only
+read-only verifier. No new acceptance deployment, real-data import,
+authenticated real-data query, or benchmark was
 performed here. The earlier [performance baseline](PERFORMANCE_RECHECK.md)
 belongs to a different source revision and cannot establish this branch's
 latency or correctness.
@@ -37,8 +38,13 @@ the script never prints or saves it. Only loopback permits HTTP. Its response
 size limit is 2 MB per endpoint and timeout is bounded to 1–30 seconds. The
 output path above is ignored by Git.
 
-Waiting snapshot consistency and scope-level acceptance are deferred until C2
-is approved and an isolated published dataset is available. Real-scale
+The C2 snapshot selector is covered by a synthetic isolated ClickHouse test:
+two published snapshots, one unpublished import, distinct hospital scopes,
+and equality of waiting summary, overview and organization counts. This is
+not evidence that the current real-data delivery has owner-confirmed snapshot
+semantics. The U1-03 verifier still covers only referral/refusal totals; its
+real-data run and the real-scale benchmark remain **NOT TESTED** until an
+approved isolated stand is available. Real-scale
 performance requires the same prepared stand, exact source/image SHA,
 publication watermark, dataset size, scope, cache state, concurrency, request
 count, status/error counts and successful-only p50/p95/p99. Use the existing

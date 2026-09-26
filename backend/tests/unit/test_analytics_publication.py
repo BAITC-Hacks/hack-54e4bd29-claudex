@@ -125,7 +125,82 @@ def test_snapshot_age_uses_only_imports_with_reviewed_snapshot_semantics():
 
     repo.waiting_summary = waiting
     service.waiting_summary(context(Role.ADMIN), DATE_FILTER)
-    assert captured[0].published_import_ids == (reviewed,)
+    assert captured[0].published_import_ids == meta.watermark.import_ids
+    assert captured[0].waiting_import_ids == (reviewed,)
+    result = service.waiting_summary(context(Role.ADMIN), DATE_FILTER)
+    assert result.snapshot_at == NOW
+    assert result.snapshot_semantics_confirmed is True
+
+
+def test_unconfirmed_waiting_delivery_never_exposes_source_load_as_snapshot():
+    from datetime import UTC, datetime
+
+    from app.shared.analytics_data import RawWaitingSummary
+
+    repo, meta, _, service = setup_service()
+    imported_at = datetime(2026, 9, 26, tzinfo=UTC)
+    scopes = []
+
+    def waiting(_filters, scope):
+        scopes.append(scope)
+        return RawWaitingSummary(imported_at, 20, 0, 1, 2, 3, 4)
+
+    repo.waiting_summary = waiting
+    result = service.waiting_summary(context(Role.ADMIN), DATE_FILTER)
+    service.overview(context(Role.ADMIN), DATE_FILTER)
+    service.organizations(context(Role.ADMIN), DATE_FILTER, page=1, page_size=20)
+
+    assert result.snapshot_at is None
+    assert result.snapshot_semantics_confirmed is False
+    assert result.waiting_records.value is None
+    assert result.median_days.value is None
+    assert scopes[0].waiting_import_ids == ()
+    assert repo.overview_scopes[0].waiting_import_ids == ()
+    assert repo.organization_calls[0][0].waiting_import_ids == ()
+
+
+def test_waiting_approval_change_invalidates_overview_cache_with_same_imports():
+    from app.shared.delivery import DeliveryReadiness
+
+    repo, meta, cache, service = setup_service()
+    approved = [False]
+    import_id = meta.watermark.import_ids[0]
+
+    def readiness(dataset):
+        return DeliveryReadiness(
+            dataset,
+            snapshot_approved_import_ids=(import_id,) if approved[0] else (),
+        )
+
+    meta.delivery_readiness = readiness
+    before = service.overview(context(Role.ADMIN), DATE_FILTER)
+    approved[0] = True
+    after = service.overview(context(Role.ADMIN), DATE_FILTER)
+
+    assert before.waiting_records.value is None
+    assert after.waiting_records.value == 12
+    assert len(repo.overview_scopes) == 2
+    assert cache.read_keys[0] != cache.read_keys[1]
+
+
+def test_approved_but_no_eligible_source_snapshot_has_null_snapshot_at():
+    from app.shared.analytics_data import RawWaitingSummary
+    from app.shared.delivery import DeliveryReadiness
+
+    repo, meta, _, service = setup_service()
+    import_id = meta.watermark.import_ids[0]
+    meta.delivery_readiness = lambda dataset: DeliveryReadiness(
+        dataset, snapshot_approved_import_ids=(import_id,)
+    )
+    repo.waiting_summary = lambda _filters, _scope: RawWaitingSummary(
+        None, 0, 0, None, None, None, None
+    )
+
+    result = service.waiting_summary(context(Role.ADMIN), DATE_FILTER)
+
+    assert result.snapshot_at is None
+    assert result.snapshot_semantics_confirmed is False
+    assert result.waiting_records.value == 0
 
 
 @pytest.mark.parametrize(

@@ -84,6 +84,8 @@ class TimeSeriesResponse(BaseModel):
 class WaitingSummaryData(BaseModel):
     model_config = _RESPONSE
 
+    snapshot_at: datetime | None = None
+    snapshot_semantics_confirmed: bool = False
     waiting_records: AnalyticsCellResponse
     median_days: AnalyticsCellResponse
     p75_days: AnalyticsCellResponse
