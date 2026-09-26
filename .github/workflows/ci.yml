@@ -362,17 +362,26 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Probe exact public images on this Docker runner
+      - name: Build signed upstream MinIO source for isolated acceptance
         run: >-
-          python -m scripts.operations.probe_public_images
-          --output "tmp/acceptance/$ACCEPTANCE_PROJECT/registry-probe.json"
+          python -m scripts.operations.minio_source_build build
+          --project "$ACCEPTANCE_PROJECT"
 
-      - name: Preserve sanitized registry evidence
+      - name: Scan both project-built images before startup
+        run: >-
+          python -m scripts.operations.minio_source_scan
+          --project "$ACCEPTANCE_PROJECT"
+
+      - name: Preserve MinIO provenance, SBOM and security evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: public-registry-probe
-          path: tmp/acceptance/${{ env.ACCEPTANCE_PROJECT }}/registry-probe.json
+          name: minio-source-build-evidence
+          path: |
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/source-images.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/security/*-trivy.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/security/*-sbom.cdx.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/security/scan-summary.json
           if-no-files-found: ignore
 
       - uses: actions/setup-node@v4
@@ -389,7 +398,7 @@ jobs:
 
       - name: Prepare fresh namespaced containers and volumes
         run: |
-          python -m scripts.operations.prepare_acceptance prepare --project "$ACCEPTANCE_PROJECT"
+          python -m scripts.operations.prepare_acceptance prepare --project "$ACCEPTANCE_PROJECT" --minio-source-build
           python -m scripts.operations.prepare_acceptance start --project "$ACCEPTANCE_PROJECT"
 
       - name: Load invented fixtures through the normal publication path

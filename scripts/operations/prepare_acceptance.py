@@ -339,6 +339,7 @@ def prepare_files(
     images: dict[str, str],
     output: Path,
     realm_template: Path,
+    source_images: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Generate acceptance configuration without touching existing services."""
     validate_project_name(project)
@@ -348,6 +349,13 @@ def prepare_files(
         DIGEST_PATTERN.fullmatch(digest) is None for digest in images.values()
     ):
         raise ValueError("Acceptance images must be exact sha256 content digests")
+    if source_images is not None and (
+        set(source_images) != {"server", "client"}
+        or any(
+            DIGEST_PATTERN.fullmatch(value) is None for value in source_images.values()
+        )
+    ):
+        raise ValueError("Acceptance source images must be exact local content IDs")
     output.mkdir(parents=True, exist_ok=False)
     public_origin = f"http://127.0.0.1:{port}"
     issuer = f"{public_origin}/auth/realms/medsignal"
@@ -457,13 +465,24 @@ def prepare_files(
             ("mlflow", "mlflow"),
         )
     )
+    source_lines = (
+        "  minio:\n"
+        f"    image: {source_images['server']}\n"
+        "  minio-init:\n"
+        f"    image: {source_images['client']}\n"
+        if source_images is not None
+        else ""
+    )
     overlay = (
         "services:\n"
         "  nginx:\n"
         "    build: !reset null\n"
         f"    image: {images['nginx']}\n"
         "    ports: !override\n"
-        f"      - \"127.0.0.1:{port}:80\"\n" + image_lines + "  keycloak:\n"
+        f"      - \"127.0.0.1:{port}:80\"\n"
+        + image_lines
+        + source_lines
+        + "  keycloak:\n"
         "    volumes: !override\n"
         f"      - {realm_mount}\n"
     )
@@ -475,7 +494,10 @@ def prepare_files(
         "security_gate": "FAIL",
         "dataset": "synthetic-only",
         "status": "PREPARED",
+        "minio_mode": "PROJECT_BUILT_SOURCE" if source_images else "DEFAULT",
     }
+    if source_images is not None:
+        manifest["minio_source_images"] = source_images
     (output / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
@@ -773,7 +795,9 @@ def _named_image_present(image_ref: str) -> tuple[bool | None, str | None]:
 
 
 def _check_named_dependency_images(
-    config: dict[str, Any], report: dict[str, Any]
+    config: dict[str, Any],
+    report: dict[str, Any],
+    source_images: dict[str, str] | None = None,
 ) -> None:
     """Inspect six public named dependencies, pulling only confirmed absent refs."""
     services = config.get("services")
@@ -784,6 +808,30 @@ def _check_named_dependency_images(
     for name in NAMED_DEPENDENCY_SERVICES:
         service = services.get(name)
         image_ref = service.get("image") if isinstance(service, dict) else None
+        source_name = {"minio": "server", "minio-init": "client"}.get(name)
+        if source_images is not None and source_name is not None:
+            expected_id = source_images[source_name]
+            if image_ref != expected_id:
+                raise AcceptancePreflightError(
+                    "IMAGE_REFERENCE_RESOLUTION", "named_images"
+                )
+            source_present, source_matches, error = _inspect_local_image(expected_id)
+            rows.append(
+                {
+                    "service": name,
+                    "image_kind": "LOCAL_IMAGE_ID",
+                    "present_before": source_present,
+                    "pull_attempted": False,
+                    "pull_succeeded": False,
+                    "present_after": source_present,
+                    "failure_category": error,
+                }
+            )
+            if not source_present or not source_matches:
+                raise AcceptancePreflightError(
+                    error or "IMAGE_ID_MISMATCH", "named_images"
+                )
+            continue
         if not isinstance(image_ref, str) or not PUBLIC_IMAGE_PATTERN.fullmatch(
             image_ref
         ):
@@ -825,7 +873,15 @@ def _run_preflight(
     images = _check_preflight_images(output, report)
     _check_preflight_image_resolution(project, output, config, images, report)
     _check_preflight_mounts(config, output, report)
-    _check_named_dependency_images(config, report)
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    source_images = None
+    if manifest.get("minio_mode") == "PROJECT_BUILT_SOURCE":
+        from scripts.operations.minio_source_build import load_built_images
+
+        source_images = load_built_images(project)
+        if source_images != manifest.get("minio_source_images"):
+            raise AcceptancePreflightError("IMAGE_ID_MISMATCH", "named_images")
+    _check_named_dependency_images(config, report, source_images)
 
 
 def _validated_config(project: str, output: Path) -> dict[str, Any]:
@@ -954,6 +1010,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("action", choices=("prepare", "start", "verify"))
     parser.add_argument("--project")
     parser.add_argument("--port", type=int)
+    parser.add_argument("--minio-source-build", action="store_true")
     args = parser.parse_args(argv)
     project = args.project or f"phase8-accept-{uuid.uuid4().hex[:8]}"
     stage = "initialization"
@@ -965,6 +1022,11 @@ def main(argv: list[str] | None = None) -> int:
             if output.exists():
                 raise FileExistsError("Acceptance project already exists")
             port = args.port or _free_loopback_port()
+            source_images = None
+            if args.minio_source_build:
+                from scripts.operations.minio_source_build import load_built_images
+
+                source_images = load_built_images(project)
             images = _build_images(project, port)
             manifest = prepare_files(
                 project=project,
@@ -972,6 +1034,7 @@ def main(argv: list[str] | None = None) -> int:
                 images=images,
                 output=output,
                 realm_template=REALM_TEMPLATE,
+                source_images=source_images,
             )
             manifest["git_sha"] = _run("git", "rev-parse", "HEAD").strip()
             (output / "manifest.json").write_text(

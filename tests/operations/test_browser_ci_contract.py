@@ -54,3 +54,22 @@ def test_browser_failure_artifact_contains_only_sanitized_diagnostics() -> None:
     assert path.endswith("/sanitized-diagnostics.json")
     assert "private-diagnostics" not in path
     assert artifact.get("if") == "always()"
+
+
+def test_browser_builds_and_scans_source_images_before_normal_start() -> None:
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    )
+    steps = workflow["jobs"]["browser-acceptance"]["steps"]
+    commands = [str(step.get("run", "")) for step in steps]
+    build = next(
+        i for i, command in enumerate(commands) if "minio_source_build" in command
+    )
+    scan = next(i for i, command in enumerate(commands) if "minio_source_scan" in command)
+    prepare = next(
+        i for i, command in enumerate(commands) if "prepare_acceptance prepare" in command
+    )
+    assert build < scan < prepare
+    assert "--minio-source-build" in commands[prepare]
+    assert not any("probe_public_images" in command for command in commands)
+    assert all(step.get("continue-on-error") is not True for step in steps)
