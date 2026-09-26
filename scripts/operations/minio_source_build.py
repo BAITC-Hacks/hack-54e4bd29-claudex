@@ -40,6 +40,14 @@ EXPECTED = {
 SAFE_HASH = re.compile(r"[0-9a-f]{64}")
 UPSTREAM_VARIANT = "UNMODIFIED_UPSTREAM"
 PATCHED_VARIANT = "PATCHED_ACCEPTANCE"
+KNOWN_APPLICATION_CRITICAL = "CVE-2024-55949"
+APPLICATION_ADVISORY = (
+    "https://github.com/minio/minio/security/advisories/GHSA-cwq8-g58r-32hg"
+)
+
+
+class KnownApplicationCriticalError(RuntimeError):
+    """A confirmed MinIO application vulnerability prevents acceptance use."""
 
 
 def validate_build_contract(manifest: dict[str, Any]) -> None:
@@ -87,6 +95,15 @@ def validate_build_contract(manifest: dict[str, Any]) -> None:
             != patch["sha256"]
         ):
             raise ValueError("MinIO acceptance patch contract changed")
+
+
+def require_no_known_application_critical(manifest: dict[str, Any]) -> None:
+    """Stop dependency-only builds of the vulnerable MinIO application code."""
+    if manifest["server"]["commit_sha"] == EXPECTED["server"][3]:
+        raise KnownApplicationCriticalError(
+            f"MinIO application CRITICAL {KNOWN_APPLICATION_CRITICAL} blocks acceptance; "
+            f"see {APPLICATION_ADVISORY}"
+        )
 
 
 def _apply_acceptance_patch(name: str, source: Path, manifest: dict[str, Any]) -> str:
@@ -289,6 +306,7 @@ def build(project: str, *, patched: bool = False) -> dict[str, Any]:
     validate_project_name(project)
     manifest = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     validate_build_contract(manifest)
+    require_no_known_application_critical(manifest)
     project_dir = BUILD_ROOT / project
     project_dir.mkdir(parents=True, exist_ok=False)
     gpg_home = _trusted_key(project_dir, manifest)
@@ -327,6 +345,7 @@ def load_built_images(project: str) -> dict[str, str]:
     )
     manifest = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     validate_build_contract(manifest)
+    require_no_known_application_critical(manifest)
     images = evidence.get("images")
     variant = evidence.get("variant")
     if (
@@ -377,6 +396,13 @@ def main(argv: list[str] | None = None) -> int:
             load_built_images(args.project)
         print("Project-built MinIO source images: PASS")
         return 0
+    except KnownApplicationCriticalError:
+        print(
+            f"MinIO source build: BLOCKED_KNOWN_APPLICATION_CRITICAL "
+            f"{KNOWN_APPLICATION_CRITICAL}",
+            file=sys.stderr,
+        )
+        return 2
     except (OSError, ValueError, RuntimeError, KeyError, json.JSONDecodeError) as exc:
         print(
             f"Project-built MinIO source images: FAIL ({type(exc).__name__})",

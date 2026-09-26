@@ -51,9 +51,47 @@ Run-scoped machine evidence is uploaded as `minio-source-build-evidence` and
 binary hashes, package versions, scanner DB date, HIGH/CRITICAL counts and
 runtime results from those artifacts; do not infer them from this design.
 
-## Current result
+## Current result: application security hold
 
-Pending the first patched CI run. The original unmodified image scan remains
-**security admission FAIL** and **functional acceptance NOT TESTED**. The three
-existing backend, worker and MLflow image security jobs are separate and remain
-unmodified.
+The first patched CI run
+[`36247311226`](https://github.com/zzhassyn/govtech_case1/actions/runs/36247311226)
+was **cancelled during the source-build step, before scan or Compose startup**.
+Its browser job is `108418778243`. No patched binary hashes or image IDs were
+produced, the patched image scan did not run, and browser tests executed: **0**.
+MinIO bootstrap, S3 policies, MLflow and OIDC/browser compatibility are all
+**NOT TESTED**. The cancellation was deliberate after finding a CRITICAL
+application-code advisory that dependency scanning may not surface.
+
+The [upstream MinIO security advisory
+GHSA-cwq8-g58r-32hg](https://github.com/minio/minio/security/advisories/GHSA-cwq8-g58r-32hg)
+rates `CVE-2024-55949` **Critical**. It says the IAM import API allows
+privilege escalation in releases before
+`RELEASE.2024-12-13T22-19-12Z`; the selected server base
+`RELEASE.2024-11-07T00-52-20Z` predates that fix. Our patches change only Go
+module metadata and runtime OpenSSL packages, so they do **not** repair the
+affected MinIO application code. The source-build helper now rejects this
+known server commit **before cloning, building, scanning or starting images**;
+preflight also refuses previously built image IDs. No bypass flag was added.
+
+**FUNCTIONAL_ACCEPTANCE: BLOCKED / NOT TESTED. SECURITY_ADMISSION: FAIL.**
+The original unmodified image scan still shows dependency CRITICAL findings.
+The three existing backend, worker and MLflow image gates remain separate and
+unmodified. The patched build's Go/OS vulnerability counts are **unknown**,
+not zero.
+
+## Decision needed
+
+The approved dependency-only patch is insufficient. A separate decision is
+needed before any new runtime attempt:
+
+1. Select and authorize a newer, supported storage release/product for the
+   isolated acceptance environment, then pin its source/image provenance and
+   scan it, including known application advisories; or
+2. Explicitly authorize a reviewed application-code backport of upstream fix
+   commit `f246c9053f9603e610d98439799bdd2a6b293427` onto the exact 2024
+   server tag **for synthetic acceptance only**, plus a wider advisory review.
+   A backport would no longer be the unmodified upstream release.
+
+Until one option is approved and verified, leave the gate closed. An isolated
+synthetic environment does not turn this CRITICAL into production risk
+acceptance.

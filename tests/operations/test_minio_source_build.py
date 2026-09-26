@@ -160,6 +160,9 @@ def test_default_prepare_does_not_replace_quay_images(tmp_path: Path) -> None:
 def test_source_image_manifest_rejects_changed_local_image_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(
+        minio_source_build, "require_no_known_application_critical", lambda _: None
+    )
     folder = tmp_path / PROJECT
     folder.mkdir()
     expected = {"server": "sha256:" + "1" * 64, "client": "sha256:" + "2" * 64}
@@ -221,6 +224,9 @@ def test_source_image_manifest_rejects_changed_local_image_id(
 def test_patched_image_manifest_rejects_missing_or_changed_patch_provenance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(
+        minio_source_build, "require_no_known_application_critical", lambda _: None
+    )
     folder = tmp_path / PROJECT
     folder.mkdir()
     manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
@@ -268,6 +274,47 @@ def test_source_manifest_rejects_changed_acceptance_patch() -> None:
     manifest["patched_acceptance"]["client"]["sha256"] = "0" * 64
     with pytest.raises(ValueError, match="patch contract"):
         minio_source_build.validate_build_contract(manifest)
+
+
+def test_confirmed_minio_application_critical_blocks_before_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A dependency-only patch cannot clear an application-code advisory."""
+    manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    with pytest.raises(RuntimeError, match="CVE-2024-55949"):
+        minio_source_build.require_no_known_application_critical(manifest)
+    monkeypatch.setattr(minio_source_build, "BUILD_ROOT", tmp_path)
+    monkeypatch.setattr(
+        minio_source_build,
+        "_trusted_key",
+        lambda *_args: pytest.fail("build reached network/source stage"),
+    )
+    with pytest.raises(RuntimeError, match="CVE-2024-55949"):
+        minio_source_build.build(PROJECT, patched=True)
+    assert not (tmp_path / PROJECT).exists()
+    folder = tmp_path / PROJECT
+    folder.mkdir()
+    (folder / "source-images.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        minio_source_build,
+        "_image_id",
+        lambda _tag: pytest.fail("preflight inspected an image before advisory gate"),
+    )
+    with pytest.raises(RuntimeError, match="CVE-2024-55949"):
+        minio_source_build.load_built_images(PROJECT)
+
+
+def test_cli_reports_known_application_critical_without_stack_or_secrets(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert (
+        minio_source_build.main(["build", "--project", PROJECT, "--patched-acceptance"])
+        == 2
+    )
+    output = capsys.readouterr()
+    assert "BLOCKED_KNOWN_APPLICATION_CRITICAL CVE-2024-55949" in output.err
+    assert "Traceback" not in output.err
+    assert "password" not in output.err.lower()
 
 
 def test_source_mode_preflight_never_pulls_quay(
