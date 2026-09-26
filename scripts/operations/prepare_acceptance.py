@@ -73,6 +73,15 @@ class AcceptanceCommandError(RuntimeError):
         )
 
 
+class AcceptancePreflightError(RuntimeError):
+    """Report a fixed pre-container category without retaining source values."""
+
+    def __init__(self, category: str, stage: str) -> None:
+        self.category = category
+        self.stage = stage
+        super().__init__(f"Acceptance preflight failed ({category})")
+
+
 def _command_category(command: tuple[str, ...]) -> str:
     if command[:2] == ("docker", "compose"):
         return (
@@ -90,16 +99,30 @@ def _command_category(command: tuple[str, ...]) -> str:
 def _docker_error_category(stderr: str) -> str:
     """Classify stderr in memory; never reproduce any of its original bytes."""
     lowered = stderr.lower()
+    if "container name" in lowered and "already in use" in lowered:
+        return "CONTAINER_NAME_CONFLICT"
     for category, markers in (
         ("PORT_BIND_CONFLICT", ("port is already allocated", "address already in use")),
+        ("INVALID_REFERENCE", ("invalid reference format",)),
+        ("NETWORK_CREATE_FAILED", ("failed to create network", "error creating network")),
+        ("VOLUME_CREATE_FAILED", ("failed to create volume", "error creating volume")),
+        (
+            "MOUNT_CONFIGURATION_ERROR",
+            ("invalid mount config", "bind source path does not exist"),
+        ),
         (
             "IMAGE_UNAVAILABLE",
-            ("no such image", "pull access denied", "manifest unknown"),
+            ("no such image", "no such object", "pull access denied", "manifest unknown"),
         ),
         ("DEPENDENCY_FAILED", ("dependency failed to start", "depends on service")),
         ("DEPENDENCY_UNHEALTHY", ("unhealthy",)),
         ("RESOURCE_EXHAUSTED", ("no space left on device", "out of memory")),
         ("PERMISSION_DENIED", ("permission denied", "access is denied")),
+        (
+            "COMPOSE_VALIDATION_RUNTIME_ERROR",
+            ("has neither an image nor a build context", "invalid project name"),
+        ),
+        ("DAEMON_ERROR", ("error response from daemon",)),
     ):
         if any(marker in lowered for marker in markers):
             return category
@@ -183,7 +206,11 @@ def _safe_services(
 
 
 def _collect_start_diagnostics(
-    project: str, output: Path, stage: str, error: Exception
+    project: str,
+    output: Path,
+    stage: str,
+    error: Exception,
+    preflight: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a machine-readable report from fixed vocabulary and vetted identifiers."""
     try:
@@ -203,11 +230,21 @@ def _collect_start_diagnostics(
         or item["health"] == "unhealthy"
     ]
     command_error = error if isinstance(error, AcceptanceCommandError) else None
+    preflight_error = error if isinstance(error, AcceptancePreflightError) else None
     return {
         "diagnostic_version": 1,
-        "failure_stage": stage,
+        "failure_stage": preflight_error.stage if preflight_error else stage,
+        "failure_category": (
+            preflight_error.category
+            if preflight_error
+            else command_error.docker_error_category
+            if command_error
+            else "UNCLASSIFIED"
+        ),
         "command_category": command_error.command_category
         if command_error
+        else "preflight"
+        if preflight_error
         else "verification",
         "exit_code": command_error.exit_code if command_error else None,
         "docker_error_category": (
@@ -228,6 +265,7 @@ def _collect_start_diagnostics(
         "failed_dependency_services": [
             name for name in failed if name in ONE_SHOT_SERVICES
         ],
+        "preflight": preflight or {},
     }
 
 
@@ -496,9 +534,193 @@ def _compose_command(project: str, output: Path) -> list[str]:
     ]
 
 
-def _validated_config(project: str, output: Path) -> None:
+def _read_preflight_images(output: Path) -> dict[str, str]:
+    try:
+        manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise AcceptancePreflightError(
+            "MANIFEST_IMAGES_INVALID", "preflight_images"
+        ) from exc
+    images = manifest.get("images") if isinstance(manifest, dict) else None
+    if (
+        not isinstance(images, dict)
+        or set(images) != REQUIRED_IMAGES
+        or any(
+            not isinstance(value, str) or not DIGEST_PATTERN.fullmatch(value)
+            for value in images.values()
+        )
+    ):
+        raise AcceptancePreflightError("MANIFEST_IMAGES_INVALID", "preflight_images")
+    return images
+
+
+def _inspect_local_image(image_id: str) -> tuple[bool, bool, str | None]:
+    """Check a pinned ID without retaining Docker's inspect or stderr payload."""
+    try:
+        result = subprocess.run(  # noqa: S603 — fixed Docker CLI
+            ["docker", "image", "inspect", image_id, "--format", "{{.Id}}"],  # noqa: S607 — fixed CLI
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=8,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False, False, "IMAGE_INSPECT_FAILED"
+    if result.returncode:
+        category = _docker_error_category(result.stderr)
+        if category == "IMAGE_UNAVAILABLE":
+            return False, False, "IMAGE_ID_NOT_PRESENT"
+        return (
+            False,
+            False,
+            category if category == "DAEMON_ERROR" else "IMAGE_INSPECT_FAILED",
+        )
+    return True, result.stdout.strip() == image_id, None
+
+
+def _check_preflight_images(output: Path, report: dict[str, Any]) -> dict[str, str]:
+    images = _read_preflight_images(output)
+    presence: list[dict[str, Any]] = []
+    errors: set[str] = set()
+    for family in sorted(REQUIRED_IMAGES):
+        present, matches, error = _inspect_local_image(images[family])
+        presence.append(
+            {"image_family": family, "present": present, "image_id_matches": matches}
+        )
+        if error:
+            errors.add(error)
+        elif not matches:
+            errors.add("IMAGE_ID_MISMATCH")
+    report["image_presence"] = presence
+    for category in (
+        "DAEMON_ERROR",
+        "IMAGE_INSPECT_FAILED",
+        "IMAGE_ID_NOT_PRESENT",
+        "IMAGE_ID_MISMATCH",
+    ):
+        if category in errors:
+            raise AcceptancePreflightError(category, "preflight_images")
+    return images
+
+
+def _check_preflight_image_resolution(
+    project: str,
+    output: Path,
+    config: dict[str, Any],
+    images: dict[str, str],
+    report: dict[str, Any],
+) -> None:
+    raw = _safe_probe(*_compose_command(project, output), "config", "--images")
+    resolved = {line.strip() for line in (raw or "").splitlines() if line.strip()}
+    services = config.get("services", {})
+    rows: list[dict[str, Any]] = []
+    expected: set[str] = set()
+    mismatch = raw is None or not isinstance(services, dict)
+    active_names: set[str] = set()
+    if isinstance(services, dict):
+        for name, service in sorted(services.items()):
+            if name not in SERVICE_NAMES or not isinstance(service, dict):
+                mismatch = True
+                continue
+            if service.get("profiles"):
+                continue  # Profile-only tools do not participate in default up.
+            active_names.add(name)
+            image = service.get("image")
+            family = SERVICE_IMAGE_FAMILY.get(name, name)
+            if isinstance(image, str) and image:
+                expected.add(image)
+            kind = (
+                "UNKNOWN"
+                if not isinstance(image, str) or image not in resolved
+                else "LOCAL_IMAGE_ID"
+                if DIGEST_PATTERN.fullmatch(image)
+                else "NAMED_IMAGE"
+            )
+            service_mismatch = kind == "UNKNOWN" or (
+                name in SERVICE_IMAGE_FAMILY and image != images[family]
+            )
+            mismatch = mismatch or service_mismatch
+            rows.append(
+                {
+                    "service": name,
+                    "expected_image_family": family,
+                    "resolved_reference_kind": kind,
+                    "mismatch": service_mismatch,
+                }
+            )
+    mismatch = (
+        mismatch
+        or not expected.issubset(resolved)
+        or not set(SERVICE_IMAGE_FAMILY).issubset(active_names)
+    )
+    report["compose_image_resolution"] = {
+        "expected_image_refs": len(expected),
+        "resolved_image_refs": len(resolved),
+        "services": rows,
+        "mismatch": mismatch,
+    }
+    if mismatch:
+        raise AcceptancePreflightError(
+            "IMAGE_REFERENCE_RESOLUTION", "preflight_image_resolution"
+        )
+
+
+def _check_preflight_mounts(
+    config: dict[str, Any], output: Path, report: dict[str, Any]
+) -> None:
+    services = config.get("services", {})
+    checks: list[dict[str, Any]] = []
+    seen: set[tuple[str, Path]] = set()
+    if isinstance(services, dict):
+        for name, service in sorted(services.items()):
+            if (
+                name not in SERVICE_NAMES
+                or not isinstance(service, dict)
+                or service.get("profiles")
+            ):
+                continue
+            volumes = service.get("volumes", [])
+            if not isinstance(volumes, list):
+                continue
+            for volume in volumes:
+                if not isinstance(volume, dict) or volume.get("type") != "bind":
+                    continue
+                source = volume.get("source")
+                path = Path(source) if isinstance(source, str) and source else None
+                exists = path.exists() if path is not None else False
+                checks.append(
+                    {"service": name, "mount_kind": "bind", "source_exists": exists}
+                )
+                if path is not None:
+                    seen.add((name, path.resolve()))
+    for name, path in (
+        ("keycloak", output / "realm.json"),
+        ("pipeline", output / "source-empty"),
+    ):
+        if (name, path.resolve()) not in seen:
+            checks.append(
+                {"service": name, "mount_kind": "bind", "source_exists": path.exists()}
+            )
+    report["mount_sources"] = checks
+    if any(not item["source_exists"] for item in checks):
+        raise AcceptancePreflightError("MOUNT_SOURCE_MISSING", "preflight_mounts")
+
+
+def _run_preflight(
+    project: str, output: Path, config: dict[str, Any], report: dict[str, Any]
+) -> None:
+    """Gather only allowlisted evidence before the unchanged Compose up command."""
+    images = _check_preflight_images(output, report)
+    _check_preflight_image_resolution(project, output, config, images, report)
+    _check_preflight_mounts(config, output, report)
+
+
+def _validated_config(project: str, output: Path) -> dict[str, Any]:
     rendered = _run(*_compose_command(project, output), "config", "--format", "json")
-    validate_compose_config(json.loads(rendered), project)
+    config: dict[str, Any] = json.loads(rendered)
+    validate_compose_config(config, project)
+    return config
 
 
 def _wait_http(url: str, *, deadline_seconds: float = 300) -> None:
@@ -623,6 +845,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     project = args.project or f"phase8-accept-{uuid.uuid4().hex[:8]}"
     stage = "initialization"
+    preflight: dict[str, Any] = {}
     try:
         validate_project_name(project)
         output = ARTIFACTS / project
@@ -646,7 +869,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Prepared isolated acceptance project {project} at {output}")
         elif args.action == "start":
             stage = "compose_config"
-            _validated_config(project, output)
+            config = _validated_config(project, output)
+            stage = "preflight"
+            _run_preflight(project, output, config, preflight)
             stage = "compose_up"
             _run(*_compose_command(project, output), "up", "--no-build", "-d")
             stage = "runtime_verify"
@@ -662,7 +887,9 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 output = ARTIFACTS / project
                 if output.is_dir():
-                    report = _collect_start_diagnostics(project, output, stage, exc)
+                    report = _collect_start_diagnostics(
+                        project, output, stage, exc, preflight
+                    )
                     _write_private(
                         output / "sanitized-diagnostics.json",
                         json.dumps(report, indent=2, sort_keys=True) + "\n",
