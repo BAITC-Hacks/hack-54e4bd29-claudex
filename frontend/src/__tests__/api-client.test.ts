@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { ApiError, apiRequest } from "@/services/api-client";
+import { fetchReadiness } from "@/services/system";
 
 /**
  * Клиент API разбирает контракт ошибки и проверяет ответ схемой.
@@ -69,5 +70,71 @@ describe("apiRequest", () => {
   it("распознаёт отказ аутентификации", async () => {
     const error = new ApiError("UNAUTHENTICATED", "нет доступа", 401, null);
     expect(error.isUnauthenticated).toBe(true);
+  });
+
+  it("сохраняет контракт ошибки аналитики при HTTP 503", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        mockResponse(
+          {
+            error: {
+              code: "DEPENDENCY_UNAVAILABLE",
+              message: "Аналитическое хранилище недоступно",
+              details: {},
+              request_id: "abc123def456",
+            },
+          },
+          503,
+        ),
+      ),
+    );
+
+    await expect(apiRequest("/analytics/overview", schema)).rejects.toMatchObject({
+      code: "DEPENDENCY_UNAVAILABLE",
+      httpStatus: 503,
+      requestId: "abc123def456",
+    });
+  });
+
+  it("не выдаёт HTML 503 от прокси за ошибку API-контракта", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ...mockResponse(null, 503),
+        json: async () => { throw new SyntaxError("Unexpected token '<'"); },
+      })),
+    );
+
+    await expect(apiRequest("/analytics/overview", schema)).rejects.toMatchObject({
+      code: "UNEXPECTED_RESPONSE",
+      httpStatus: 503,
+      requestId: "abc123def456",
+    });
+  });
+
+  it("читает ответ о неготовности только у /ready", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        mockResponse({
+          status: "not_ready",
+          service: "MedSignal",
+          version: "test",
+          dependencies: [{
+            name: "postgres",
+            status: "down",
+            required: true,
+            latency_ms: null,
+            reason: "unavailable",
+          }],
+        }, 503),
+      ),
+    );
+
+    await expect(fetchReadiness()).resolves.toMatchObject({
+      status: "not_ready",
+      dependencies: [{ name: "postgres", status: "down" }],
+    });
   });
 });

@@ -107,7 +107,7 @@ export async function apiRequest<T>(
 
   // Готовность отвечает кодом 503 вместе с телом по контракту:
   // это состояние, а не отказ, поэтому тело разбирается как обычно.
-  if (!response.ok && response.status !== 503) {
+  if (!response.ok && !(path === "/ready" && response.status === 503)) {
     throw await parseError(response);
   }
 
