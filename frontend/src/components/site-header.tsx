@@ -54,10 +54,10 @@ function SiteHeaderContent({ pathname, research }: { pathname: string; research:
       <div className="h-1 bg-[linear-gradient(90deg,#087d85_0%,#12a8ae_58%,#f0bd45_58%,#f0bd45_66%,#1e4b7a_66%)]" />
       <div className="container flex min-h-[68px] items-center justify-between gap-6 py-2">
         <div className="flex min-w-0 items-center gap-8">
-          <Link href="/" className="group flex shrink-0 items-center gap-3" aria-label="MedFlow — главная">
+          <Link href="/" className="group flex shrink-0 items-center gap-3" aria-label="MedSignal — главная">
             <BrandMark compact className="text-[#087d85] shadow-[0_8px_22px_-10px_rgba(8,125,133,.7)] transition-transform group-hover:-rotate-3 group-hover:scale-105" />
             <span className="leading-none">
-              <span className="block text-[17px] font-extrabold tracking-[-0.055em] text-[#102f45]">MedFlow</span>
+              <span className="block text-[17px] font-extrabold tracking-[-0.055em] text-[#102f45]">MedSignal</span>
               <span className="mt-1 block text-[8px] font-extrabold uppercase tracking-[0.19em] text-cyan-700">Health intelligence</span>
             </span>
           </Link>

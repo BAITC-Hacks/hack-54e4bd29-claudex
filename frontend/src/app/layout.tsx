@@ -7,7 +7,7 @@ import { DECISION_SUPPORT_NOTICE, env } from "@/config/env";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
-  title: "MedFlow — исследовательский пилот",
+  title: "MedSignal — исследовательский пилот",
   description:
     "Система раннего предупреждения о риске перегрузки медицинских организаций",
   robots: { index: false, follow: false },
@@ -31,7 +31,7 @@ export default function RootLayout({
                   <p className="max-w-4xl text-[11px] leading-5 text-slate-500">
                     {DECISION_SUPPORT_NOTICE}
                   </p>
-                  <span className="hidden text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-700 md:block">MedFlow · 2026</span>
+                  <span className="hidden text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-700 md:block">MedSignal · 2026</span>
                 </div>
               </footer>
             )}

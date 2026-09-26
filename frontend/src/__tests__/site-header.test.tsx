@@ -28,6 +28,8 @@ describe("SiteHeader responsive navigation", () => {
   it("exposes every standard route in the compact menu and marks the active route", () => {
     render(<SiteHeader />);
 
+    expect(screen.getByRole("link", { name: "MedSignal — главная" })).toBeInTheDocument();
+
     const toggle = screen.getByRole("button", { name: "Открыть меню" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("navigation", { name: "Мобильная навигация" })).not.toBeInTheDocument();
