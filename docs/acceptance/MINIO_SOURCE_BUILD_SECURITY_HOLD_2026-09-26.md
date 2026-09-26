@@ -91,7 +91,8 @@ remaining HIGH findings; security admission stays FAIL without a separate
 review. Compatibility, especially gRPC-Go API behavior and MinIO bootstrap,
 must be checked by the full existing synthetic acceptance path.
 
-No dependency changes, runtime package upgrade, CRITICAL suppression, policy
-relaxation or image startup is authorized by the current request. If the owner
-does not approve the patched variant, leave functional acceptance blocked and
-evaluate a separately approved storage release/product decision later.
+At the time of this run, no dependency change or startup was authorized. The
+owner subsequently approved a separate **patched acceptance-only** experiment.
+Its provenance and results are recorded in
+[MINIO_PATCHED_ACCEPTANCE.md](MINIO_PATCHED_ACCEPTANCE.md). This does not
+retroactively turn the original scan into a pass.
