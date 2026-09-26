@@ -7,7 +7,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Any, Protocol
+from typing import Any, NoReturn, Protocol
 
 from app.business.copilot.rate_limit import LocalCopilotRateLimiter
 from app.business.signals.service import SignalService
@@ -17,6 +17,7 @@ from app.core.exceptions import (
     CopilotInvalidResponseError,
     CopilotProviderUnavailableError,
 )
+from app.core.logging import get_logger
 from app.models.enums import SignalType
 from app.security.context import SecurityContext
 
@@ -50,6 +51,7 @@ _UNVERIFIED_SOURCE = re.compile(
     r"по данным|согласно источнику)\b|\b[a-z0-9.-]+\.(?:ru|kz|org|com)\b",
     re.IGNORECASE,
 )
+logger = get_logger(__name__)
 
 
 class CopilotProvider(Protocol):
@@ -147,31 +149,39 @@ def _facts_from_signal(signal: Any) -> tuple[CopilotFact, ...]:
 def _validate_model_output(
     raw: dict[str, object], facts: tuple[CopilotFact, ...]
 ) -> tuple[str, tuple[str, ...]]:
-    if set(raw) != {"explanation", "fact_ids"}:
+    def reject(reason: str) -> NoReturn:
+        # Fixed reason codes only: never log the model text or a fact value.
+        logger.warning("copilot response rejected", extra={"reason_code": reason})
         raise CopilotInvalidResponseError()
+
+    if set(raw) != {"explanation", "fact_ids"}:
+        reject("SCHEMA_FIELDS")
     explanation = raw["explanation"]
     fact_ids = raw["fact_ids"]
+    if not isinstance(explanation, str) or not 40 <= len(explanation) <= 1500:
+        reject("EXPLANATION_TYPE_OR_LENGTH")
+    if _QUANTITATIVE.search(explanation) or _NUMBER_WORDS.search(explanation):
+        reject("NUMERIC_ASSERTION")
+    if _TEMPORAL_CLAIMS.search(explanation):
+        reject("DATE_ASSERTION")
+    if _UNVERIFIED_SOURCE.search(explanation):
+        reject("UNVERIFIED_SOURCE")
     if (
-        not isinstance(explanation, str)
-        or not 40 <= len(explanation) <= 1500
-        or _QUANTITATIVE.search(explanation)
-        or _NUMBER_WORDS.search(explanation)
-        or _TEMPORAL_CLAIMS.search(explanation)
-        or _UNVERIFIED_SOURCE.search(explanation)
-        or "<" in explanation
+        "<" in explanation
         or ">" in explanation
         or "http://" in explanation.lower()
         or "https://" in explanation.lower()
-        or not isinstance(fact_ids, list)
-        or not fact_ids
-        or len(fact_ids) > len(facts)
     ):
-        raise CopilotInvalidResponseError()
+        reject("MARKUP_OR_URL")
+    if not isinstance(fact_ids, list) or not fact_ids:
+        reject("FACT_IDS_TYPE_OR_EMPTY")
+    if len(fact_ids) > len(facts):
+        reject("FACT_IDS_COUNT")
     allowed = {fact.id for fact in facts}
     if any(not isinstance(item, str) or item not in allowed for item in fact_ids):
-        raise CopilotInvalidResponseError()
+        reject("FACT_ID_UNKNOWN")
     if len(fact_ids) != len(set(fact_ids)):
-        raise CopilotInvalidResponseError()
+        reject("FACT_ID_DUPLICATE")
     return explanation.strip(), tuple(fact_ids)
 
 
@@ -215,28 +225,24 @@ class CopilotService:
             raise CopilotInsufficientDataError()
         if self._rate_limiter is not None:
             self._rate_limiter.check(context.user_id)
+        # PostgreSQL String columns return str, including when ORM hints use StrEnum.
+        signal_type = SignalType(signal.type)
 
         # Never include title/summary, free-form factors, actions, audit,
         # user/signal/hospital IDs or raw evidence in provider input.
         payload: dict[str, object] = {
-            "rule": signal.type.value,
+            "rule": signal_type.value,
+            "rule_label": _RULE_LABELS[signal_type],
             "facts": [
                 {
                     "id": fact.id,
                     "metric_code": fact.metric_code,
-                    "value": fact.value,
-                    "unit": fact.unit,
+                    "label": fact.label,
                     "direction": fact.direction,
-                    "period_start": fact.period_start.isoformat()
-                    if fact.period_start
-                    else None,
-                    "period_end": fact.period_end.isoformat()
-                    if fact.period_end
-                    else None,
                 }
                 for fact in facts
             ],
-            "limitations": ["synthetic_demo", "no_causality", "not_current_queue"],
+            "limitations": ["synthetic_demo", "no_causality"],
         }
         explanation, fact_ids = _validate_model_output(
             self._provider.explain(payload), facts
@@ -244,7 +250,7 @@ class CopilotService:
         return CopilotResult(
             signal_id=signal.id,
             signal_version=signal.version,
-            title=f"Пояснение сигнала: {_RULE_LABELS[signal.type]}",
+            title=f"Пояснение сигнала: {_RULE_LABELS[signal_type]}",
             explanation=explanation,
             fact_ids=fact_ids,
             facts=facts,
