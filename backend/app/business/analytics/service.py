@@ -185,25 +185,35 @@ class AnalyticsService:
         if filters is None:
             return self._publication_scope(scope)
 
-        requested_hospitals = {
+        canonical_filter = {
             uuid.UUID(item.key.removeprefix("canonical:"))
             for item in filters.organization_ids
             if item.identity_space is OrganizationIdentitySpace.CANONICAL
         }
-        if filters.region_ids:
-            requested_hospitals.update(
-                self._metadata.hospital_ids_for_regions(filters.region_ids)
-            )
-        has_canonical_constraint = bool(filters.region_ids) or any(
-            item.identity_space is OrganizationIdentitySpace.CANONICAL
+        has_source_filter = any(
+            item.identity_space is OrganizationIdentitySpace.SOURCE
             for item in filters.organization_ids
         )
-        if not requested_hospitals and has_canonical_constraint:
+        if filters.region_ids:
+            regional_filter = set(
+                self._metadata.hospital_ids_for_regions(filters.region_ids)
+            )
+            # A source identity may refer to any mapped hospital in the region.
+            # The repository applies the OR among organization identities.
+            requested_hospitals = (
+                regional_filter
+                if has_source_filter or not canonical_filter
+                else regional_filter & canonical_filter
+            )
+        elif has_source_filter or not canonical_filter:
+            return self._publication_scope(scope)
+        else:
+            requested_hospitals = canonical_filter
+
+        if not requested_hospitals:
             return self._publication_scope(
                 QueryScope((), all_canonical=False, include_unmapped=False)
             )
-        if not requested_hospitals:
-            return self._publication_scope(scope)
 
         if scope.all_canonical:
             narrowed = tuple(sorted(requested_hospitals, key=str))
@@ -217,14 +227,7 @@ class AnalyticsService:
             QueryScope(
                 canonical_hospital_ids=narrowed,
                 all_canonical=False,
-                include_unmapped=(
-                    scope.include_unmapped
-                    and not filters.region_ids
-                    and any(
-                        item.identity_space is OrganizationIdentitySpace.SOURCE
-                        for item in filters.organization_ids
-                    )
-                ),
+                include_unmapped=False,
             )
         )
 

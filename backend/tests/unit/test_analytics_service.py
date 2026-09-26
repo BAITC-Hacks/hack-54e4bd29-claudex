@@ -196,6 +196,82 @@ def test_regional_scope_is_resolved_to_hospitals_and_excludes_unmapped() -> None
     )
 
 
+def test_region_and_canonical_organization_filters_intersect() -> None:
+    region_id = uuid.uuid4()
+    in_region, outside_region = uuid.uuid4(), uuid.uuid4()
+    repository = FakeAnalyticsRepository()
+    service = make_service(repository, FakeMetadataRepository((in_region,)), FakeCache())
+
+    service.overview(
+        context(Role.ADMIN),
+        replace(
+            DATE_FILTER,
+            region_ids=(region_id,),
+            organization_ids=(OrganizationIdentity.canonical(outside_region),),
+        ),
+    )
+
+    assert replace(
+        repository.overview_scopes[0], mapping_version=None, published_import_ids=None
+    ) == QueryScope((), all_canonical=False, include_unmapped=False)
+
+
+def test_multiple_organizations_are_or_within_region_filter() -> None:
+    region_id = uuid.uuid4()
+    in_region, outside_region = uuid.uuid4(), uuid.uuid4()
+    repository = FakeAnalyticsRepository()
+    service = make_service(repository, FakeMetadataRepository((in_region,)), FakeCache())
+
+    service.overview(
+        context(Role.ADMIN),
+        replace(
+            DATE_FILTER,
+            region_ids=(region_id,),
+            organization_ids=(
+                OrganizationIdentity.canonical(outside_region),
+                OrganizationIdentity.canonical(in_region),
+            ),
+        ),
+    )
+
+    assert replace(
+        repository.overview_scopes[0], mapping_version=None, published_import_ids=None
+    ) == QueryScope((in_region,), all_canonical=False, include_unmapped=False)
+
+
+def test_mixed_canonical_and_source_filters_keep_source_matches_in_scope() -> None:
+    region_id = uuid.uuid4()
+    in_region, outside_region = uuid.uuid4(), uuid.uuid4()
+    source = OrganizationIdentity.source("a" * 64)
+    repository = FakeAnalyticsRepository()
+    service = make_service(repository, FakeMetadataRepository((in_region,)), FakeCache())
+
+    service.overview(
+        context(Role.ADMIN),
+        replace(
+            DATE_FILTER,
+            organization_ids=(OrganizationIdentity.canonical(outside_region), source),
+        ),
+    )
+    service.overview(
+        context(Role.ADMIN),
+        replace(
+            DATE_FILTER,
+            region_ids=(region_id,),
+            organization_ids=(OrganizationIdentity.canonical(outside_region), source),
+        ),
+    )
+
+    scopes = [
+        replace(item, mapping_version=None, published_import_ids=None)
+        for item in repository.overview_scopes
+    ]
+    assert scopes == [
+        QueryScope((), all_canonical=True, include_unmapped=True),
+        QueryScope((in_region,), all_canonical=False, include_unmapped=False),
+    ]
+
+
 def test_health_authority_can_review_unmapped_but_canonical_scope_stays_bounded() -> None:
     region_id = uuid.uuid4()
     hospital_id = uuid.uuid4()
