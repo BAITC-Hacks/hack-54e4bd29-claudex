@@ -76,6 +76,34 @@ the unmodified base. The patched variant must pass source-tree, advisory,
 image-scan and IAM runtime gates before Compose. A pinned patch does not by
 itself prove functional or security acceptance.
 
+## IAM regression evidence
+
+CI run [`36254020141`](https://github.com/zzhassyn/govtech_case1/actions/runs/36254020141)
+localized the previous generic probe failure to `create_service_account`
+(mc exit code 1). The probe had generated a 48-character secret for that
+service account. The pinned MinIO server's
+`auth.CreateNewCredentialsWithMetadata` enforces a 40-character maximum for
+service-account secret keys. The acceptance probe now generates a 40-character
+random secret; this is a test-harness correction, not a change to MinIO source,
+permissions, or production configuration.
+
+In CI run [`36254595904`](https://github.com/zzhassyn/govtech_case1/actions/runs/36254595904),
+the disposable pre-Compose IAM probe recorded `DENIED` separately for the
+limited user and its service account, `ALLOWED` for the authorized admin,
+unchanged limited-user policy, and successful cleanup. The sanitized probe
+summary preserves each assertion and any primary/cleanup failure separately;
+it contains no credentials or archive content. This proves this particular
+runtime regression on the patched acceptance image. It does not constitute
+production security admission.
+
+The same run continued to the full synthetic Compose start, which failed in
+`runtime_verify` with Keycloak in `restarting` state. PostgreSQL and ClickHouse
+migrations and `minio-init` had exited successfully; the MinIO service was
+healthy. The sanitized startup diagnostic does **not** establish why Keycloak
+restarted. S3/MLflow verification, signed-token browser checks and Playwright
+were therefore **NOT TESTED** in this run. The IAM probe's PASS is independent
+of this later acceptance failure; `FUNCTIONAL_ACCEPTANCE` remains blocked.
+
 **SECURITY_ADMISSION: FAIL** regardless of synthetic functional outcome; a
 supported production storage path has not been selected. The existing
 backend, worker and MLflow image gates remain separate and unmodified.
