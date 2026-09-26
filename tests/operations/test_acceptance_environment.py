@@ -53,6 +53,7 @@ def test_prepared_files_use_fresh_secrets_scoped_ports_and_pinned_images(
                         "clientId": "medsignal-frontend",
                         "redirectUris": ["http://localhost/*"],
                         "webOrigins": ["http://localhost"],
+                        "attributes": {"post.logout.redirect.uris": "http://localhost/*"},
                     },
                     {"clientId": "medsignal-dev-cli", "secret": "old-demo"},
                 ],
@@ -83,6 +84,9 @@ def test_prepared_files_use_fresh_secrets_scoped_ports_and_pinned_images(
     assert realm["users"][0]["credentials"][0]["value"] != "old-demo"
     assert realm["clients"][1]["secret"] != "old-demo"  # noqa: S105 — test fixture
     assert realm["clients"][0]["redirectUris"] == ["http://127.0.0.1:55123/*"]
+    assert realm["clients"][0]["attributes"]["post.logout.redirect.uris"] == (
+        "http://127.0.0.1:55123/*"
+    )
     assert manifest["security_gate"] == "FAIL"
     assert "old-demo" not in manifest_text
     assert "POSTGRES_PASSWORD" not in manifest_text

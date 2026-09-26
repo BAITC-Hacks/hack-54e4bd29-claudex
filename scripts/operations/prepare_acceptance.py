@@ -76,6 +76,9 @@ def prepare_files(
         if client.get("clientId") == "medsignal-frontend":
             client["redirectUris"] = [f"{public_origin}/*"]
             client["webOrigins"] = [public_origin]
+            client.setdefault("attributes", {})["post.logout.redirect.uris"] = (
+                f"{public_origin}/*"
+            )
     _write_private(output / "realm.json", json.dumps(realm, indent=2) + "\n")
 
     suffix = project.removeprefix("phase8-").replace("-", "")[-12:]
