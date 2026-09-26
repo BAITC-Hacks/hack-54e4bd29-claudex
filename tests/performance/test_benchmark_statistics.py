@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
+import pytest
 
-from scripts.performance.benchmark import _measure, summarize
+from scripts.performance.benchmark import (
+    ENDPOINTS,
+    _measure,
+    load_verified_context,
+    summarize,
+)
+from scripts.performance.verify_analytics import filter_digest
 
 
 def test_summary_contains_reproducibility_context() -> None:
@@ -72,6 +80,7 @@ def test_latency_percentiles_exclude_429_503_and_client_timeout() -> None:
     assert statuses == {"200": 1, "429": 1, "503": 1, "CLIENT_TIMEOUT": 1}
     assert len(latencies) == 1
     assert result["requests"] == 4
+    assert result["successful_requests"] == 1
     assert result["successful_latency_samples"] == 1
     assert result["error_rate"] == 0.75
     assert result["failure_classes"] == {
@@ -79,3 +88,44 @@ def test_latency_percentiles_exclude_429_503_and_client_timeout() -> None:
         "dependency_unavailable": 1,
         "client_timeout": 1,
     }
+    assert result["status_summary"] == {
+        "http_429": 1,
+        "http_503": 1,
+        "timeouts": 1,
+    }
+
+
+def test_benchmark_includes_all_five_aggregate_routes() -> None:
+    assert "/api/v1/analytics/waiting/summary" in ENDPOINTS
+    assert "/api/v1/analytics/organizations" in ENDPOINTS
+
+
+def test_benchmark_accepts_only_matching_verified_publication(tmp_path: Path) -> None:
+    report = tmp_path / "verified.json"
+    filters = {
+        "date_from": "2025-01-01",
+        "date_to": "2025-01-02",
+        "region": ["synthetic-region"],
+        "organization": [],
+    }
+    report.write_text(
+        json.dumps(
+            {
+                "status": "PASS",
+                "git_sha": "a" * 40,
+                "filter_digest": filter_digest(filters),
+                "provenance": {
+                    "latest_import_ids": ["synthetic-import"],
+                    "mapping_version": "synthetic-mapping",
+                    "latest_import_completed_at": "2025-01-03T00:00:00Z",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    context = load_verified_context(report, git_sha="a" * 40, filters=filters)
+    assert context["provenance"]["latest_import_ids"] == ["synthetic-import"]
+
+    filters["region"] = ["other-region"]
+    with pytest.raises(ValueError, match="filter"):
+        load_verified_context(report, git_sha="a" * 40, filters=filters)

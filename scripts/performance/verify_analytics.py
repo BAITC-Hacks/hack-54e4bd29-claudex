@@ -7,6 +7,7 @@ records a bearer token, response body, source organization or patient value.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -22,9 +23,29 @@ ROUTES = {
     "overview": "/api/v1/analytics/overview",
     "referrals": "/api/v1/analytics/referrals/timeseries",
     "refusals": "/api/v1/analytics/refusals/timeseries",
+    "waiting": "/api/v1/analytics/waiting/summary",
+    "organizations": "/api/v1/analytics/organizations",
 }
-PROVENANCE_KEYS = ("date_from", "date_to", "latest_import_ids", "mapping_version")
+PROVENANCE_KEYS = (
+    "date_from",
+    "date_to",
+    "latest_import_ids",
+    "latest_import_completed_at",
+    "mapping_version",
+)
 MAX_RESPONSE_BYTES = 2_000_000
+
+
+def filter_digest(filters: dict[str, Any]) -> str:
+    """Return a non-disclosing fingerprint of one analytics filter set."""
+    canonical = {
+        "date_from": filters["date_from"],
+        "date_to": filters["date_to"],
+        "region": sorted(filters.get("region", [])),
+        "organization": sorted(filters.get("organization", [])),
+    }
+    encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
 
 
 class VerificationContractError(ValueError):
@@ -79,12 +100,21 @@ def _daily_sum(
 
 
 def verify_aggregates(
-    overview: dict[str, Any], referrals: dict[str, Any], refusals: dict[str, Any]
+    overview: dict[str, Any],
+    referrals: dict[str, Any],
+    refusals: dict[str, Any],
+    waiting: dict[str, Any] | None = None,
+    organizations: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Check daily referral/refusal sums against KPI counts at one publication."""
+    """Check five bounded aggregate routes against one publication and snapshot."""
     try:
         provenance = _provenance(overview)
-        if any(_provenance(series) != provenance for series in (referrals, refusals)):
+        supplied = tuple(
+            item
+            for item in (referrals, refusals, waiting, organizations)
+            if item is not None
+        )
+        if any(_provenance(series) != provenance for series in supplied):
             return {
                 "status": "FAIL",
                 "reason": "PUBLICATION_OR_PERIOD_MISMATCH",
@@ -121,6 +151,40 @@ def verify_aggregates(
                     "overview": expected,
                     "daily_sum": actual,
                 }
+        if waiting is not None:
+            waiting_data = waiting["data"]
+            if type(waiting_data["snapshot_semantics_confirmed"]) is not bool:
+                raise VerificationContractError("invalid snapshot semantics flag")
+            snapshot_at = waiting_data["snapshot_at"]
+            if snapshot_at is not None:
+                datetime.fromisoformat(snapshot_at.replace("Z", "+00:00"))
+            overview_waiting = _cell_value(overview["data"]["waiting_records"])
+            summary_waiting = _cell_value(waiting_data["waiting_records"])
+            checks["waiting_snapshot"] = (
+                {"status": "NOT TESTED", "reason": "SUPPRESSED_OR_MISSING"}
+                if overview_waiting is None or summary_waiting is None
+                else {
+                    "status": "PASS" if overview_waiting == summary_waiting else "FAIL",
+                    "overview": overview_waiting,
+                    "summary": summary_waiting,
+                    "snapshot_at": snapshot_at,
+                }
+            )
+        if organizations is not None:
+            page = organizations["data"]
+            if (
+                type(page["page"]) is not int
+                or page["page"] < 1
+                or type(page["page_size"]) is not int
+                or not 1 <= page["page_size"] <= 100
+                or type(page["total"]) is not int
+                or page["total"] < 0
+                or type(page["has_next"]) is not bool
+                or not isinstance(page["items"], list)
+                or len(page["items"]) > page["page_size"]
+            ):
+                raise VerificationContractError("invalid organization page")
+            checks["organizations"] = {"status": "PASS", "total": page["total"]}
     except (KeyError, TypeError, ValueError):
         return {"status": "FAIL", "reason": "INVALID_RESPONSE_CONTRACT", "checks": {}}
     statuses = {check["status"] for check in checks.values()}
@@ -195,7 +259,7 @@ def main() -> int:
             responses = {}
             for name, route in ROUTES.items():
                 route_params = params + (
-                    [("granularity", "DAY")] if name != "overview" else []
+                    [("granularity", "DAY")] if name in {"referrals", "refusals"} else []
                 )
                 response = client.get(
                     base_url + route,
@@ -220,6 +284,14 @@ def main() -> int:
     except ValueError:
         report = {"status": "FAIL", "reason": "INVALID_RESPONSE_CONTRACT", "checks": {}}
     report["git_sha"] = _checkout_sha()
+    report["filter_digest"] = filter_digest(
+        {
+            "date_from": args.date_from,
+            "date_to": args.date_to,
+            "region": args.region,
+            "organization": args.organization,
+        }
+    )
     report["filters"] = {
         "date_from": args.date_from,
         "date_to": args.date_to,

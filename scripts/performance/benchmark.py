@@ -12,12 +12,46 @@ from typing import Any
 
 import httpx
 
+from scripts.performance.verify_analytics import _checkout_sha, filter_digest
+
 ENDPOINTS = (
     "/api/v1/analytics/overview",
     "/api/v1/analytics/referrals/timeseries",
     "/api/v1/analytics/refusals/timeseries",
+    "/api/v1/analytics/waiting/summary",
     "/api/v1/analytics/organizations",
 )
+
+
+def load_verified_context(
+    path: Path, *, git_sha: str, filters: dict[str, Any]
+) -> dict[str, Any]:
+    """Bind a performance run to a passed aggregate/publication check."""
+    candidate = json.loads(path.read_text(encoding="utf-8"))
+    if candidate.get("status") != "PASS":
+        raise ValueError("Aggregate verification must pass before benchmarking")
+    if candidate.get("git_sha") != git_sha:
+        raise ValueError("Verification source SHA does not match benchmark checkout")
+    if candidate.get("filter_digest") != filter_digest(filters):
+        raise ValueError("Verification filter set does not match benchmark filter set")
+    provenance = candidate.get("provenance")
+    if not isinstance(provenance, dict) or not isinstance(
+        provenance.get("latest_import_ids"), list
+    ):
+        raise ValueError("Verification has no publication provenance")
+    return {
+        "status": "PASS",
+        "provenance": {
+            key: provenance.get(key)
+            for key in (
+                "latest_import_ids",
+                "latest_import_completed_at",
+                "mapping_version",
+                "date_from",
+                "date_to",
+            )
+        },
+    }
 
 
 def _percentile(values: list[float], percentile: float) -> float | None:
@@ -57,11 +91,17 @@ def summarize(
         "path_mode": path_mode,
         "concurrency": concurrency,
         "requests": requests,
+        "successful_requests": len(latencies_ms),
         "successful_latency_samples": len(latencies_ms),
         "errors": errors,
         "error_rate": round(errors / requests, 6) if requests else 0.0,
         "status_counts": statuses,
         "failure_classes": {name: count for name, count in failures.items() if count},
+        "status_summary": {
+            "http_429": statuses.get("429", 0),
+            "http_503": statuses.get("503", 0),
+            "timeouts": statuses.get("CLIENT_TIMEOUT", 0),
+        },
         "cache_state": cache_state,
         "dataset_size": dataset_size,
         "p50_ms": _percentile(latencies_ms, 0.50),
@@ -126,10 +166,21 @@ async def run(args: argparse.Namespace) -> list[dict[str, Any]]:
         )
         results = []
         for endpoint in args.endpoint:
+            params: list[tuple[str, str]] = []
+            if args.date_from:
+                params.append(("date_from", args.date_from))
+            if args.date_to:
+                params.append(("date_to", args.date_to))
+            params += [("region", value) for value in args.region]
+            params += [("organization", value) for value in args.organization]
+            if endpoint.endswith("/timeseries"):
+                params.append(("granularity", "DAY"))
+            query = "?" + str(httpx.QueryParams(tuple(params))) if params else ""
+            request_path = endpoint + query
             latencies, statuses = await _measure(
                 client,
                 args.base_url,
-                endpoint,
+                request_path,
                 token,
                 args.requests,
                 args.concurrency,
@@ -158,6 +209,11 @@ def main() -> int:
         help="Optional public OIDC gateway when API traffic targets a private backend.",
     )
     parser.add_argument("--endpoint", action="append", choices=ENDPOINTS)
+    parser.add_argument("--date-from")
+    parser.add_argument("--date-to")
+    parser.add_argument("--region", action="append", default=[])
+    parser.add_argument("--organization", action="append", default=[])
+    parser.add_argument("--verification-report", type=Path)
     parser.add_argument("--requests", type=int, default=200)
     parser.add_argument("--concurrency", type=int, default=20)
     parser.add_argument("--timeout", type=float, default=30.0)
@@ -184,8 +240,36 @@ def main() -> int:
         for name, size in args.dataset_size.items()
     ):
         parser.error("dataset-size must contain nonnegative core dataset counts")
+    filters = {
+        "date_from": args.date_from,
+        "date_to": args.date_to,
+        "region": args.region,
+        "organization": args.organization,
+    }
+    git_sha = _checkout_sha()
+    verification = {"status": "NOT TESTED"}
+    if args.verification_report:
+        if git_sha is None:
+            parser.error("source SHA is unavailable")
+        try:
+            verification = load_verified_context(
+                args.verification_report, git_sha=git_sha, filters=filters
+            )
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            parser.error(str(exc))
     results = asyncio.run(run(args))
-    report = {"results": results}
+    report = {
+        "git_sha": git_sha,
+        "verification": verification,
+        "filter_digest": filter_digest(filters),
+        "filters": {
+            "date_from": args.date_from,
+            "date_to": args.date_to,
+            "region_count": len(args.region),
+            "organization_count": len(args.organization),
+        },
+        "results": results,
+    }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))

@@ -21,6 +21,7 @@ def responses() -> tuple[dict, dict, dict]:
         "date_from": "2025-01-01T00:00:00Z",
         "date_to": "2025-01-02T23:59:59Z",
         "latest_import_ids": ["synthetic-import-1"],
+        "latest_import_completed_at": "2025-01-03T00:00:00Z",
         "mapping_version": "synthetic-mapping-1",
     }
     overview = {
@@ -60,6 +61,7 @@ def test_matching_daily_series_are_verified_without_raw_rows() -> None:
         "refusals": {"status": "PASS", "overview": 3, "daily_sum": 3},
     }
     assert "synthetic-import-1" in result["provenance"]["latest_import_ids"]
+    assert result["provenance"]["latest_import_completed_at"] == "2025-01-03T00:00:00Z"
 
 
 def test_mismatch_fails_with_exact_aggregate_difference() -> None:
@@ -126,6 +128,43 @@ def test_without_published_imports_is_not_a_success() -> None:
     assert verify_aggregates(overview, referrals, refusals)["status"] == "NOT TESTED"
 
 
+def test_waiting_snapshot_and_organization_metadata_share_publication() -> None:
+    overview, referrals, refusals = responses()
+    overview["data"]["waiting_records"] = {"value": 4, "suppressed": False}
+    waiting = {
+        "meta": dict(overview["meta"]),
+        "data": {
+            "snapshot_at": "2025-01-02T00:00:00Z",
+            "snapshot_semantics_confirmed": True,
+            "waiting_records": {"value": 4, "suppressed": False},
+        },
+    }
+    organizations = {
+        "meta": dict(overview["meta"]),
+        "data": {"items": [], "page": 1, "page_size": 20, "total": 0, "has_next": False},
+    }
+
+    result = verify_aggregates(overview, referrals, refusals, waiting, organizations)
+    assert result["status"] == "PASS"
+    assert result["checks"]["waiting_snapshot"] == {
+        "status": "PASS",
+        "overview": 4,
+        "summary": 4,
+        "snapshot_at": "2025-01-02T00:00:00Z",
+    }
+
+    waiting["data"]["waiting_records"]["value"] = 5
+    mismatched = verify_aggregates(overview, referrals, refusals, waiting, organizations)
+    assert mismatched["checks"]["waiting_snapshot"]["status"] == "FAIL"
+
+    waiting["data"]["waiting_records"]["value"] = 4
+    organizations["meta"]["mapping_version"] = "different"
+    assert (
+        verify_aggregates(overview, referrals, refusals, waiting, organizations)["reason"]
+        == "PUBLICATION_OR_PERIOD_MISMATCH"
+    )
+
+
 def test_remote_http_is_rejected_before_any_request() -> None:
     with pytest.raises(VerificationContractError):
         verify_analytics._validate_base_url("http://example.com")
@@ -135,7 +174,20 @@ def test_cli_uses_only_bounded_gets_and_never_writes_token(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     overview, referrals, refusals = responses()
-    bodies = iter((overview, referrals, refusals))
+    overview["data"]["waiting_records"] = {"value": 4, "suppressed": False}
+    waiting = {
+        "meta": dict(overview["meta"]),
+        "data": {
+            "snapshot_at": "2025-01-02T00:00:00Z",
+            "snapshot_semantics_confirmed": True,
+            "waiting_records": {"value": 4, "suppressed": False},
+        },
+    }
+    organizations = {
+        "meta": dict(overview["meta"]),
+        "data": {"items": [], "page": 1, "page_size": 20, "total": 0, "has_next": False},
+    }
+    bodies = iter((overview, referrals, refusals, waiting, organizations))
     requests: list[tuple[str, list[tuple[str, str]], str]] = []
 
     class FakeResponse:
@@ -189,11 +241,16 @@ def test_cli_uses_only_bounded_gets_and_never_writes_token(
         "http://localhost/api/v1/analytics/overview",
         "http://localhost/api/v1/analytics/referrals/timeseries",
         "http://localhost/api/v1/analytics/refusals/timeseries",
+        "http://localhost/api/v1/analytics/waiting/summary",
+        "http://localhost/api/v1/analytics/organizations",
     ]
     assert all(item[2] == "Bearer synthetic-secret-token" for item in requests)
     assert all(len(item[1]) <= 3 for item in requests)
     assert "synthetic-secret-token" not in output.read_text(encoding="utf-8")
-    assert json.loads(output.read_text(encoding="utf-8"))["status"] == "PASS"
+    saved = json.loads(output.read_text(encoding="utf-8"))
+    assert saved["status"] == "PASS"
+    assert len(saved["filter_digest"]) == 64
+    assert saved["provenance"]["latest_import_completed_at"] == "2025-01-03T00:00:00Z"
 
 
 def test_cli_records_http_status_without_error_body_or_token(
