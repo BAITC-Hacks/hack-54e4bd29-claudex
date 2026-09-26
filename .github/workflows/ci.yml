@@ -360,6 +360,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      - name: Ensure targeted POSIX ACL tooling
+        run: command -v setfacl >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq acl)
       - name: Check real image user, read-only realm mount and OIDC import
         run: >-
           python -m scripts.operations.keycloak_realm_probe
@@ -433,6 +435,9 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
+
+      - name: Ensure targeted POSIX ACL tooling
+        run: command -v setfacl >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq acl)
 
       - name: Prepare fresh namespaced containers and volumes
         run: |

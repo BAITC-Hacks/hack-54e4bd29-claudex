@@ -10,6 +10,7 @@ import argparse
 import json
 import re
 import secrets
+import shutil
 import socket
 import subprocess
 import sys
@@ -330,6 +331,66 @@ def _secret() -> str:
 def _write_private(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
     path.chmod(0o600)
+
+
+def _supports_posix_acl() -> bool:
+    return sys.platform == "linux"
+
+
+def grant_keycloak_realm_read(image: str, realm_path: Path) -> dict[str, Any]:
+    """Grant only the pinned image's non-root UID read access to this realm file.
+
+    The host owner retains access; other generated secrets keep their 0600 mode.
+    Docker Desktop's Windows bind mounts do not expose POSIX ACL semantics.
+    """
+    if not _supports_posix_acl():
+        return {"status": "NOT_APPLICABLE"}
+    if not realm_path.is_file():
+        raise AcceptancePreflightError("KEYCLOAK_REALM_MISSING", "keycloak_realm_acl")
+    inspected = _quiet_command(
+        "docker",
+        "image",
+        "inspect",
+        image,
+        "--format",
+        "{{.Id}}|{{.Config.User}}",
+        timeout=15,
+    )
+    if inspected is None or inspected.returncode != 0:
+        raise AcceptancePreflightError(
+            "KEYCLOAK_IMAGE_INSPECT_FAILED", "keycloak_realm_acl"
+        )
+    parts = inspected.stdout.strip().split("|", 1)
+    if (
+        len(parts) != 2
+        or DIGEST_PATTERN.fullmatch(parts[0]) is None
+        or re.fullmatch(r"[1-9][0-9]*", parts[1]) is None
+    ):
+        raise AcceptancePreflightError(
+            "KEYCLOAK_IMAGE_USER_INVALID", "keycloak_realm_acl"
+        )
+    uid = int(parts[1])
+    acl_binary = shutil.which("setfacl")
+    if acl_binary is None:
+        raise AcceptancePreflightError(
+            "KEYCLOAK_REALM_ACL_UNAVAILABLE", "keycloak_realm_acl"
+        )
+    try:
+        result = subprocess.run(  # noqa: S603 — fixed ACL command, no shell
+            [acl_binary, "-m", f"u:{uid}:r--", str(realm_path)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise AcceptancePreflightError(
+            "KEYCLOAK_REALM_ACL_UNAVAILABLE", "keycloak_realm_acl"
+        ) from exc
+    if result.returncode != 0:
+        raise AcceptancePreflightError("KEYCLOAK_REALM_ACL_FAILED", "keycloak_realm_acl")
+    return {"status": "APPLIED", "image_id": parts[0], "image_user_uid": uid}
 
 
 def prepare_files(
@@ -1047,6 +1108,14 @@ def main(argv: list[str] | None = None) -> int:
             config = _validated_config(project, output)
             stage = "preflight"
             _run_preflight(project, output, config, preflight)
+            stage = "keycloak_realm_acl"
+            keycloak = config.get("services", {}).get("keycloak", {})
+            image = keycloak.get("image") if isinstance(keycloak, dict) else None
+            if not isinstance(image, str):
+                raise AcceptancePreflightError(
+                    "KEYCLOAK_IMAGE_REFERENCE_INVALID", "keycloak_realm_acl"
+                )
+            grant_keycloak_realm_read(image, output / "realm.json")
             stage = "compose_up"
             _run(*_compose_command(project, output), "up", "--no-build", "-d")
             stage = "runtime_verify"

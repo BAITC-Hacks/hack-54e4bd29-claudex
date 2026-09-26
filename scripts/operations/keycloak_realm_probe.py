@@ -25,6 +25,7 @@ from scripts.operations.prepare_acceptance import (
     ROOT,
     _compose_command,
     _write_private,
+    grant_keycloak_realm_read,
     prepare_files,
     validate_project_name,
 )
@@ -273,10 +274,23 @@ def probe(project: str) -> dict[str, Any]:
             ),
             "host_uid": os.geteuid() if hasattr(os, "geteuid") else None,
         }
+        report["keycloak_user_before"] = _read_probe(image, realm_path)
+        report["acl_grant"] = grant_keycloak_realm_read(image, realm_path)
+        after_stat = realm_path.stat()
+        report["realm_owner_uid_after"] = after_stat.st_uid
+        report["realm_owner_gid_after"] = after_stat.st_gid
+        report["host_owner_readable_after"] = os.access(realm_path, os.R_OK)
+        report["realm_mode_after"] = oct(stat.S_IMODE(after_stat.st_mode))
+        report["realm_acl_present_after"] = (
+            "system.posix_acl_access" in os.listxattr(realm_path)
+            if hasattr(os, "listxattr")
+            else None
+        )
         ordinary = _read_probe(image, realm_path)
         unrelated = _read_probe(image, realm_path, other_user=True)
-        report["keycloak_user"] = ordinary
-        report["unrelated_user_readable"] = unrelated["readable"]
+        report["keycloak_user_after"] = ordinary
+        report["unrelated_user_readable_after"] = unrelated["readable"]
+        report["env_mode"] = oct(stat.S_IMODE((output / ".env").stat().st_mode))
         report["runtime"] = _runtime_probe(
             project, image, realm_path, service["environment"], ordinary["readable"]
         )
@@ -284,6 +298,9 @@ def probe(project: str) -> dict[str, Any]:
             "PASS"
             if ordinary["readable"]
             and not unrelated["readable"]
+            and report["host_owner_readable_after"]
+            and report["realm_owner_uid_after"] == report["realm_owner_uid"]
+            and report["env_mode"] == "0o600"
             and report["runtime"]["discovery_status"] == 200
             and report["runtime"]["restart_count"] == 0
             and report["runtime"]["cleanup_status"] == "PASS"

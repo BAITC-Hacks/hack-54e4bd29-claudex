@@ -257,7 +257,14 @@ def test_start_failure_records_only_allowlisted_compose_diagnostics(
         raise AssertionError("Unexpected subprocess")
 
     monkeypatch.setattr(prepare_acceptance, "ARTIFACTS", tmp_path)
-    monkeypatch.setattr(prepare_acceptance, "_validated_config", lambda *_args: None)
+    monkeypatch.setattr(
+        prepare_acceptance,
+        "_validated_config",
+        lambda *_args: {"services": {"keycloak": {"image": NAMED_IMAGES["keycloak"]}}},
+    )
+    monkeypatch.setattr(
+        prepare_acceptance, "grant_keycloak_realm_read", lambda *_args: {}
+    )
     monkeypatch.setattr(
         prepare_acceptance, "_run_preflight", lambda *_args: None, raising=False
     )
