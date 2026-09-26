@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     analytics,
     audit,
+    copilot,
     data_imports,
     directory,
     forecasts,
@@ -21,6 +22,7 @@ api_router.include_router(health.router)
 api_router.include_router(system.router)
 api_router.include_router(directory.router)
 api_router.include_router(signals.router)
+api_router.include_router(copilot.router)
 api_router.include_router(audit.router)
 api_router.include_router(data_imports.router)
 api_router.include_router(analytics.router)

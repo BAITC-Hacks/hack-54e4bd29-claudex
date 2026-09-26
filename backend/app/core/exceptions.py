@@ -69,3 +69,33 @@ class ConflictError(AppError):
 class DependencyUnavailableError(AppError):
     code = "DEPENDENCY_UNAVAILABLE"
     message = "Сервис временно недоступен"
+
+
+class CopilotDisabledError(AppError):
+    code = "COPILOT_DISABLED"
+    message = "Copilot отключён"
+
+
+class CopilotInsufficientDataError(AppError):
+    code = "COPILOT_INSUFFICIENT_DATA"
+    message = "Недостаточно разрешённых фактов для пояснения"
+
+
+class CopilotProviderUnavailableError(AppError):
+    code = "COPILOT_PROVIDER_UNAVAILABLE"
+    message = "Сервис пояснений временно недоступен"
+
+
+class CopilotProviderTimeoutError(AppError):
+    code = "COPILOT_PROVIDER_TIMEOUT"
+    message = "Превышено время ожидания сервиса пояснений"
+
+
+class CopilotInvalidResponseError(AppError):
+    code = "COPILOT_INVALID_RESPONSE"
+    message = "Ответ сервиса пояснений не прошёл проверку"
+
+
+class CopilotRateLimitedError(AppError):
+    code = "COPILOT_RATE_LIMITED"
+    message = "Слишком много запросов к сервису пояснений"

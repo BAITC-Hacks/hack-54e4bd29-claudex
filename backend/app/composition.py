@@ -11,11 +11,15 @@
 
 from __future__ import annotations
 
+import threading
 from typing import cast
 
 from app.adapters.analytics_cache import RedisAnalyticsCache, RedisLike
+from app.adapters.openai_copilot import OpenAICopilotProvider
 from app.business.analytics.service import AnalyticsService
 from app.business.audit.service import AuditService
+from app.business.copilot.rate_limit import LocalCopilotRateLimiter
+from app.business.copilot.service import CopilotService
 from app.business.forecasting.service import ForecastQueryService
 from app.business.hospitals.service import HospitalService
 from app.business.incidents.service import IncidentService
@@ -28,7 +32,7 @@ from app.business.signals.policy import SignalPolicy
 from app.business.signals.ports import SignalInputRepository
 from app.business.signals.service import SignalService
 from app.business.simulation.service import ScenarioService
-from app.core.config import get_settings
+from app.core.config import AppEnv, get_settings
 from app.database.clickhouse import get_client as get_clickhouse_client
 from app.database.postgres import get_session_factory
 from app.database.redis import get_cache_client
@@ -77,6 +81,36 @@ def build_hospital_service() -> HospitalService:
 def build_signal_service() -> SignalService:
     uow, authz, dispatcher = _dependencies()
     return SignalService(uow, authz, dispatcher)
+
+
+_copilot_rate_limiter: LocalCopilotRateLimiter | None = None
+_copilot_rate_limiter_lock = threading.Lock()
+
+
+def build_copilot_service() -> CopilotService:
+    global _copilot_rate_limiter
+    settings = get_settings()
+    if _copilot_rate_limiter is None:
+        with _copilot_rate_limiter_lock:
+            if _copilot_rate_limiter is None:
+                _copilot_rate_limiter = LocalCopilotRateLimiter(
+                    limit=settings.copilot_max_requests_per_minute
+                )
+    key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else ""
+    return CopilotService(
+        signals=build_signal_service(),
+        provider=OpenAICopilotProvider(
+            api_key=key,
+            model=settings.llm_model,
+            timeout_seconds=settings.llm_timeout_seconds,
+            max_output_tokens=settings.llm_max_output_tokens,
+        ),
+        enabled=settings.copilot_enabled,
+        synthetic_demo_environment=settings.app_env is AppEnv.LOCAL,
+        provider_name=settings.llm_provider,
+        model=settings.llm_model,
+        rate_limiter=_copilot_rate_limiter,
+    )
 
 
 def build_signal_evaluation_service() -> SignalEvaluationService:
