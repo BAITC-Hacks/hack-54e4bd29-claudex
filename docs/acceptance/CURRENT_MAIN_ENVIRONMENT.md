@@ -54,7 +54,8 @@ and the acceptance overlay.
 | PostgreSQL and ClickHouse migrations on fresh volumes | PASS | `phase8-accept-20260926a` one-shot `migrate` and `clickhouse-migrate` exited 0; services reached readiness |
 | HTTP health/ready and Keycloak OIDC | PASS | `prepare_acceptance start` reached HTTP 200 for all three through loopback nginx |
 | MinIO service identity bootstrap and effective access | PASS | `minio-init` exited 0; app, worker, pipeline and MLflow credential probes passed |
-| Production Next build in isolated project | PASS | Production frontend image `sha256:0823b31d3f4842888f9c2c0e3e217736f33cad071d03e4b8b6d48d9a48523129` built and started; browser E2E still NOT TESTED |
+| Production Next build in isolated project | PASS | Production frontend image built and real browser journey completed in `phase8-accept-20260926d`; see `docs/frontend/USER_JOURNEY_AUDIT.md` |
+| Real browser E2E and controlled HTTP 503 | PASS locally | Two journey tests passed with signed Keycloak identities; one separate dependency-outage test returned `/ready` 503, displayed a dashboard error and restored ClickHouse. CI job is added but has NOT TESTED runtime status. |
 | Image security gate | FAIL | Current Trivy evidence in `docs/security/CURRENT_IMAGE_FINDINGS.md` |
 | Real data, performance and production controls | NOT TESTED | Out of scope until explicitly approved |
 
@@ -69,3 +70,25 @@ reusing another project's volumes. Exact image digests and successful probes
 are recorded in ignored `tmp/acceptance/phase8-accept-20260926a/manifest.json`.
 This run has no synthetic analytical facts yet; authenticated workflow and
 browser tests remain separate pending checks.
+
+A second fresh-project test of the later checkout found an MLflow restart
+loop caused by a PostgreSQL driver mismatch. The Dockerfile now installs
+`psycopg[binary]==3.2.*`, and the rebuilt image imported psycopg 3.2.13 and
+MLflow 3.16.1. A **new** project, `phase8-accept-20260926c`, again reached
+READY on fresh volumes; MLflow stayed running and its internal HTTP `/health`
+returned 200. Three synthetic deliveries and an exact synthetic mapping
+publication were verified there, as described in
+`docs/acceptance/SYNTHETIC_ANALYTICS_RUNTIME.md`. Its image security gate
+remains FAIL. The earlier `phase8-accept-20260926a/b` services were stopped;
+their volumes were not deleted.
+
+A third fresh project, `phase8-accept-20260926d`, used new volumes and the
+corrected test-realm post-logout redirect. Three publishable synthetic datasets
+and ten exact synthetic mappings were loaded. The browser covered login,
+desktop/mobile routes, waiting snapshot, empty periods, human signal
+acknowledge, scenario preview/save, restricted identity and logout. The
+production frontend image was updated locally to test fast HTTP error handling
+(content digest `sha256:3c906264d1acc298eacdbb7aacb034caffdd9467ca9536cb17b2d7250c2172e8`).
+The controlled ClickHouse outage verified a real `/ready` 503 and frontend
+error state; readiness returned after the `finally` restore. Docker Desktop
+was restarted after its daemon stopped responding; no volumes were deleted.

@@ -1,0 +1,40 @@
+"""Guard the browser job against optional tests and unsafe artifacts."""
+
+from pathlib import Path
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_browser_acceptance_is_required_and_uses_namespaced_cleanup() -> None:
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    )
+    job = workflow["jobs"]["browser-acceptance"]
+    steps = job["steps"]
+    commands = "\n".join(str(step.get("run", "")) for step in steps)
+    assert job["env"]["ACCEPTANCE_PROJECT"].startswith("phase8-")
+    assert all(step.get("continue-on-error") is not True for step in steps)
+    assert "bootstrap_synthetic" in commands
+    assert "npm --prefix frontend run test:e2e" in commands
+    assert "run_degraded_browser" in commands
+    assert '--project-name "$ACCEPTANCE_PROJECT"' in commands
+    assert "down --volumes" in commands
+
+
+def test_browser_artifact_contains_only_numeric_summaries() -> None:
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    )
+    steps = workflow["jobs"]["browser-acceptance"]["steps"]
+    artifact = next(
+        step
+        for step in steps
+        if step.get("uses", "").startswith("actions/upload-artifact")
+    )
+    paths = set(artifact["with"]["path"].splitlines())
+    assert paths == {
+        "tmp/playwright-summary.json",
+        "tmp/playwright-degraded-summary.json",
+    }

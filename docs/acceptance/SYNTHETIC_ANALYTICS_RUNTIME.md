@@ -38,3 +38,51 @@ The machine-readable verification report is intentionally ignored at
 contains aggregate counts and provenance only. No benchmark on real data was
 performed: **REAL SCALE = NOT TESTED**. Scope intersection and browser journeys
 remain separate checks; this aggregate PASS does not claim them.
+
+## Recheck on current local branch after runtime repairs
+
+The first fresh recheck (`phase8-accept-20260926b`) exposed a real MLflow
+restart loop: the image installed `psycopg2`, while SQLAlchemy imported
+`psycopg`. The image now installs the same compatible `psycopg[binary]==3.2.*`
+driver family as the backend. A second fresh project with new volumes,
+`phase8-accept-20260926c`, passed `/health`, `/ready`, Keycloak OIDC, all four
+MinIO service identity probes, migrations and MLflow's own HTTP `/health`.
+The earlier phase8 projects were stopped without deleting their volumes.
+
+On `phase8-accept-20260926c`, the three publishable synthetic datasets again
+loaded 30/22/24 rows. Ten exact, invented organization/region mappings were
+explicitly approved and published as `mapping-10`; no fuzzy matching occurred.
+The five-route aggregate verifier passed with this mapping version. Real signed
+tokens showed:
+
+| Identity/filter | Referrals | Waiting | Refusals |
+|---|---:|---:|---:|
+| ADMIN, all | 30 | 22 | 24 |
+| REGIONAL_ANALYST, R-A | 15 | 11 | 12 |
+| HOSPITAL_MANAGER, H-A1 | 15 | 11 | 12 |
+| ADMIN, R-A ∩ H-A1 | 15 | 11 | 12 |
+| ADMIN, R-B ∩ H-A1 | 0 | 0 | 0 |
+
+The HOSPITAL_MANAGER request for foreign H-B1 returned **404**. This matches
+the non-disclosure scope contract. These are invented facts, not real-data
+scope evidence.
+
+A bounded synthetic edge benchmark used 20 concurrent requests and 50
+requests per route. The overview had 50/50 HTTP 200, p95 878 ms. Subsequent
+routes hit nginx rate limiting: referrals 30/50 HTTP 429; refusals 40/50;
+waiting 45/50; organizations 45/50. No 503 or client timeouts occurred.
+Per-route p50/p95/p99, success counts, errors, dataset size, requested cache
+state and source/publication provenance are in the ignored local
+`tmp/acceptance/phase8-accept-20260926c/benchmark-warm.json`. Percentiles
+exclude failed requests. The command returned nonzero as it should; no rate
+limit was weakened. `cache_state=warm` was a declared test condition, not an
+observed cache-hit measurement. The benchmark is **not** evidence of 20-user
+real-data latency or a production SLA.
+
+Fresh project `phase8-accept-20260926d` reproduced 30/22/24 published rows,
+the exact mapping publication and signed-token scope counts. Two production
+browser journey tests passed after the transport-error fix. One separate
+browser failure test passed with ClickHouse stopped: `/ready` was 503, the
+dashboard displayed a meaningful error, and ClickHouse was restored. A strict
+reporter recorded only numeric counts (`planned=2, passed=2, skipped=0` for the
+normal run). No real-scale benchmark was authorized: **REAL SCALE NOT TESTED**.
