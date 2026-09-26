@@ -28,6 +28,207 @@ DIGEST_PATTERN = re.compile(r"sha256:[a-f0-9]{64}")
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "tmp" / "acceptance"
 REALM_TEMPLATE = ROOT / "infrastructure" / "keycloak" / "realm-medsignal-dev.json"
+SERVICE_NAMES = frozenset(
+    {
+        "nginx",
+        "frontend",
+        "backend",
+        "worker",
+        "migrate",
+        "clickhouse-migrate",
+        "postgres",
+        "clickhouse",
+        "redis",
+        "minio",
+        "minio-init",
+        "mlflow",
+        "keycloak",
+    }
+)
+ONE_SHOT_SERVICES = frozenset({"migrate", "clickhouse-migrate", "minio-init"})
+SERVICE_IMAGE_FAMILY = {
+    "nginx": "nginx",
+    "frontend": "frontend",
+    "backend": "backend",
+    "worker": "worker",
+    "migrate": "backend",
+    "clickhouse-migrate": "pipeline",
+    "mlflow": "mlflow",
+}
+SAFE_STATES = frozenset({"running", "exited", "created", "restarting", "paused", "dead"})
+SAFE_HEALTH = frozenset({"healthy", "unhealthy", "starting"})
+
+
+class AcceptanceCommandError(RuntimeError):
+    """Preserve command failure metadata without retaining raw command output."""
+
+    def __init__(
+        self, command_category: str, exit_code: int, docker_error_category: str
+    ) -> None:
+        self.command_category = command_category
+        self.exit_code = exit_code
+        self.docker_error_category = docker_error_category
+        super().__init__(
+            f"Acceptance command failed ({command_category}, exit {exit_code})"
+        )
+
+
+def _command_category(command: tuple[str, ...]) -> str:
+    if command[:2] == ("docker", "compose"):
+        return (
+            "compose_up"
+            if command[-3:] == ("up", "--no-build", "-d")
+            else "compose_other"
+        )
+    if command[:2] == ("docker", "build"):
+        return "image_build"
+    if command[:3] == ("docker", "image", "inspect"):
+        return "image_inspect"
+    return "other"
+
+
+def _docker_error_category(stderr: str) -> str:
+    """Classify stderr in memory; never reproduce any of its original bytes."""
+    lowered = stderr.lower()
+    for category, markers in (
+        ("PORT_BIND_CONFLICT", ("port is already allocated", "address already in use")),
+        (
+            "IMAGE_UNAVAILABLE",
+            ("no such image", "pull access denied", "manifest unknown"),
+        ),
+        ("DEPENDENCY_FAILED", ("dependency failed to start", "depends on service")),
+        ("DEPENDENCY_UNHEALTHY", ("unhealthy",)),
+        ("RESOURCE_EXHAUSTED", ("no space left on device", "out of memory")),
+        ("PERMISSION_DENIED", ("permission denied", "access is denied")),
+    ):
+        if any(marker in lowered for marker in markers):
+            return category
+    return "UNCLASSIFIED"
+
+
+def _safe_probe(*command: str) -> str | None:
+    """Return stdout only to an allowlist parser, never to a log or artifact."""
+    try:
+        result = subprocess.run(  # noqa: S603 — fixed local diagnostic argv
+            list(command),
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=8,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def _safe_version(output: str | None, pattern: str) -> str | None:
+    match = re.search(pattern, output or "", flags=re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def _safe_services(
+    project: str, output: Path, images: dict[str, Any]
+) -> list[dict[str, Any]]:
+    raw = _safe_probe(
+        *_compose_command(project, output), "ps", "--all", "--format", "json"
+    )
+    if not raw:
+        return []
+    try:
+        parsed = (
+            json.loads(raw)
+            if raw.lstrip().startswith("[")
+            else [json.loads(line) for line in raw.splitlines() if line.strip()]
+        )
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    services: dict[str, dict[str, Any]] = {}
+    for item in parsed:
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("Service"), str)
+            or item["Service"] not in SERVICE_NAMES
+        ):
+            continue
+        name = item["Service"]
+        state = item.get("State")
+        health = item.get("Health")
+        code = item.get("ExitCode")
+        observed_image = item.get("Image")
+        expected_image = images.get(SERVICE_IMAGE_FAMILY.get(name, ""))
+        image_id = (
+            observed_image
+            if isinstance(observed_image, str)
+            and DIGEST_PATTERN.fullmatch(observed_image)
+            else expected_image
+            if isinstance(expected_image, str)
+            and DIGEST_PATTERN.fullmatch(expected_image)
+            else None
+        )
+        services[name] = {
+            "service": name,
+            "state": state
+            if isinstance(state, str) and state in SAFE_STATES
+            else "unknown",
+            "exit_code": code if type(code) is int and 0 <= code <= 255 else None,
+            "health": health
+            if isinstance(health, str) and health in SAFE_HEALTH
+            else "unknown",
+            "image_id": image_id,
+        }
+    return [services[name] for name in sorted(services)]
+
+
+def _collect_start_diagnostics(
+    project: str, output: Path, stage: str, error: Exception
+) -> dict[str, Any]:
+    """Build a machine-readable report from fixed vocabulary and vetted identifiers."""
+    try:
+        manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        manifest = {}
+    manifest = manifest if isinstance(manifest, dict) else {}
+    images = manifest.get("images")
+    images = images if isinstance(images, dict) else {}
+    sha = manifest.get("git_sha")
+    sha = sha if isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{40}", sha) else None
+    services = _safe_services(project, output, images)
+    failed = [
+        item["service"]
+        for item in services
+        if (item["exit_code"] is not None and item["exit_code"] > 0)
+        or item["health"] == "unhealthy"
+    ]
+    command_error = error if isinstance(error, AcceptanceCommandError) else None
+    return {
+        "diagnostic_version": 1,
+        "failure_stage": stage,
+        "command_category": command_error.command_category
+        if command_error
+        else "verification",
+        "exit_code": command_error.exit_code if command_error else None,
+        "docker_error_category": (
+            command_error.docker_error_category if command_error else "UNCLASSIFIED"
+        ),
+        "docker_version": _safe_version(
+            _safe_probe("docker", "--version"),
+            r"Docker version v?([0-9]+(?:\.[0-9]+){1,3})",
+        ),
+        "compose_version": _safe_version(
+            _safe_probe("docker", "compose", "version"),
+            r"Docker Compose version v?([0-9]+(?:\.[0-9]+){1,3})",
+        ),
+        "project": project,
+        "git_sha": sha,
+        "services": services,
+        "failed_services": failed,
+        "failed_dependency_services": [
+            name for name in failed if name in ONE_SHOT_SERVICES
+        ],
+    }
 
 
 def validate_project_name(project: str) -> str:
@@ -225,8 +426,13 @@ def _run(*command: str) -> str:
         list(command), cwd=ROOT, capture_output=True, text=True, check=False
     )
     if result.returncode:
-        raise RuntimeError(
-            f"Acceptance command failed ({command[0]}, exit {result.returncode})"
+        category = _command_category(command)
+        raise AcceptanceCommandError(
+            category,
+            result.returncode,
+            _docker_error_category(result.stderr)
+            if category == "compose_up"
+            else "UNCLASSIFIED",
         )
     return result.stdout
 
@@ -416,6 +622,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int)
     args = parser.parse_args(argv)
     project = args.project or f"phase8-accept-{uuid.uuid4().hex[:8]}"
+    stage = "initialization"
     try:
         validate_project_name(project)
         output = ARTIFACTS / project
@@ -438,8 +645,11 @@ def main(argv: list[str] | None = None) -> int:
             _validated_config(project, output)
             print(f"Prepared isolated acceptance project {project} at {output}")
         elif args.action == "start":
+            stage = "compose_config"
             _validated_config(project, output)
+            stage = "compose_up"
             _run(*_compose_command(project, output), "up", "--no-build", "-d")
+            stage = "runtime_verify"
             _verify(project, output)
             print(f"Acceptance project {project}: READY (security gate remains FAIL)")
         else:
@@ -448,6 +658,24 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except (OSError, ValueError, RuntimeError, KeyError, json.JSONDecodeError) as exc:
         # No paths, env values, Docker stderr or exception text leave this CLI.
+        if args.action == "start" and PROJECT_PATTERN.fullmatch(project):
+            try:
+                output = ARTIFACTS / project
+                if output.is_dir():
+                    report = _collect_start_diagnostics(project, output, stage, exc)
+                    _write_private(
+                        output / "sanitized-diagnostics.json",
+                        json.dumps(report, indent=2, sort_keys=True) + "\n",
+                    )
+                    print(
+                        "Acceptance start: FAIL; sanitized diagnostics: "
+                        + json.dumps(report, sort_keys=True),
+                        file=sys.stderr,
+                    )
+                    return 1
+            except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+                # Even a failed diagnostic probe must not leak original command output.
+                pass
         print(f"Acceptance {args.action}: FAIL ({type(exc).__name__})", file=sys.stderr)
         return 1
 

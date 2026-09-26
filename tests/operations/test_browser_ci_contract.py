@@ -31,10 +31,26 @@ def test_browser_artifact_contains_only_numeric_summaries() -> None:
     artifact = next(
         step
         for step in steps
-        if step.get("uses", "").startswith("actions/upload-artifact")
+        if step.get("with", {}).get("name") == "synthetic-browser-counts"
     )
     paths = set(artifact["with"]["path"].splitlines())
     assert paths == {
         "tmp/playwright-summary.json",
         "tmp/playwright-degraded-summary.json",
     }
+
+
+def test_browser_failure_artifact_contains_only_sanitized_diagnostics() -> None:
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    )
+    steps = workflow["jobs"]["browser-acceptance"]["steps"]
+    artifact = next(
+        step
+        for step in steps
+        if step.get("with", {}).get("name") == "acceptance-start-diagnostics"
+    )
+    path = artifact["with"]["path"]
+    assert path.endswith("/sanitized-diagnostics.json")
+    assert "private-diagnostics" not in path
+    assert artifact.get("if") == "always()"

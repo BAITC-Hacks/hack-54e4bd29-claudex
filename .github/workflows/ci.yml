@@ -409,6 +409,14 @@ jobs:
             tmp/playwright-degraded-summary.json
           if-no-files-found: warn
 
+      - name: Preserve sanitized acceptance startup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-start-diagnostics
+          path: tmp/acceptance/${{ env.ACCEPTANCE_PROJECT }}/sanitized-diagnostics.json
+          if-no-files-found: ignore
+
       - name: Tear down only the namespaced disposable project
         if: always()
         run: |

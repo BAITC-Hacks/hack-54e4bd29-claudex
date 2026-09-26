@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -163,3 +165,131 @@ def test_minio_identity_probes_use_service_credentials_without_host_secrets(
     assert len(calls) == 4
     assert all("MINIO_ROOT_PASSWORD" not in " ".join(call) for call in calls)
     assert all("--env-file" in call for call in calls)
+
+
+def test_failed_compose_up_preserves_safe_category_and_exit_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw = "POSTGRES_PASSWORD=private-value; port is already allocated"
+    monkeypatch.setattr(
+        prepare_acceptance.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 23, "", raw),
+    )
+
+    with pytest.raises(prepare_acceptance.AcceptanceCommandError) as caught:
+        prepare_acceptance._run("docker", "compose", "up", "--no-build", "-d")
+
+    error = caught.value
+    assert error.command_category == "compose_up"
+    assert error.exit_code == 23
+    assert error.docker_error_category == "PORT_BIND_CONFLICT"
+    assert "private-value" not in str(error)
+    assert "POSTGRES_PASSWORD" not in str(error)
+
+
+def test_start_failure_records_only_allowlisted_compose_diagnostics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = "phase8-accept-abcd1234"
+    output = tmp_path / project
+    output.mkdir()
+    (output / "manifest.json").write_text(
+        json.dumps(
+            {
+                "git_sha": "a" * 40,
+                "images": {"backend": "sha256:" + "b" * 64},
+            }
+        ),
+        encoding="utf-8",
+    )
+    raw_stderr_canary = (
+        "POSTGRES_PASSWORD=private-value " "MINIO_ROOT_PASSWORD=another-value"
+    )
+    ps = "\n".join(
+        json.dumps(item)
+        for item in (
+            {
+                "Service": "backend",
+                "State": "exited",
+                "ExitCode": 42,
+                "Health": "unhealthy",
+                "Status": raw_stderr_canary,
+                "Image": "sha256:" + "b" * 64,
+                "Environment": {"APP_SECRET": "do-not-print"},
+            },
+            {
+                "Service": "migrate",
+                "State": "exited",
+                "ExitCode": 1,
+                "Health": "",
+                "Status": raw_stderr_canary,
+            },
+            {"Service": raw_stderr_canary, "State": "exited", "ExitCode": 9},
+        )
+    )
+
+    def fake_run(
+        command: list[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        if command[-3:] == ["up", "--no-build", "-d"]:
+            return subprocess.CompletedProcess(
+                command, 17, "", raw_stderr_canary + " dependency failed to start"
+            )
+        if command == ["docker", "--version"]:
+            return subprocess.CompletedProcess(
+                command, 0, "Docker version 28.5.1, build abc", ""
+            )
+        if command == ["docker", "compose", "version"]:
+            return subprocess.CompletedProcess(
+                command, 0, "Docker Compose version v2.40.0", ""
+            )
+        if command[-4:] == ["ps", "--all", "--format", "json"]:
+            return subprocess.CompletedProcess(command, 0, ps, "")
+        raise AssertionError("Unexpected subprocess")
+
+    monkeypatch.setattr(prepare_acceptance, "ARTIFACTS", tmp_path)
+    monkeypatch.setattr(prepare_acceptance, "_validated_config", lambda *_args: None)
+    monkeypatch.setattr(
+        prepare_acceptance, "_compose_command", lambda *_args: ["docker", "compose"]
+    )
+    monkeypatch.setattr(prepare_acceptance.subprocess, "run", fake_run)
+
+    assert prepare_acceptance.main(["start", "--project", project]) == 1
+    diagnostic_file = output / "sanitized-diagnostics.json"
+    report = json.loads(diagnostic_file.read_text(encoding="utf-8"))
+    assert report["failure_stage"] == "compose_up"
+    assert report["command_category"] == "compose_up"
+    assert report["exit_code"] == 17
+    assert report["docker_error_category"] == "DEPENDENCY_FAILED"
+    assert report["docker_version"] == "28.5.1"
+    assert report["compose_version"] == "2.40.0"
+    assert report["git_sha"] == "a" * 40
+    assert report["failed_dependency_services"] == ["migrate"]
+    assert report["failed_services"] == ["backend", "migrate"]
+    assert report["services"][0] == {
+        "service": "backend",
+        "state": "exited",
+        "exit_code": 42,
+        "health": "unhealthy",
+        "image_id": "sha256:" + "b" * 64,
+    }
+    captured = capsys.readouterr()
+    combined = captured.out + captured.err
+    stored = diagnostic_file.read_text(encoding="utf-8")
+    for forbidden in (
+        "POSTGRES_PASSWORD",
+        "CLICKHOUSE_PASSWORD",
+        "REDIS_PASSWORD",
+        "MINIO_ROOT_PASSWORD",
+        "MINIO_PIPELINE_SECRET_KEY",
+        "KEYCLOAK_ADMIN_PASSWORD",
+        "APP_SECRET",
+        "DATA_PSEUDONYMIZATION_KEY",
+        "private-value",
+        "another-value",
+        "do-not-print",
+    ):
+        assert forbidden not in combined + stored
+    if os.name != "nt":
+        assert not diagnostic_file.stat().st_mode & 0o077
