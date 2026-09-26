@@ -62,6 +62,16 @@ def classify_scan(scan: dict[str, Any], sbom: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def parse_scanner_version(output: str) -> tuple[str, str | None]:
+    """Read scanner and cached DB metadata without copying raw CLI text."""
+    match = re.search(r"Version:\s*([0-9]+(?:\.[0-9]+){2})", output)
+    db_match = re.search(r"UpdatedAt:\s*([^\n]+)", output)
+    return (
+        match.group(1) if match else "NOT AVAILABLE",
+        db_match.group(1).strip() if db_match else None,
+    )
+
+
 def _run(args: list[str], *, timeout: int = 900) -> str:
     try:
         result = subprocess.run(  # noqa: S603 — fixed Docker CLI arguments
@@ -120,13 +130,18 @@ def scan(project: str) -> dict[str, Any]:
                 f"CRITICAL={rows[name]['critical']} "
                 f"Go components={rows[name]['go_component_count']}"
             )
-        version_text = _run(["docker", "run", "--rm", TRIVY_IMAGE, "--version"])
-        match = re.search(r"Version:\s*([0-9]+(?:\.[0-9]+){2})", version_text)
-        if match:
-            scanner_version = match.group(1)
-        db_match = re.search(r"UpdatedAt:\s*([^\n]+)", version_text)
-        if db_match:
-            database_updated_at = db_match.group(1).strip()
+        version_text = _run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--mount",
+                f"type=volume,source={cache},target=/root/.cache/trivy",
+                TRIVY_IMAGE,
+                "--version",
+            ]
+        )
+        scanner_version, database_updated_at = parse_scanner_version(version_text)
     finally:
         # This cache belongs only to this phase8-* project, never an existing stack.
         subprocess.run(  # noqa: S603 — scoped Docker CLI cleanup

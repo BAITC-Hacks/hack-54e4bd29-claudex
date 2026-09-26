@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts.operations.minio_source_scan import classify_scan
+from scripts.operations.minio_source_scan import classify_scan, parse_scanner_version
 
 
 def _sbom() -> dict[str, object]:
@@ -45,3 +45,12 @@ def test_missing_go_components_is_not_a_clean_scan() -> None:
     assert result["go_components_detected"] is False
     assert result["security_admission"] == "NOT VERIFIED"
     assert result["functional_may_continue"] is False
+
+
+def test_scanner_version_extracts_cached_vulnerability_database_date() -> None:
+    version, updated = parse_scanner_version(
+        "Version: 0.58.2\nVulnerability DB:\n  Version: 2\n"
+        "  UpdatedAt: 2026-09-26T10:00:00Z\n"
+    )
+    assert version == "0.58.2"
+    assert updated == "2026-09-26T10:00:00Z"
