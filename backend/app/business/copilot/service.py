@@ -45,6 +45,11 @@ _TEMPORAL_CLAIMS = re.compile(
     r"октябр|ноябр|декабр|сегодня|сейчас|текущ[а-я]*",
     re.IGNORECASE,
 )
+_UNVERIFIED_SOURCE = re.compile(
+    r"\b(?:воз|минздрав|министерств[а-я]*|исследовани[а-я]*|отч[её]т[а-я]*|"
+    r"по данным|согласно источнику)\b|\b[a-z0-9.-]+\.(?:ru|kz|org|com)\b",
+    re.IGNORECASE,
+)
 
 
 class CopilotProvider(Protocol):
@@ -152,6 +157,7 @@ def _validate_model_output(
         or _QUANTITATIVE.search(explanation)
         or _NUMBER_WORDS.search(explanation)
         or _TEMPORAL_CLAIMS.search(explanation)
+        or _UNVERIFIED_SOURCE.search(explanation)
         or "<" in explanation
         or ">" in explanation
         or "http://" in explanation.lower()
