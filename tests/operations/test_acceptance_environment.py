@@ -514,6 +514,9 @@ def test_successful_preflight_keeps_original_compose_up_command(
         prepare_acceptance, "_run_preflight", lambda *_: None, raising=False
     )
     monkeypatch.setattr(
+        prepare_acceptance, "grant_keycloak_realm_read", lambda *_args: {}
+    )
+    monkeypatch.setattr(
         prepare_acceptance, "_compose_command", lambda *_: ["docker", "compose"]
     )
     monkeypatch.setattr(
