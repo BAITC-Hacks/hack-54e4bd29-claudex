@@ -28,6 +28,14 @@ IMAGES = {
         "pipeline": "f",
     }.items()
 }
+NAMED_IMAGES = {
+    "postgres": "postgres:16-alpine",
+    "clickhouse": "clickhouse/clickhouse-server:24.8-alpine",
+    "redis": "redis:7.4-alpine",
+    "minio": "quay.io/minio/minio:RELEASE.synthetic",
+    "minio-init": "quay.io/minio/mc:RELEASE.synthetic",
+    "keycloak": "quay.io/keycloak/keycloak:26.0",
+}
 
 
 @pytest.mark.parametrize("project", ["medsignal", "phase8", "../phase8-x", "phase8_X"])
@@ -317,10 +325,12 @@ def _preflight_fixture(tmp_path: Path) -> tuple[Path, dict[str, object]]:
         "volumes": [{"type": "bind", "source": str(repository_config)}],
     }
     services["keycloak"] = {
-        "image": "keycloak:26",
+        "image": NAMED_IMAGES["keycloak"],
         "volumes": [{"type": "bind", "source": str(output / "realm.json")}],
     }
-    services["postgres"] = {"image": "postgres:16-alpine"}
+    services.update(
+        {name: {"image": ref} for name, ref in NAMED_IMAGES.items() if name != "keycloak"}
+    )
     return output, {"services": services}
 
 
@@ -338,7 +348,7 @@ def _fake_preflight_docker(
                 )
             return subprocess.CompletedProcess(command, 0, image_id + "\n", "")
         if command[-2:] == ["config", "--images"]:
-            refs = {*IMAGES.values(), "keycloak:26", "postgres:16-alpine"}
+            refs = {*IMAGES.values(), *NAMED_IMAGES.values()}
             if omit_resolved:
                 refs.remove(omit_resolved)
             return subprocess.CompletedProcess(command, 0, "\n".join(sorted(refs)), "")
@@ -356,6 +366,18 @@ def test_preflight_reports_all_six_local_images_and_matching_compose_refs(
         prepare_acceptance, "_compose_command", lambda *_: ["docker", "compose"]
     )
     monkeypatch.setattr(prepare_acceptance.subprocess, "run", _fake_preflight_docker())
+    monkeypatch.setattr(
+        prepare_acceptance,
+        "_check_named_dependency_images",
+        lambda *_: None,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        prepare_acceptance, "_check_daemon_primitives", lambda *_: None, raising=False
+    )
+    monkeypatch.setattr(
+        prepare_acceptance, "_probe_compose_create", lambda *_: None, raising=False
+    )
     report: dict[str, object] = {}
 
     prepare_acceptance._run_preflight("phase8-accept-abcd1234", output, config, report)
@@ -365,8 +387,8 @@ def test_preflight_reports_all_six_local_images_and_matching_compose_refs(
         item["present"] and item["image_id_matches"] for item in report["image_presence"]
     )
     assert report["compose_image_resolution"]["mismatch"] is False
-    assert report["compose_image_resolution"]["expected_image_refs"] == 8
-    assert report["compose_image_resolution"]["resolved_image_refs"] == 8
+    assert report["compose_image_resolution"]["expected_image_refs"] == 12
+    assert report["compose_image_resolution"]["resolved_image_refs"] == 12
     assert all(item["source_exists"] for item in report["mount_sources"])
 
 
@@ -421,7 +443,7 @@ def test_preflight_detects_compose_image_reference_mismatch(
 
     assert caught.value.category == "IMAGE_REFERENCE_RESOLUTION"
     assert report["compose_image_resolution"]["mismatch"] is True
-    assert report["compose_image_resolution"]["resolved_image_refs"] == 7
+    assert report["compose_image_resolution"]["resolved_image_refs"] == 11
     assert any(
         item["mismatch"] for item in report["compose_image_resolution"]["services"]
     )
@@ -577,3 +599,320 @@ def test_new_docker_error_categories_never_include_original_stderr(
 ) -> None:
     raw = f"{stderr} POSTGRES_PASSWORD=private-value"
     assert prepare_acceptance._docker_error_category(raw) == category
+
+
+def test_missing_named_dependency_is_pulled_and_reinspected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _output, config = _preflight_fixture(tmp_path)
+    calls: list[tuple[str, ...]] = []
+    pulled = False
+
+    def fake_run(
+        command: list[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal pulled
+        calls.append(tuple(command))
+        if command[:3] == ["docker", "image", "inspect"]:
+            if command[3] == NAMED_IMAGES["minio"] and not pulled:
+                return subprocess.CompletedProcess(command, 1, "", "No such image")
+            return subprocess.CompletedProcess(command, 0, "sha256:" + "a" * 64, "")
+        if command[:2] == ["docker", "pull"]:
+            assert command[2] == NAMED_IMAGES["minio"]
+            pulled = True
+            return subprocess.CompletedProcess(command, 0, "ignored pull output", "")
+        raise AssertionError("Unexpected Docker command")
+
+    monkeypatch.setattr(prepare_acceptance.subprocess, "run", fake_run)
+    report: dict[str, object] = {}
+
+    prepare_acceptance._check_named_dependency_images(config, report)
+
+    rows = report["named_images"]
+    assert len(rows) == 6
+    assert next(row for row in rows if row["service"] == "minio") == {
+        "service": "minio",
+        "image_kind": "NAMED_IMAGE",
+        "present_before": False,
+        "pull_attempted": True,
+        "pull_succeeded": True,
+        "present_after": True,
+        "failure_category": None,
+    }
+    assert len([call for call in calls if call[:2] == ("docker", "pull")]) == 1
+    assert "ignored pull output" not in json.dumps(report)
+
+
+def test_failed_named_image_pull_stops_before_daemon_and_compose_probes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _output, config = _preflight_fixture(tmp_path)
+    calls: list[tuple[str, ...]] = []
+    failing_ref = NAMED_IMAGES["postgres"]
+
+    def fake_run(
+        command: list[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(tuple(command))
+        if command[:3] == ["docker", "image", "inspect"]:
+            if command[3] == failing_ref:
+                return subprocess.CompletedProcess(command, 1, "", "No such image")
+            return subprocess.CompletedProcess(command, 0, "sha256:" + "a" * 64, "")
+        if command[:2] == ["docker", "pull"]:
+            return subprocess.CompletedProcess(
+                command, 1, "", "toomanyrequests POSTGRES_PASSWORD=private-value"
+            )
+        raise AssertionError("Unexpected Docker command")
+
+    monkeypatch.setattr(prepare_acceptance.subprocess, "run", fake_run)
+    report: dict[str, object] = {}
+
+    with pytest.raises(prepare_acceptance.AcceptancePreflightError) as caught:
+        prepare_acceptance._check_named_dependency_images(config, report)
+
+    assert caught.value.category == "IMAGE_PULL_RATE_LIMIT"
+    assert next(
+        row for row in report["named_images"] if row["service"] == "postgres"
+    ) == {
+        "service": "postgres",
+        "image_kind": "NAMED_IMAGE",
+        "present_before": False,
+        "pull_attempted": True,
+        "pull_succeeded": False,
+        "present_after": False,
+        "failure_category": "IMAGE_PULL_RATE_LIMIT",
+    }
+    assert not any("create" in call or "up" in call for call in calls)
+    assert "private-value" not in json.dumps(report) + str(caught.value) + "".join(
+        capsys.readouterr()
+    )
+
+
+@pytest.mark.parametrize(
+    ("stderr", "category"),
+    [
+        ("dial tcp: connection refused", "REGISTRY_UNAVAILABLE"),
+        ("manifest unknown", "IMAGE_MANIFEST_UNAVAILABLE"),
+        ("pull access denied", "IMAGE_PULL_DENIED"),
+        ("toomanyrequests", "IMAGE_PULL_RATE_LIMIT"),
+        ("Error response from daemon", "DAEMON_ERROR"),
+        ("unexpected registry response", "UNKNOWN_PULL_ERROR"),
+    ],
+)
+def test_pull_failure_classifier_emits_only_fixed_categories(
+    stderr: str, category: str
+) -> None:
+    assert (
+        prepare_acceptance._pull_failure_category(
+            stderr + " MINIO_ROOT_PASSWORD=private-value"
+        )
+        == category
+    )
+
+
+def test_daemon_primitives_create_and_cleanup_only_namespaced_resources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(
+        command: list[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(tuple(command))
+        return subprocess.CompletedProcess(command, 0, "opaque-id", "")
+
+    monkeypatch.setattr(prepare_acceptance.subprocess, "run", fake_run)
+    report: dict[str, object] = {}
+    prepare_acceptance._check_daemon_primitives(
+        "phase8-accept-abcd1234", IMAGES["nginx"], report
+    )
+
+    assert report["daemon_primitives"] == {
+        "volume_create": "PASS",
+        "network_create": "PASS",
+        "container_create": "PASS",
+    }
+    assert len(calls) == 6
+    assert all(
+        any("phase8-accept-abcd1234" in arg for arg in command) for command in calls
+    )
+    assert not any("--env" in command or "--mount" in command for command in calls)
+    assert any(command[:2] == ("docker", "rm") for command in calls)
+    assert any(command[:3] == ("docker", "network", "rm") for command in calls)
+    assert any(command[:3] == ("docker", "volume", "rm") for command in calls)
+    assert "opaque-id" not in json.dumps(report)
+
+
+def test_failed_network_probe_still_cleans_successful_volume_and_container(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(
+        command: list[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(tuple(command))
+        if command[:3] == ["docker", "network", "create"]:
+            return subprocess.CompletedProcess(
+                command, 1, "", "POSTGRES_PASSWORD=private-value"
+            )
+        if command[:3] == ["docker", "network", "inspect"]:
+            return subprocess.CompletedProcess(command, 1, "", "not found")
+        return subprocess.CompletedProcess(command, 0, "opaque-id", "")
+
+    monkeypatch.setattr(prepare_acceptance.subprocess, "run", fake_run)
+    report: dict[str, object] = {}
+    with pytest.raises(prepare_acceptance.AcceptancePreflightError) as caught:
+        prepare_acceptance._check_daemon_primitives(
+            "phase8-accept-abcd1234", IMAGES["nginx"], report
+        )
+
+    assert caught.value.category == "NETWORK_CREATE_FAILED"
+    assert report["daemon_primitives"] == {
+        "volume_create": "PASS",
+        "network_create": "FAIL",
+        "container_create": "PASS",
+    }
+    assert any(command[:3] == ("docker", "volume", "rm") for command in calls)
+    assert any(command[:2] == ("docker", "rm") for command in calls)
+    assert "private-value" not in json.dumps(report) + str(caught.value)
+
+
+@pytest.mark.parametrize("create_succeeds", [True, False])
+def test_compose_create_captures_state_then_cleans_without_starting(
+    create_succeeds: bool, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output, _config = _preflight_fixture(tmp_path)
+    calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(prepare_acceptance, "ARTIFACTS", tmp_path)
+    monkeypatch.setattr(
+        prepare_acceptance, "_compose_command", lambda *_: ["docker", "compose"]
+    )
+    monkeypatch.setattr(
+        prepare_acceptance, "_namespace_is_empty", lambda *_: True, raising=False
+    )
+    monkeypatch.setattr(
+        prepare_acceptance,
+        "_safe_services",
+        lambda *_: [
+            {
+                "service": "postgres",
+                "state": "created",
+                "exit_code": 0,
+                "health": "unknown",
+            }
+        ],
+    )
+
+    def fake_run(*command: str) -> str:
+        calls.append(command)
+        if command[-2:] == ("create", "--no-build") and not create_succeeds:
+            raise prepare_acceptance.AcceptanceCommandError(
+                "compose_create", 1, "DAEMON_ERROR"
+            )
+        return ""
+
+    monkeypatch.setattr(prepare_acceptance, "_run", fake_run)
+    report: dict[str, object] = {}
+    if create_succeeds:
+        prepare_acceptance._probe_compose_create(
+            "phase8-accept-abcd1234", output, IMAGES, report
+        )
+        assert report["compose_create"]["result"] == "PASS"
+    else:
+        with pytest.raises(prepare_acceptance.AcceptancePreflightError) as caught:
+            prepare_acceptance._probe_compose_create(
+                "phase8-accept-abcd1234", output, IMAGES, report
+            )
+        assert caught.value.stage == "compose_create"
+        assert report["compose_create"]["result"] == "FAIL"
+        assert report["compose_create"]["service_states"][0]["service"] == "postgres"
+    assert calls == [
+        ("docker", "compose", "create", "--no-build"),
+        ("docker", "compose", "down", "--volumes", "--remove-orphans"),
+    ]
+    assert report["compose_create"]["cleanup_succeeded"] is True
+
+
+def test_compose_create_command_failure_is_classified_without_raw_stderr(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    secret = "POSTGRES_PASSWORD=private-value"  # noqa: S105 — synthetic test canary
+
+    def fake_run(
+        command: list[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            command, 1, "", f"Error response from daemon {secret}"
+        )
+
+    monkeypatch.setattr(prepare_acceptance.subprocess, "run", fake_run)
+    with pytest.raises(prepare_acceptance.AcceptanceCommandError) as caught:
+        prepare_acceptance._run("docker", "compose", "create", "--no-build")
+
+    assert caught.value.command_category == "compose_create"
+    assert caught.value.docker_error_category == "DAEMON_ERROR"
+    assert secret not in str(caught.value) + "".join(capsys.readouterr())
+
+
+def test_compose_create_refuses_existing_namespace_without_down(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output, _config = _preflight_fixture(tmp_path)
+    calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(prepare_acceptance, "_namespace_is_empty", lambda *_: False)
+    monkeypatch.setattr(
+        prepare_acceptance, "_run", lambda *command: calls.append(command) or ""
+    )
+    report: dict[str, object] = {}
+
+    with pytest.raises(prepare_acceptance.AcceptancePreflightError) as caught:
+        prepare_acceptance._probe_compose_create(
+            "phase8-accept-abcd1234", output, IMAGES, report
+        )
+
+    assert caught.value.category == "ACCEPTANCE_NAMESPACE_NOT_EMPTY"
+    assert calls == []
+    assert report["compose_create"]["result"] == "NOT_RUN"
+
+
+def test_named_pull_failure_artifact_contains_only_sanitized_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output, config = _preflight_fixture(tmp_path)
+    raw_secret = "MINIO_ROOT_PASSWORD=synthetic-private-value"  # noqa: S105 — test canary
+    monkeypatch.setattr(prepare_acceptance, "ARTIFACTS", tmp_path)
+    monkeypatch.setattr(prepare_acceptance, "_validated_config", lambda *_: config)
+    monkeypatch.setattr(prepare_acceptance, "_safe_probe", lambda *_: None)
+    monkeypatch.setattr(prepare_acceptance, "_safe_services", lambda *_: [])
+
+    def fail_pull(
+        _project: str,
+        _output: Path,
+        _config: dict[str, object],
+        report: dict[str, object],
+    ) -> None:
+        raw_stderr = f"toomanyrequests {raw_secret}"
+        category = prepare_acceptance._pull_failure_category(raw_stderr)
+        report["named_images"] = [
+            {
+                "service": "minio",
+                "image_kind": "NAMED_IMAGE",
+                "present_before": False,
+                "pull_attempted": True,
+                "pull_succeeded": False,
+                "present_after": False,
+                "failure_category": category,
+            }
+        ]
+        raise prepare_acceptance.AcceptancePreflightError(category, "named_images")
+
+    monkeypatch.setattr(prepare_acceptance, "_run_preflight", fail_pull)
+    assert prepare_acceptance.main(["start", "--project", output.name]) == 1
+
+    artifact = (output / "sanitized-diagnostics.json").read_text(encoding="utf-8")
+    result = json.loads(artifact)
+    assert result["failure_stage"] == "named_images"
+    assert result["failure_category"] == "IMAGE_PULL_RATE_LIMIT"
+    assert result["preflight"]["named_images"][0]["service"] == "minio"
+    assert raw_secret not in artifact + "".join(capsys.readouterr())

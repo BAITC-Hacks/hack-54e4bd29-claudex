@@ -23,8 +23,19 @@ from urllib.request import urlopen
 REQUIRED_IMAGES = frozenset(
     {"backend", "worker", "mlflow", "frontend", "nginx", "pipeline"}
 )
+NAMED_DEPENDENCY_SERVICES = (
+    "postgres",
+    "clickhouse",
+    "redis",
+    "minio",
+    "minio-init",
+    "keycloak",
+)
 PROJECT_PATTERN = re.compile(r"phase8-[a-z0-9][a-z0-9-]{4,50}[a-z0-9]")
 DIGEST_PATTERN = re.compile(r"sha256:[a-f0-9]{64}")
+PUBLIC_IMAGE_PATTERN = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9._/-]*:[A-Za-z0-9._-]+(?:@sha256:[a-f0-9]{64})?"
+)
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "tmp" / "acceptance"
 REALM_TEMPLATE = ROOT / "infrastructure" / "keycloak" / "realm-medsignal-dev.json"
@@ -84,11 +95,11 @@ class AcceptancePreflightError(RuntimeError):
 
 def _command_category(command: tuple[str, ...]) -> str:
     if command[:2] == ("docker", "compose"):
-        return (
-            "compose_up"
-            if command[-3:] == ("up", "--no-build", "-d")
-            else "compose_other"
-        )
+        if command[-3:] == ("up", "--no-build", "-d"):
+            return "compose_up"
+        if command[-2:] == ("create", "--no-build"):
+            return "compose_create"
+        return "compose_other"
     if command[:2] == ("docker", "build"):
         return "image_build"
     if command[:3] == ("docker", "image", "inspect"):
@@ -127,6 +138,44 @@ def _docker_error_category(stderr: str) -> str:
         if any(marker in lowered for marker in markers):
             return category
     return "UNCLASSIFIED"
+
+
+def _pull_failure_category(stderr: str) -> str:
+    """Classify only fixed registry/daemon markers; never return Docker text."""
+    lowered = stderr.lower()
+    for category, markers in (
+        ("IMAGE_PULL_RATE_LIMIT", ("toomanyrequests", "rate limit", "too many requests")),
+        ("IMAGE_MANIFEST_UNAVAILABLE", ("manifest unknown", "manifest not found")),
+        (
+            "IMAGE_PULL_DENIED",
+            ("pull access denied", "unauthorized:", "authentication required"),
+        ),
+        (
+            "REGISTRY_UNAVAILABLE",
+            ("dial tcp", "i/o timeout", "tls handshake timeout", "connection refused"),
+        ),
+        ("DAEMON_ERROR", ("error response from daemon",)),
+    ):
+        if any(marker in lowered for marker in markers):
+            return category
+    return "UNKNOWN_PULL_ERROR"
+
+
+def _quiet_command(
+    *command: str, timeout: int = 30
+) -> subprocess.CompletedProcess[str] | None:
+    """Keep all Docker stdout/stderr in memory, never print or persist them."""
+    try:
+        return subprocess.run(  # noqa: S603 — fixed Docker CLI argv, no shell
+            list(command),
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
 
 
 def _safe_probe(*command: str) -> str | None:
@@ -469,7 +518,7 @@ def _run(*command: str) -> str:
             category,
             result.returncode,
             _docker_error_category(result.stderr)
-            if category == "compose_up"
+            if category in {"compose_up", "compose_create"}
             else "UNCLASSIFIED",
         )
     return result.stdout
@@ -707,6 +756,205 @@ def _check_preflight_mounts(
         raise AcceptancePreflightError("MOUNT_SOURCE_MISSING", "preflight_mounts")
 
 
+def _named_image_present(image_ref: str) -> tuple[bool | None, str | None]:
+    result = _quiet_command(
+        "docker", "image", "inspect", image_ref, "--format", "{{.Id}}", timeout=15
+    )
+    if result is None:
+        return None, "DAEMON_ERROR"
+    if result.returncode == 0:
+        return (
+            (True, None)
+            if DIGEST_PATTERN.fullmatch(result.stdout.strip())
+            else (None, "DAEMON_ERROR")
+        )
+    category = _docker_error_category(result.stderr)
+    if category == "IMAGE_UNAVAILABLE":
+        return False, None
+    return None, category if category == "DAEMON_ERROR" else "UNKNOWN_PULL_ERROR"
+
+
+def _check_named_dependency_images(
+    config: dict[str, Any], report: dict[str, Any]
+) -> None:
+    """Inspect six public named dependencies, pulling only confirmed absent refs."""
+    services = config.get("services")
+    rows: list[dict[str, Any]] = []
+    report["named_images"] = rows
+    if not isinstance(services, dict):
+        raise AcceptancePreflightError("IMAGE_REFERENCE_RESOLUTION", "named_images")
+    for name in NAMED_DEPENDENCY_SERVICES:
+        service = services.get(name)
+        image_ref = service.get("image") if isinstance(service, dict) else None
+        if not isinstance(image_ref, str) or not PUBLIC_IMAGE_PATTERN.fullmatch(
+            image_ref
+        ):
+            raise AcceptancePreflightError("IMAGE_REFERENCE_RESOLUTION", "named_images")
+        present, inspect_error = _named_image_present(image_ref)
+        row: dict[str, Any] = {
+            "service": name,
+            "image_kind": "NAMED_IMAGE",
+            "present_before": present is True,
+            "pull_attempted": False,
+            "pull_succeeded": False,
+            "present_after": present is True,
+            "failure_category": inspect_error,
+        }
+        rows.append(row)
+        if inspect_error:
+            raise AcceptancePreflightError(inspect_error, "named_images")
+        if present:
+            continue
+        row["pull_attempted"] = True
+        pull = _quiet_command("docker", "pull", image_ref, timeout=600)
+        row["pull_succeeded"] = pull is not None and pull.returncode == 0
+        after, after_error = _named_image_present(image_ref)
+        row["present_after"] = after is True
+        if not row["pull_succeeded"] or after is not True:
+            category = (
+                _pull_failure_category(pull.stderr)
+                if pull is not None and pull.returncode
+                else after_error or "UNKNOWN_PULL_ERROR"
+            )
+            row["failure_category"] = category
+            raise AcceptancePreflightError(category, "named_images")
+
+
+def _probe_owned_resource(kind: str, name: str, project: str) -> bool:
+    labels = ".Config.Labels" if kind == "container" else ".Labels"
+    template = "{{ index " + labels + ' "medsignal.acceptance.project" }}'
+    command = (
+        ("docker", "container", "inspect", name, "--format", template)
+        if kind == "container"
+        else ("docker", kind, "inspect", name, "--format", template)
+    )
+    result = _quiet_command(*command)
+    return (
+        result is not None and result.returncode == 0 and result.stdout.strip() == project
+    )
+
+
+def _probe_one_resource(
+    kind: str, project: str, nginx_image_id: str
+) -> tuple[bool, bool]:
+    """Return (create+cleanup passed, cleanup passed) for a unique labelled probe."""
+    name = f"{project}-diag-{kind}-{uuid.uuid4().hex[:10]}"
+    label = f"medsignal.acceptance.project={project}"
+    create: tuple[str, ...]
+    remove: tuple[str, ...]
+    if kind == "volume":
+        create = ("docker", "volume", "create", "--name", name, "--label", label)
+        remove = ("docker", "volume", "rm", name)
+    elif kind == "network":
+        create = ("docker", "network", "create", "--label", label, name)
+        remove = ("docker", "network", "rm", name)
+    else:
+        create = (
+            "docker",
+            "create",
+            "--name",
+            name,
+            "--network",
+            "none",
+            "--label",
+            label,
+            nginx_image_id,
+        )
+        remove = ("docker", "rm", name)
+    created = False
+    cleaned = True
+    try:
+        result = _quiet_command(*create)
+        created = result is not None and result.returncode == 0
+    finally:
+        if created or _probe_owned_resource(kind, name, project):
+            removal = _quiet_command(*remove)
+            cleaned = removal is not None and removal.returncode == 0
+    return created and cleaned, cleaned
+
+
+def _check_daemon_primitives(
+    project: str, nginx_image_id: str, report: dict[str, Any]
+) -> None:
+    validate_project_name(project)
+    if not DIGEST_PATTERN.fullmatch(nginx_image_id):
+        raise AcceptancePreflightError("DAEMON_PRIMITIVE_FAILED", "daemon_primitives")
+    statuses: dict[str, str] = {}
+    report["daemon_primitives"] = statuses
+    first_failure: str | None = None
+    for kind, field in (
+        ("volume", "volume_create"),
+        ("network", "network_create"),
+        ("container", "container_create"),
+    ):
+        passed, cleaned = _probe_one_resource(kind, project, nginx_image_id)
+        statuses[field] = "PASS" if passed else "FAIL"
+        if not passed and first_failure is None:
+            first_failure = (
+                "DAEMON_PRIMITIVE_FAILED" if not cleaned else field.upper() + "_FAILED"
+            )
+    if first_failure:
+        raise AcceptancePreflightError(first_failure, "daemon_primitives")
+
+
+def _namespace_is_empty(project: str, output: Path) -> bool:
+    """Never run diagnostic `down --volumes` against existing project resources."""
+    label = f"label=com.docker.compose.project={project}"
+    outputs = (
+        _safe_probe(
+            *_compose_command(project, output), "ps", "--all", "--format", "json"
+        ),
+        _safe_probe("docker", "volume", "ls", "--filter", label, "--format", "{{.Name}}"),
+        _safe_probe(
+            "docker", "network", "ls", "--filter", label, "--format", "{{.Name}}"
+        ),
+    )
+    return all(value is not None and value.strip() in ("", "[]") for value in outputs)
+
+
+def _probe_compose_create(
+    project: str, output: Path, images: dict[str, str], report: dict[str, Any]
+) -> None:
+    """Capture create state and remove resources in a fresh project namespace."""
+    if not _namespace_is_empty(project, output):
+        report["compose_create"] = {
+            "result": "NOT_RUN",
+            "failure_category": "ACCEPTANCE_NAMESPACE_NOT_EMPTY",
+        }
+        raise AcceptancePreflightError("ACCEPTANCE_NAMESPACE_NOT_EMPTY", "compose_create")
+    command = _compose_command(project, output)
+    error: AcceptanceCommandError | None = None
+    create_passed = False
+    cleaned = False
+    try:
+        try:
+            _run(*command, "create", "--no-build")
+            create_passed = True
+        except AcceptanceCommandError as exc:
+            error = exc
+        report["compose_create"] = {
+            "result": "PASS" if create_passed else "FAIL",
+            "failure_category": error.docker_error_category if error else None,
+            "service_states": _safe_services(project, output, images),
+        }
+    finally:
+        try:
+            _run(*command, "down", "--volumes", "--remove-orphans")
+            cleaned = True
+        except (OSError, RuntimeError):
+            cleaned = False
+        report.setdefault("compose_create", {})["cleanup_succeeded"] = cleaned
+    if not cleaned:
+        raise AcceptancePreflightError("COMPOSE_CREATE_CLEANUP_FAILED", "compose_create")
+    if not create_passed:
+        category = (
+            error.docker_error_category
+            if error and error.docker_error_category != "UNCLASSIFIED"
+            else "COMPOSE_CREATE_FAILED"
+        )
+        raise AcceptancePreflightError(category, "compose_create")
+
+
 def _run_preflight(
     project: str, output: Path, config: dict[str, Any], report: dict[str, Any]
 ) -> None:
@@ -714,6 +962,9 @@ def _run_preflight(
     images = _check_preflight_images(output, report)
     _check_preflight_image_resolution(project, output, config, images, report)
     _check_preflight_mounts(config, output, report)
+    _check_named_dependency_images(config, report)
+    _check_daemon_primitives(project, images["nginx"], report)
+    _probe_compose_create(project, output, images, report)
 
 
 def _validated_config(project: str, output: Path) -> dict[str, Any]:
