@@ -57,7 +57,7 @@ Run-scoped machine evidence is uploaded as `minio-source-build-evidence` and
 binary hashes, package versions, scanner DB date, HIGH/CRITICAL counts and
 runtime results from those artifacts; do not infer them from this design.
 
-## Previous result and current verification state
+## Earlier verification history
 
 The first patched CI run
 [`36247311226`](https://github.com/zzhassyn/govtech_case1/actions/runs/36247311226)
@@ -102,7 +102,43 @@ migrations and `minio-init` had exited successfully; the MinIO service was
 healthy. The sanitized startup diagnostic does **not** establish why Keycloak
 restarted. S3/MLflow verification, signed-token browser checks and Playwright
 were therefore **NOT TESTED** in this run. The IAM probe's PASS is independent
-of this later acceptance failure; `FUNCTIONAL_ACCEPTANCE` remains blocked.
+of this later acceptance failure; `FUNCTIONAL_ACCEPTANCE` was blocked in that run.
+
+## Keycloak realm mount and completed synthetic journey
+
+Run [`36257197947`](https://github.com/zzhassyn/govtech_case1/actions/runs/36257197947)
+isolated the failure without rebuilding MedSignal images: the generated realm
+was owned by Linux runner UID/GID `1001:1001`, mode `0600`, with no ACL. The
+exact acceptance image `quay.io/keycloak/keycloak:26.0` ran as UID `1000`,
+GID `0`, and could not read the read-only bind mount. Its isolated startup
+exited `1`, was not OOM-killed, and had no automatic restart. This also
+explains why a later Compose snapshot of Keycloak as merely `running` did not
+prove that realm import had succeeded.
+
+Acceptance startup now inspects the rendered Compose image and grants read
+access **only** to its verified non-root UID through a POSIX ACL on the
+generated `realm.json`. The host owner keeps access; `.env` remains `0600`.
+The write policy for all other generated secrets is unchanged. Missing ACL
+tooling or an unresolved/root image user stops acceptance before Compose.
+
+In run [`36257739306`](https://github.com/zzhassyn/govtech_case1/actions/runs/36257739306),
+the same Linux read-only mount changed from unreadable (`0600`, no ACL) to
+readable by UID `1000` (`0640` ACL mask). An unrelated UID `20001` still
+could not read it. An isolated Keycloak imported the realm, returned HTTP
+`200` from OIDC discovery, and had zero restarts or OOM events. The full
+Compose attempt stopped separately at `minio-init` exit `1`; no browser tests
+ran in that attempt. Its sanitized diagnostic did not establish a cause for
+that one-off MinIO bootstrap failure, and no MinIO code or policy was changed.
+
+Run [`36258664151`](https://github.com/zzhassyn/govtech_case1/actions/runs/36258664151)
+repeated the successful Keycloak preflight and completed the full isolated
+synthetic acceptance: MinIO pre-start gates, Compose and scoped bootstrap,
+invented fixtures, signed-token scope checks, production Next.js browser
+journey, real ClickHouse HTTP `503` scenario, dependency recovery, and
+namespaced teardown. Numeric browser artifacts recorded **2 passed / 0
+failed** for the normal journey and **1 passed / 0 failed** for the degraded
+journey. This is functional evidence for synthetic data, not production
+readiness. The production backend, worker and MLflow image gates still fail.
 
 **SECURITY_ADMISSION: FAIL** regardless of synthetic functional outcome; a
 supported production storage path has not been selected. The existing
