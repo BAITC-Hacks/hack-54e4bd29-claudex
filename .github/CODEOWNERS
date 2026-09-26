@@ -1,0 +1,25 @@
+# Confirmed MedSignal ownership (U1/U2/U3). GitHub uses the last matching rule.
+# Base zones first; narrowly scoped file-type exceptions follow.
+/backend/ @zzhassyn
+/data_pipeline/ @zzhassyn
+/ml/ @zzhassyn
+/database/ @zzhassyn
+
+/infrastructure/ @Alim-Rakhmet
+/.github/ @Alim-Rakhmet
+
+/frontend/ @aldabergenuly
+
+# Repository-wide exceptions: database migrations and dependency manifests.
+*.sql @zzhassyn
+requirements*.txt @zzhassyn
+pyproject.toml @zzhassyn
+poetry.lock @zzhassyn
+uv.lock @zzhassyn
+package.json @aldabergenuly
+package-lock.json @aldabergenuly
+
+# Container definitions and Compose overlays are infrastructure-owned.
+/docker-compose*.yml @Alim-Rakhmet
+Dockerfile @Alim-Rakhmet
+*.Dockerfile @Alim-Rakhmet

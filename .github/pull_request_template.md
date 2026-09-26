@@ -19,6 +19,21 @@ claims. Link the approved decision when one is required.
 | Final-image Trivy gate when an image changes | | |
 | Isolated runtime/browser verification when needed | | |
 
+## Ownership and review
+
+Select reviewers from [CODEOWNERS](CODEOWNERS) for every changed zone. For a
+cross-zone change, request each affected owner: U1 `@zzhassyn` (backend, data,
+ML, SQL/migrations, Python manifests), U2 `@Alim-Rakhmet` (infrastructure,
+CI, Compose, Dockerfiles), U3 `@aldabergenuly` (frontend and package manifests).
+The additional account `@albqqd` has no assigned ownership zone. File-type
+exceptions in CODEOWNERS take precedence over their containing directory.
+
+- [ ] Relevant owners have reviewed the API, schema, security and UI contracts.
+- [ ] Any failed required gate is recorded as a blocker; no blanket acceptance
+      or silent suppression is claimed.
+- [ ] No credentials, tokens, patient-level data or unsafe browser artifacts
+      are attached.
+
 Record the exact source SHA and environment for runtime or performance claims.
 `NOT TESTED` is an honest result, not a pass. Do not attach tokens, private
 datasets, patient-level values, or raw sensitive logs.
@@ -30,6 +45,6 @@ datasets, patient-level values, or raw sensitive logs.
 - [ ] The reviewer can assess the final diff and any cross-module contract.
 - [ ] No self-approval or exception to a failed required check is claimed.
 
-This template records evidence; it does not itself enforce branch protection,
-CODEOWNERS or required checks. GitHub settings and reviewer assignments are
-handled separately by authorized repository administrators.
+This template records evidence; it does not itself enforce branch protection
+or required checks. GitHub settings remain the responsibility of authorized
+repository administrators.
