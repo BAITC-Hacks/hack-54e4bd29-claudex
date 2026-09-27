@@ -71,10 +71,18 @@ function activeRoute(pathname: string): string | undefined {
     .sort((first, second) => second.href.length - first.href.length)[0]?.href;
 }
 
-function AppNavigation({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+function AppNavigation({
+  pathname,
+  onNavigate,
+  ariaLabel = "Основная навигация",
+}: {
+  pathname: string;
+  onNavigate?: () => void;
+  ariaLabel?: string;
+}) {
   const active = activeRoute(pathname);
   return (
-    <nav aria-label="Основная навигация" className="space-y-6">
+    <nav aria-label={ariaLabel} className="space-y-6">
       {navigationGroups.map((group) => (
         <div key={group.label}>
           <p className="mb-2 px-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
@@ -240,7 +248,13 @@ function ApplicationShellContent({ children, pathname }: { children: ReactNode; 
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto py-3"><AppNavigation pathname={pathname} onNavigate={closeMobileNavigation} /></div>
+            <div className="flex-1 overflow-y-auto py-3">
+              <AppNavigation
+                pathname={pathname}
+                onNavigate={closeMobileNavigation}
+                ariaLabel="Мобильная навигация"
+              />
+            </div>
             <Button type="button" variant="ghost" className="mt-4 justify-start border-t border-slate-200 text-slate-600" onClick={logout}>
               <PanelLeftClose className="h-4 w-4" aria-hidden="true" /> Выйти
             </Button>

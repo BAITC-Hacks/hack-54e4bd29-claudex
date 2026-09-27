@@ -45,6 +45,7 @@ describe("ApplicationShell", () => {
     const toggle = screen.getByRole("button", { name: "Открыть меню" });
     fireEvent.click(toggle);
     const drawer = screen.getByRole("dialog", { name: "Навигация MedSignal" });
+    expect(within(drawer).getByRole("navigation", { name: "Мобильная навигация" })).toBeInTheDocument();
     expect(within(drawer).getByRole("link", { name: "Сигналы" })).toBeInTheDocument();
 
     fireEvent.keyDown(drawer, { key: "Escape" });
