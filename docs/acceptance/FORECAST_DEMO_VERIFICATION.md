@@ -97,6 +97,7 @@ API эти поля в текущем frontend остаются optional. При
 предшествующих окнах. Надпись «Прогноз на синтетических демонстрационных
 данных» включается только явным флагом
 `NEXT_PUBLIC_SYNTHETIC_DEMO=true` вместе с `NEXT_PUBLIC_APP_ENV=local`
+или `NEXT_PUBLIC_APP_ENV=test`
 (при сборке standalone-образа или в локальном dev server); по умолчанию
 demo-флаг `false`.
 
@@ -129,7 +130,7 @@ HTTP-стенд перестал отвечать. После согласова
 
 ## Проверки кода и незакрытые проверки стенда
 
-После последних правок выполнены: backend pytest — 660 passed, 12 skipped
+До изменения условия подписи для `test` выполнены: backend pytest — 660 passed, 12 skipped
 (изолированные DB integration tests требуют отдельного стенда); ML pytest —
 18 passed; targeted operations — 4 passed; frontend Vitest — 122 passed;
 frontend lint/typecheck/production build — PASS; Ruff check/format и mypy для
@@ -141,6 +142,23 @@ manifest, повторно дал 42 пары и MAE 1,5714285714.
 Обновлённый контейнер API, новый browser UI и два дополнительных утверждения
 DB verifier остаются **NOT TESTED**. Прямой OIDC API 200/404 и первоначальная
 сверка PostgreSQL/ClickHouse были выполнены раньше, до отказа daemon.
+
+При подготовке интеграции выявлено отдельное ограничение конфигурации:
+существующий synthetic acceptance project имеет `NEXT_PUBLIC_APP_ENV=test`,
+но не задаёт `NEXT_PUBLIC_SYNTHETIC_DEMO`; его overlay закрепляет старые
+frontend/backend image digests и не собирает образы. Поэтому он не доказывает
+поведение обновлённых API/UI. Условие подписи расширено только на явно
+синтетический `test` build; `production` при том же флаге остаётся без
+подписи. Для новой изолированной сборки нужно явно передать build arg
+`NEXT_PUBLIC_SYNTHETIC_DEMO=true` в frontend и подтвердить происхождение
+данных по synthetic manifest. Один лишь browser-флаг происхождение не
+подтверждает. Эти runtime-проверки пока **NOT TESTED**.
+
+После исправления условия подписи: Vitest — 123 passed (19 файлов), lint,
+typecheck и production Next.js build с `NEXT_PUBLIC_APP_ENV=test` и
+`NEXT_PUBLIC_SYNTHETIC_DEMO=true` — PASS. Browser/API status от этих локальных
+проверок не меняется. Подробная передача интеграции:
+[`FORECAST_INTEGRATION_HANDOFF.md`](FORECAST_INTEGRATION_HANDOFF.md).
 
 ## Воспроизведение
 
