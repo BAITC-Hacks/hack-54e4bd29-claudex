@@ -2,7 +2,8 @@
 
 import { Activity, AlertTriangle, Ban, Building2, ClipboardList } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useMemo } from "react";
 
 import { AuthGate } from "@/features/auth/auth-gate";
 import { useAuth } from "@/features/auth/auth-context";
@@ -30,9 +31,36 @@ const INITIAL_QUERY: AnalyticsQuery = {
   granularity: "DAY",
 };
 
+const DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/;
+
+function dashboardQuery(search: Pick<URLSearchParams, "get">): AnalyticsQuery {
+  const dateFrom = search.get("date_from");
+  const dateTo = search.get("date_to");
+  const granularity = search.get("granularity");
+  return {
+    dateFrom: DATE_PARAM.test(dateFrom ?? "")
+      ? `${dateFrom}T00:00:00Z`
+      : INITIAL_QUERY.dateFrom,
+    dateTo: DATE_PARAM.test(dateTo ?? "")
+      ? `${dateTo}T23:59:59.999Z`
+      : INITIAL_QUERY.dateTo,
+    granularity: granularity === "WEEK" ? "WEEK" : "DAY",
+  };
+}
+
 export default function DashboardPage() {
   const { isAuthenticated } = useAuth();
-  const [query, setQuery] = useState(INITIAL_QUERY);
+  const pathname = usePathname();
+  const router = useRouter();
+  const search = useSearchParams();
+  const query = useMemo(() => dashboardQuery(search), [search]);
+  const setQuery = useCallback((next: AnalyticsQuery) => {
+    const params = new URLSearchParams();
+    params.set("date_from", (next.dateFrom ?? INITIAL_QUERY.dateFrom!).slice(0, 10));
+    params.set("date_to", (next.dateTo ?? INITIAL_QUERY.dateTo!).slice(0, 10));
+    params.set("granularity", next.granularity === "WEEK" ? "WEEK" : "DAY");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [pathname, router]);
   const analytics = useSituationCenter(isAuthenticated, query);
   const referralForecast = useLatestReferralForecast(isAuthenticated);
   const signals = useSignals(isAuthenticated, { page: 1, pageSize: 5 });
