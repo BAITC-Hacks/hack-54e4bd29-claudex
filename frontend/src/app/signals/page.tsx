@@ -24,11 +24,12 @@ export default function SignalsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="space-y-1.5">
-        <h1 className="text-xl font-semibold tracking-tight">
-          Лента предупреждений
+      <section className="border-b border-slate-200 pb-6">
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] text-cyan-700">Контроль отклонений</p>
+        <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.045em] text-[#102f45]">
+          Сигналы
         </h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
           Показаны сигналы организаций, доступных вашей учётной записи.
           Ограничение применяет сервер.
         </p>
@@ -36,13 +37,13 @@ export default function SignalsPage() {
 
       <AuthGate>
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="text-sm text-muted-foreground" htmlFor="status">
+          <div className="surface-card flex flex-wrap items-center gap-3 rounded-2xl p-4">
+            <label className="text-xs font-bold text-slate-600" htmlFor="status">
               Статус
             </label>
             <select
               id="status"
-              className="h-9 rounded-md border border-border bg-background px-3 text-sm"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-700"
               value={status}
               onChange={(event) => {
                 setStatus(event.target.value as SignalStatus | "");
@@ -56,34 +57,34 @@ export default function SignalsPage() {
               ))}
             </select>
             {signals.data && (
-              <span className="text-sm text-muted-foreground">
+              <span className="ml-auto rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
                 Всего: {signals.data.total}
               </span>
             )}
           </div>
 
           {signals.isPending && (
-            <p className="text-sm text-muted-foreground">Загрузка…</p>
+            <p className="surface-card rounded-2xl p-8 text-sm text-slate-500" role="status">Загружаем сигналы…</p>
           )}
           {signals.isError && (
-            <p className="text-sm text-destructive">
-              Не удалось получить сигналы: {signals.error.message}
+            <p className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-900" role="alert">
+              Сигналы временно недоступны. Повторите позже.
             </p>
           )}
           {signals.data && <SignalTable items={signals.data.items} />}
 
           {signals.data && (signals.data.has_next || page > 1) && (
-            <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center justify-end gap-3 text-sm">
               <button
-                className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40"
+                className="min-h-10 rounded-xl border border-slate-200 bg-white px-4 font-bold text-slate-700 disabled:opacity-40"
                 disabled={page === 1}
                 onClick={() => setPage((current) => current - 1)}
               >
                 Назад
               </button>
-              <span className="text-muted-foreground">Страница {page}</span>
+              <span className="text-slate-500">Страница {page}</span>
               <button
-                className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40"
+                className="min-h-10 rounded-xl border border-slate-200 bg-white px-4 font-bold text-slate-700 disabled:opacity-40"
                 disabled={!signals.data.has_next}
                 onClick={() => setPage((current) => current + 1)}
               >

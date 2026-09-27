@@ -79,6 +79,7 @@ it("keeps the algorithmic explanation visible if optional Copilot fails", async 
   });
 
   render(<SignalDetailPage />);
+  expect(screen.getByRole("heading", { name: "Алгоритмическое объяснение" })).toBeInTheDocument();
   expect(screen.getByText(detail.explanation.summary)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Объяснить сигнал" }));
   expect(await screen.findByText(/Функция отключена/)).toBeInTheDocument();

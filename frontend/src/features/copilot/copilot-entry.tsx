@@ -113,11 +113,11 @@ function CopilotExperience({
   }
 
   return (
-    <div className="space-y-3 border-t border-border pt-4">
-      <p className="text-sm text-muted-foreground">
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-sm leading-6 text-slate-600">
         Пояснение на основе показателей выбранного сигнала
       </p>
-      <Button ref={trigger} type="button" variant="outline" onClick={openPanel} disabled={!isAuthenticated}>
+      <Button ref={trigger} type="button" className="border-cyan-200 bg-white text-cyan-900 hover:bg-cyan-50" variant="outline" onClick={openPanel} disabled={!isAuthenticated}>
         Объяснить сигнал
       </Button>
       {open && (
@@ -128,11 +128,11 @@ function CopilotExperience({
           onCancel={(event) => { event.preventDefault(); closePanel(); }}
           onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closePanel(); } }}
           onClose={() => { setOpen(false); if (trigger.current?.isConnected) trigger.current.focus(); }}
-          className="fixed inset-y-0 right-0 m-0 ml-auto h-dvh max-h-dvh w-full max-w-[480px] overflow-y-auto border-l border-border bg-background p-0 text-foreground shadow-xl backdrop:bg-black/40"
+          className="fixed inset-y-0 right-0 m-0 ml-auto h-dvh max-h-dvh w-full max-w-[520px] overflow-y-auto border-l border-slate-200 bg-[#f5f8fa] p-0 text-foreground shadow-2xl backdrop:bg-slate-950/40"
         >
           <div className="space-y-6 p-5 sm:p-7">
-            <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
-              <h2 id="copilot-panel-title" className="text-xl font-semibold">AI-пояснение</h2>
+            <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+              <div><p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-700">Дополнительный контекст</p><h2 id="copilot-panel-title" className="mt-1 text-xl font-extrabold tracking-[-0.03em] text-[#102f45]">AI-пояснение</h2></div>
               <Button ref={closeButton} type="button" variant="ghost" size="sm" aria-label="Закрыть пояснение" onClick={closePanel}>
                 <X aria-hidden="true" className="h-4 w-4" />
               </Button>
@@ -147,7 +147,7 @@ function CopilotExperience({
               </p>
             )}
             {state.kind === "error" && (
-              <div role="alert" className="space-y-3 rounded-md border border-border p-4 text-sm">
+              <div role="alert" className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
                 <p>{ERROR_STATES[state.code] ?? "Пояснение сейчас недоступно."}</p>
                 {state.code === "COPILOT_RATE_LIMITED" && state.retryAfterSeconds !== null && (
                   <p>Повторить не ранее чем через {state.retryAfterSeconds} секунд.</p>
@@ -176,15 +176,15 @@ function CopilotResult({ result }: { result: CopilotResponse }) {
   const selected = new Set(result.fact_ids);
   return (
     <div className="space-y-6 text-sm">
-      <section className="space-y-2">
-        <h3 className="font-semibold">Пояснение</h3>
+      <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="font-extrabold text-[#102f45]">Пояснение</h3>
         <p className="whitespace-pre-line leading-relaxed">{result.explanation}</p>
       </section>
-      <section className="space-y-3">
-        <h3 className="font-semibold">На каких данных основано</h3>
+      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="font-extrabold text-[#102f45]">На каких данных основано</h3>
         <ul className="space-y-3">
           {result.facts.map((fact) => (
-            <li key={fact.id} className="rounded-md border border-border p-3">
+            <li key={fact.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <p className="font-medium">{fact.label}</p>
               <p>{formatFactValue(fact)}</p>
               <p className="text-xs text-muted-foreground">{selected.has(fact.id) ? "Использовано в пояснении" : "Доступный факт"}</p>
@@ -194,20 +194,20 @@ function CopilotResult({ result }: { result: CopilotResponse }) {
           ))}
         </ul>
       </section>
-      <section className="space-y-2">
-        <h3 className="font-semibold">Периоды</h3>
+      <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="font-extrabold text-[#102f45]">Периоды</h3>
         <dl className="space-y-2">
           <div><dt className="text-muted-foreground">Период наблюдения</dt><dd>{formatOptionalPeriod(result.evaluation_period_start, result.evaluation_period_end)}</dd></div>
           <div><dt className="text-muted-foreground">Период сравнения</dt><dd>{formatOptionalPeriod(result.reference_period_start, result.reference_period_end)}</dd></div>
         </dl>
       </section>
-      <section className="space-y-2">
-        <h3 className="font-semibold">Ограничения и актуальность</h3>
+      <section className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
+        <h3 className="font-extrabold">Ограничения и актуальность</h3>
         <p>{result.data_current ? "Данные обозначены как актуальные для правила." : "Данные не обозначены как текущие."}</p>
         <p>Время данных: {formatTimestamp(result.data_watermark_at)}</p>
         <ul className="list-disc space-y-1 pl-5">{result.limitations.map((item) => <li key={item}>{item}</li>)}</ul>
       </section>
-      <details className="rounded-md border border-border p-3">
+      <details className="rounded-xl border border-slate-200 bg-white p-4">
         <summary className="cursor-pointer font-medium">Сведения о формировании</summary>
         <dl className="mt-3 space-y-2 text-xs">
           <div><dt>Модель</dt><dd>{result.provider} / {result.model}</dd></div>

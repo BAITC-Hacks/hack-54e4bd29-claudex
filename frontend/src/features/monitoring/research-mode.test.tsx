@@ -17,6 +17,8 @@ it("preserves explicit localhost historical replay and sends a step only after h
   vi.stubGlobal("fetch", fetcher);
   render(<QueryClientProvider client={client}><SiteHeader /><MonitorPage /></QueryClientProvider>);
   expect(await screen.findByText(/Историческое воспроизведение/)).toBeInTheDocument();
+  expect(screen.getByText(/тестовые данные/i)).toBeInTheDocument();
+  expect(screen.queryByText(/реальные данные/i)).not.toBeInTheDocument();
   const step = await screen.findByRole("button", { name: "Следующий день" });
   await waitFor(() => expect(step).toBeEnabled());
   expect(fetcher.mock.calls).toHaveLength(1);
