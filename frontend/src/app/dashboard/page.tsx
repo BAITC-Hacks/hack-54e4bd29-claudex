@@ -3,7 +3,7 @@
 import { Activity, AlertTriangle, Ban, Building2, ClipboardList } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo } from "react";
+import { Suspense, useCallback, useMemo } from "react";
 
 import { AuthGate } from "@/features/auth/auth-gate";
 import { useAuth } from "@/features/auth/auth-context";
@@ -49,6 +49,14 @@ function dashboardQuery(search: Pick<URLSearchParams, "get">): AnalyticsQuery {
 }
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={<LoadingState label="Загрузка ситуационного центра…" />}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardContent() {
   const { isAuthenticated } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
