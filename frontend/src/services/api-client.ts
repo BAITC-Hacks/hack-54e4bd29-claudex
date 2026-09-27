@@ -19,6 +19,7 @@ export class ApiError extends Error {
     readonly httpStatus: number,
     readonly requestId: string | null,
     readonly details: Record<string, unknown> = {},
+    readonly retryAfterSeconds: number | null = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -54,6 +55,16 @@ interface RequestOptions {
 }
 
 async function parseError(response: Response): Promise<ApiError> {
+  const retryAfter = response.headers.get("Retry-After");
+  let retryAfterSeconds: number | null = null;
+  if (retryAfter && /^\d{1,5}$/.test(retryAfter)) {
+    retryAfterSeconds = Math.min(Number(retryAfter), 3600);
+  } else if (retryAfter) {
+    const retryAt = Date.parse(retryAfter);
+    if (Number.isFinite(retryAt)) {
+      retryAfterSeconds = Math.min(Math.max(Math.ceil((retryAt - Date.now()) / 1000), 0), 3600);
+    }
+  }
   let payload: unknown;
   try {
     payload = await response.json();
@@ -64,7 +75,7 @@ async function parseError(response: Response): Promise<ApiError> {
   const parsed = errorResponseSchema.safeParse(payload);
   if (parsed.success) {
     const { code, message, details, request_id } = parsed.data.error;
-    return new ApiError(code, message, response.status, request_id, details);
+    return new ApiError(code, message, response.status, request_id, details, retryAfterSeconds);
   }
 
   // Ответ не по контракту: чаще всего это прокси или сетевой посредник.
@@ -73,6 +84,8 @@ async function parseError(response: Response): Promise<ApiError> {
     "Сервер вернул неожиданный ответ",
     response.status,
     response.headers.get(REQUEST_ID_HEADER),
+    {},
+    retryAfterSeconds,
   );
 }
 

@@ -97,6 +97,18 @@ describe("apiRequest", () => {
     });
   });
 
+  it("retains a bounded Retry-After only when the server actually sends it", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ...mockResponse({ error: {
+        code: "COPILOT_RATE_LIMITED", message: "Лимит", details: {}, request_id: "rid",
+      } }, 429),
+      headers: new Headers({ "Retry-After": "30", "X-Request-ID": "rid" }),
+    })));
+    await expect(apiRequest("/copilot/explain-signal", schema)).rejects.toMatchObject({
+      code: "COPILOT_RATE_LIMITED", retryAfterSeconds: 30,
+    });
+  });
+
   it("не выдаёт HTML 503 от прокси за ошибку API-контракта", async () => {
     vi.stubGlobal(
       "fetch",

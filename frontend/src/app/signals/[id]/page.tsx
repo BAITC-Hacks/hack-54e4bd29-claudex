@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { useAuth } from "@/features/auth/auth-context";
 import { AuthGate } from "@/features/auth/auth-gate";
+import { CopilotEntry } from "@/features/copilot/copilot-entry";
 import {
   SEVERITY_LABELS,
   SEVERITY_VARIANTS,
@@ -176,6 +177,7 @@ function ExplanationCard({ detail }: { detail: SignalDetail }) {
             </p>
           </>
         )}
+        <CopilotEntry signal={{ id: detail.id, version: detail.version, title: detail.title }} />
       </CardContent>
     </Card>
   );
