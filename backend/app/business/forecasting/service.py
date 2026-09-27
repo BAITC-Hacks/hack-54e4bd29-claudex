@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from app.business.forecasting.contracts import (
     ForecastPointResult,
@@ -31,6 +31,18 @@ FORECAST_LIMITATIONS = (
     "Годовая сезонность не подтверждена.",
     "Это расчётный краткосрочный прогноз потока направлений, а не прогноз перегрузки.",
 )
+
+
+def _validation_period(folds: list[dict[str, object]]) -> tuple[date | None, date | None]:
+    """Expose only dates supported by persisted temporal validation folds."""
+    if not folds:
+        return None, None
+    try:
+        starts = [date.fromisoformat(str(fold["validation_start"])) for fold in folds]
+        ends = [date.fromisoformat(str(fold["validation_end"])) for fold in folds]
+    except (KeyError, TypeError, ValueError):
+        return None, None
+    return min(starts), max(ends)
 
 
 class ForecastTrainingService:
@@ -207,6 +219,9 @@ class ForecastQueryService:
                 *limitations,
                 "Период действия прогноза завершён; результат показан как исторический.",
             )
+        validation_start, validation_end = _validation_period(
+            getattr(forecast, "validation_folds", [])
+        )
         return ReferralForecastSnapshot(
             id=forecast.id,
             generated_at=forecast.generated_at,
@@ -226,6 +241,8 @@ class ForecastQueryService:
             scope_type=forecast.scope_type,
             hospital_id=forecast.hospital_id,
             region_id=forecast.region_id,
+            validation_period_start=validation_start,
+            validation_period_end=validation_end,
             points=tuple(
                 ForecastPointResult(
                     item.forecast_date,

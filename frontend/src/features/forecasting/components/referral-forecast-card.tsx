@@ -9,6 +9,7 @@ interface Props {
   forecast: ReferralForecast | undefined;
   isLoading: boolean;
   error: Error | null;
+  isSyntheticDemo?: boolean;
 }
 
 function formatDate(value: string): string {
@@ -19,7 +20,7 @@ function formatNumber(value: number): string {
   return value.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
 }
 
-export function ReferralForecastCard({ forecast, isLoading, error }: Props) {
+export function ReferralForecastCard({ forecast, isLoading, error, isSyntheticDemo = false }: Props) {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -93,7 +94,12 @@ export function ReferralForecastCard({ forecast, isLoading, error }: Props) {
         </p>
         {forecast.freshness_status === "STALE" ? (
           <p className="mt-2 text-sm font-medium text-amber-800" role="status">
-            Исторический прогноз: период его действия завершён.
+            Историческая проверка прогноза. Исторический прогноз: период его действия завершён. MAE измерена на предшествующих временных окнах, не на показанных прогнозных датах.
+          </p>
+        ) : null}
+        {isSyntheticDemo ? (
+          <p className="mt-2 text-sm font-medium" role="status">
+            Прогноз на синтетических демонстрационных данных.
           </p>
         ) : null}
         <div
@@ -117,9 +123,16 @@ export function ReferralForecastCard({ forecast, isLoading, error }: Props) {
             {forecast.limitations.map((item) => <li key={item}>— {item}</li>)}
           </ul>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Версия: {forecast.model_version} · сформирован {formatDate(forecast.generated_at)} · MAE {formatNumber(forecast.metrics.mae)}
-        </p>
+        <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+          <p>Источник: ИС БГ · показатель: зарегистрированные направления за день · область: {forecast.scope_type === "GLOBAL" ? "глобальная" : forecast.scope_type === "REGION" ? "региональная" : "организация"}</p>
+          <p>Исходные данные: {formatDate(forecast.input_period_start)} — {formatDate(forecast.input_period_end)} · горизонт: {formatDate(forecast.forecast_start)} — {formatDate(forecast.forecast_end)}</p>
+          <p>Историческая валидация модели:</p>
+          <p>Период оценки: {forecast.validation_period_start && forecast.validation_period_end ? `${formatDate(forecast.validation_period_start)} — ${formatDate(forecast.validation_period_end)}` : "не указан"}</p>
+          <p>MAE модели: {formatNumber(forecast.metrics.mae)} направлений/день</p>
+          <p>MAE baseline: {formatNumber(forecast.baseline_metrics.mae)} направлений/день</p>
+          <p>Версия модели: {forecast.model_version} · сформирован {formatDate(forecast.generated_at)}</p>
+          <p>Идентификатор прогноза: {forecast.id}</p>
+        </div>
       </CardContent>
     </Card>
   );

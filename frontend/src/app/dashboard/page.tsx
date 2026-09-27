@@ -100,6 +100,7 @@ export default function DashboardPage() {
               forecast={referralForecast.data}
               isLoading={referralForecast.isPending}
               error={referralForecast.error}
+              isSyntheticDemo={process.env.NEXT_PUBLIC_APP_ENV === "local" && process.env.NEXT_PUBLIC_SYNTHETIC_DEMO === "true"}
             />
             <section className="rounded-lg border bg-card p-5">
               <h2 className="font-semibold">Расчётный сценарий</h2>
