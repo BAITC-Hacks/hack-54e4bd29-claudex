@@ -93,7 +93,7 @@ def test_prepared_files_use_fresh_secrets_scoped_ports_and_pinned_images(
     assert "sha256:" + "a" * 64 in overlay
     assert "!reset []" in overlay
     assert realm["users"][0]["credentials"][0]["value"] != "old-demo"
-    assert realm["clients"][1]["secret"] != "old-demo"
+    assert realm["clients"][1]["secret"] != "old-demo"  # noqa: S105 - test fixture
     assert realm["clients"][0]["redirectUris"] == ["http://127.0.0.1:55123/*"]
     assert realm["clients"][0]["attributes"]["post.logout.redirect.uris"] == (
         "http://127.0.0.1:55123/*"
@@ -731,7 +731,7 @@ def test_named_pull_failure_artifact_contains_only_sanitized_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     output, config = _preflight_fixture(tmp_path)
-    raw_secret = "MINIO_ROOT_PASSWORD=synthetic-private-value"
+    raw_secret = "MINIO_ROOT_PASSWORD=synthetic-private-value"  # noqa: S105 - canary
     monkeypatch.setattr(prepare_acceptance, "ARTIFACTS", tmp_path)
     monkeypatch.setattr(prepare_acceptance, "_validated_config", lambda *_: config)
     monkeypatch.setattr(prepare_acceptance, "_safe_probe", lambda *_: None)
@@ -911,7 +911,7 @@ def test_local_image_inspect_classifies_failure_without_leaking_stderr(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     expected_id = "sha256:" + "a" * 64
-    secret = "POSTGRES_PASSWORD=synthetic-private-value"
+    secret = "POSTGRES_PASSWORD=synthetic-private-value"  # noqa: S105 - canary
 
     def fake_run(
         command: list[str], **_kwargs: object
@@ -936,3 +936,31 @@ def test_local_image_inspect_classifies_failure_without_leaking_stderr(
     assert not matches
     assert present is (outcome == "mismatch")
     assert secret not in str((present, matches, category)) + "".join(capsys.readouterr())
+
+
+def test_acceptance_frontend_image_embeds_explicit_synthetic_test_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[tuple[str, ...]] = []
+
+    def fake_run(*command: str) -> str:
+        commands.append(command)
+        if command[:3] == ("docker", "image", "inspect"):
+            return "sha256:" + "a" * 64
+        return ""
+
+    monkeypatch.setattr(prepare_acceptance, "_run", fake_run)
+
+    prepare_acceptance._build_images("phase8-demo-integration-static01", 64321)
+
+    frontend_build = next(
+        command
+        for command in commands
+        if command[:2] == ("docker", "build")
+        and "phase8-demo-integration-static01-frontend:acceptance" in command
+    )
+    assert "NEXT_PUBLIC_APP_ENV=test" in frontend_build
+    assert "NEXT_PUBLIC_SYNTHETIC_DEMO=true" in frontend_build
+    assert (
+        "NEXT_PUBLIC_OIDC_ISSUER=" "http://127.0.0.1:64321/auth/realms/medsignal"
+    ) in frontend_build

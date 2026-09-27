@@ -65,7 +65,7 @@ def config() -> wait_for_clickhouse.ReadinessConfig:
         host="clickhouse",
         port=8123,
         username="medsignal",
-        password="synthetic-private-value",
+        password="synthetic-private-value",  # noqa: S106 - synthetic test fixture
         request_timeout_seconds=0.25,
         deadline_seconds=1.0,
         retry_interval_seconds=0.4,

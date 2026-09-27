@@ -672,6 +672,8 @@ def _build_images(project: str, port: int) -> dict[str, str]:
                 f"NEXT_PUBLIC_OIDC_ISSUER=http://127.0.0.1:{port}/auth/realms/medsignal",
                 "--build-arg",
                 "NEXT_PUBLIC_APP_ENV=test",
+                "--build-arg",
+                "NEXT_PUBLIC_SYNTHETIC_DEMO=true",
             ]
         command += ["--file", dockerfile, "--tag", tag, context]
         _run(*command)
