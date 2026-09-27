@@ -47,6 +47,7 @@ SERVICE_NAMES = frozenset(
         "backend",
         "worker",
         "migrate",
+        "clickhouse-ready",
         "clickhouse-migrate",
         "postgres",
         "clickhouse",
@@ -57,13 +58,16 @@ SERVICE_NAMES = frozenset(
         "keycloak",
     }
 )
-ONE_SHOT_SERVICES = frozenset({"migrate", "clickhouse-migrate", "minio-init"})
+ONE_SHOT_SERVICES = frozenset(
+    {"migrate", "clickhouse-ready", "clickhouse-migrate", "minio-init"}
+)
 SERVICE_IMAGE_FAMILY = {
     "nginx": "nginx",
     "frontend": "frontend",
     "backend": "backend",
     "worker": "worker",
     "migrate": "backend",
+    "clickhouse-ready": "pipeline",
     "clickhouse-migrate": "pipeline",
     "mlflow": "mlflow",
 }
@@ -481,6 +485,13 @@ def prepare_files(
         f"{(output / 'realm.json').resolve().as_posix()}:"
         "/opt/keycloak/data/import/realm-medsignal-dev.json:ro"
     )
+    clickhouse_readiness_source = (
+        ROOT / "scripts" / "operations" / "wait_for_clickhouse.py"
+    ).resolve()
+    clickhouse_readiness_mount = json.dumps(
+        f"{clickhouse_readiness_source.as_posix()}:"
+        "/opt/medsignal/acceptance/wait_for_clickhouse.py:ro"
+    )
     backend_command = json.dumps(
         [
             "uvicorn",
@@ -522,9 +533,33 @@ def prepare_files(
             ("backend", "backend"),
             ("worker", "worker"),
             ("migrate", "backend"),
-            ("clickhouse-migrate", "pipeline"),
             ("mlflow", "mlflow"),
         )
+    )
+    clickhouse_readiness_lines = (
+        "  clickhouse-ready:\n"
+        "    build: !reset null\n"
+        f"    image: {images['pipeline']}\n"
+        "    entrypoint: [\"python\", "
+        "\"/opt/medsignal/acceptance/wait_for_clickhouse.py\"]\n"
+        "    environment:\n"
+        "      CLICKHOUSE_HOST: clickhouse\n"
+        "      CLICKHOUSE_PORT: \"8123\"\n"
+        "      CLICKHOUSE_USER: \"${CLICKHOUSE_USER}\"\n"
+        "      CLICKHOUSE_PASSWORD: \"${CLICKHOUSE_PASSWORD}\"\n"
+        "    depends_on:\n"
+        "      clickhouse:\n"
+        "        condition: service_healthy\n"
+        "    networks: [data]\n"
+        "    volumes:\n"
+        f"      - {clickhouse_readiness_mount}\n"
+        "    restart: \"no\"\n"
+        "  clickhouse-migrate:\n"
+        "    build: !reset null\n"
+        f"    image: {images['pipeline']}\n"
+        "    depends_on:\n"
+        "      clickhouse-ready:\n"
+        "        condition: service_completed_successfully\n"
     )
     source_lines = (
         "  minio:\n"
@@ -542,6 +577,7 @@ def prepare_files(
         "    ports: !override\n"
         f"      - \"127.0.0.1:{port}:80\"\n"
         + image_lines
+        + clickhouse_readiness_lines
         + source_lines
         + "  keycloak:\n"
         "    volumes: !override\n"
@@ -684,29 +720,58 @@ def _read_preflight_images(output: Path) -> dict[str, str]:
     return images
 
 
-def _inspect_local_image(image_id: str) -> tuple[bool, bool, str | None]:
-    """Check a pinned ID without retaining Docker's inspect or stderr payload."""
+def _image_inspect_failure_category(stderr: str) -> str:
+    """Return a fixed inspect category without retaining Docker stderr."""
+    lowered = stderr.lower()
+    if any(marker in lowered for marker in ("no such image", "no such object")):
+        return "IMAGE_NOT_FOUND"
+    if any(
+        marker in lowered
+        for marker in (
+            "cannot connect to the docker daemon",
+            "is the docker daemon running",
+            "error during connect",
+            "dockerdesktoplinuxengine",
+            "docker_engine",
+        )
+    ):
+        return "DAEMON_UNAVAILABLE"
+    return "IMAGE_INSPECT_FAILED"
+
+
+def _inspect_image_reference(
+    image_ref: str, *, timeout: int
+) -> tuple[str | None, str | None]:
+    """Inspect one reference with bounded execution and sanitized outcomes."""
     try:
         result = subprocess.run(  # noqa: S603 — fixed Docker CLI
-            ["docker", "image", "inspect", image_id, "--format", "{{.Id}}"],  # noqa: S607 — fixed CLI
+            ["docker", "image", "inspect", image_ref, "--format", "{{.Id}}"],  # noqa: S607 — fixed CLI
             cwd=ROOT,
             capture_output=True,
             text=True,
             check=False,
-            timeout=8,
+            timeout=timeout,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        return False, False, "IMAGE_INSPECT_FAILED"
+    except subprocess.TimeoutExpired:
+        return None, "INSPECT_TIMEOUT"
+    except OSError:
+        return None, "DAEMON_UNAVAILABLE"
     if result.returncode:
-        category = _docker_error_category(result.stderr)
-        if category == "IMAGE_UNAVAILABLE":
-            return False, False, "IMAGE_ID_NOT_PRESENT"
-        return (
-            False,
-            False,
-            category if category == "DAEMON_ERROR" else "IMAGE_INSPECT_FAILED",
-        )
-    return True, result.stdout.strip() == image_id, None
+        return None, _image_inspect_failure_category(result.stderr)
+    inspected_id = result.stdout.strip()
+    if DIGEST_PATTERN.fullmatch(inspected_id) is None:
+        return None, "IMAGE_ID_MISMATCH"
+    return inspected_id, None
+
+
+def _inspect_local_image(image_id: str) -> tuple[bool, bool, str | None]:
+    """Check a pinned ID without retaining Docker's inspect or stderr payload."""
+    inspected_id, error = _inspect_image_reference(image_id, timeout=8)
+    if error:
+        return False, False, error
+    if inspected_id != image_id:
+        return True, False, "IMAGE_ID_MISMATCH"
+    return True, True, None
 
 
 def _check_preflight_images(output: Path, report: dict[str, Any]) -> dict[str, str]:
@@ -724,9 +789,10 @@ def _check_preflight_images(output: Path, report: dict[str, Any]) -> dict[str, s
             errors.add("IMAGE_ID_MISMATCH")
     report["image_presence"] = presence
     for category in (
-        "DAEMON_ERROR",
+        "DAEMON_UNAVAILABLE",
+        "INSPECT_TIMEOUT",
         "IMAGE_INSPECT_FAILED",
-        "IMAGE_ID_NOT_PRESENT",
+        "IMAGE_NOT_FOUND",
         "IMAGE_ID_MISMATCH",
     ):
         if category in errors:
@@ -838,21 +904,12 @@ def _check_preflight_mounts(
 
 
 def _named_image_present(image_ref: str) -> tuple[bool | None, str | None]:
-    result = _quiet_command(
-        "docker", "image", "inspect", image_ref, "--format", "{{.Id}}", timeout=15
-    )
-    if result is None:
-        return None, "DAEMON_ERROR"
-    if result.returncode == 0:
-        return (
-            (True, None)
-            if DIGEST_PATTERN.fullmatch(result.stdout.strip())
-            else (None, "DAEMON_ERROR")
-        )
-    category = _docker_error_category(result.stderr)
-    if category == "IMAGE_UNAVAILABLE":
+    inspected_id, category = _inspect_image_reference(image_ref, timeout=15)
+    if category == "IMAGE_NOT_FOUND":
         return False, None
-    return None, category if category == "DAEMON_ERROR" else "UNKNOWN_PULL_ERROR"
+    if category:
+        return None, category
+    return (True, None) if inspected_id else (None, "IMAGE_ID_MISMATCH")
 
 
 def _check_named_dependency_images(
@@ -985,7 +1042,7 @@ def _verify_services(project: str, output: Path) -> dict[str, str]:
         "mlflow",
         "keycloak",
     }
-    one_shot = {"migrate", "clickhouse-migrate", "minio-init"}
+    one_shot = ONE_SHOT_SERVICES
     if any(services.get(name, {}).get("State") != "running" for name in running):
         raise RuntimeError("Acceptance service is not running")
     if any(
