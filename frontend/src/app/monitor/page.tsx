@@ -1,2 +1,5 @@
-import {MonitorPage} from '@/features/monitoring/monitor-page';
-export default MonitorPage;
+import { MonitorPage } from "@/features/monitoring/monitor-page";
+
+export default function MonitorRoute() {
+  return <MonitorPage />;
+}

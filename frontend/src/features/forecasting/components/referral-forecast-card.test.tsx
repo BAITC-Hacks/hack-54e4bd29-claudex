@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ReferralForecastCard } from "@/features/forecasting/components/referral-forecast-card";
+import { ApiError } from "@/services/api-client";
 import type { ReferralForecast } from "@/features/forecasting/types";
 
 vi.mock("echarts", () => ({
@@ -56,10 +57,16 @@ describe("ReferralForecastCard", () => {
   });
 
   it("shows an explicit unavailable state instead of a zero forecast", () => {
-    render(<ReferralForecastCard forecast={undefined} isLoading={false} error={new Error("404")} />);
+    render(<ReferralForecastCard forecast={undefined} isLoading={false} error={new ApiError("NOT_FOUND", "Not found", 404, null)} />);
 
     expect(screen.getByText(/Прогноз пока недоступен/)).toBeInTheDocument();
     expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
+  });
+
+  it("distinguishes a transport error from an unpublished forecast", () => {
+    render(<ReferralForecastCard forecast={undefined} isLoading={false} error={new Error("Network failed")} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Не удалось загрузить прогноз");
+    expect(screen.queryByText(/Прогноз пока недоступен/)).not.toBeInTheDocument();
   });
 
   it("shows a loading state", () => {

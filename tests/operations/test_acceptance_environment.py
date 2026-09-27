@@ -90,6 +90,7 @@ def test_prepared_files_use_fresh_secrets_scoped_ports_and_pinned_images(
     assert "APP_ENV=local" in env_text
     assert "HTTP_PORT=55123" in env_text
     assert "127.0.0.1:55123:80" in overlay
+    assert ":/opt/keycloak/themes/medsignal:ro" in overlay
     assert "sha256:" + "a" * 64 in overlay
     assert "!reset []" in overlay
     assert realm["users"][0]["credentials"][0]["value"] != "old-demo"

@@ -19,7 +19,7 @@ import {
   type WaitingSummary,
 } from "@/features/analytics/types";
 
-function queryString(query: AnalyticsQuery & { page?: number }): string {
+function queryString(query: AnalyticsQuery & { page?: number; pageSize?: number }): string {
   const params = new URLSearchParams();
   if (query.dateFrom) params.set("date_from", query.dateFrom);
   if (query.dateTo) params.set("date_to", query.dateTo);
@@ -28,6 +28,7 @@ function queryString(query: AnalyticsQuery & { page?: number }): string {
   if (query.region) params.set("region", query.region);
   if (query.profile) params.set("profile", query.profile);
   if (query.page) params.set("page", String(query.page));
+  if (query.pageSize) params.set("page_size", String(query.pageSize));
   const encoded = params.toString();
   return encoded ? `?${encoded}` : "";
 }
@@ -52,7 +53,7 @@ export function fetchObservedWaiting(query: AnalyticsQuery, signal?: AbortSignal
   return apiRequest(`/analytics/observed-waiting/summary${queryString(query)}`, observedWaitingSchema, { signal });
 }
 
-export function fetchOrganizations(query: AnalyticsQuery & { page?: number }, signal?: AbortSignal): Promise<OrganizationList> {
+export function fetchOrganizations(query: AnalyticsQuery & { page?: number; pageSize?: number }, signal?: AbortSignal): Promise<OrganizationList> {
   return apiRequest(`/analytics/organizations${queryString(query)}`, organizationListSchema, { signal });
 }
 
@@ -66,4 +67,31 @@ export function fetchFreshness(signal?: AbortSignal): Promise<Freshness> {
 
 export function fetchQuality(signal?: AbortSignal): Promise<Quality> {
   return apiRequest("/analytics/data-quality", qualitySchema, { signal });
+}
+
+export async function fetchAllOrganizations(query: AnalyticsQuery, signal?: AbortSignal): Promise<OrganizationList> {
+  const first = await fetchOrganizations({ ...query, page: 1, pageSize: 100 }, signal);
+  const items = [...first.data.items];
+  const signature = (result: OrganizationList) => JSON.stringify([
+    result.meta.latest_import_ids,
+    result.meta.mapping_version,
+    result.data.total,
+  ]);
+  const seen = new Set(items.map((item) => item.organization_ref));
+  let current = first;
+  while (current.data.has_next) {
+    signal?.throwIfAborted();
+    const next = await fetchOrganizations({ ...query, page: current.data.page + 1, pageSize: 100 }, signal);
+    if (signature(next) !== signature(first) || next.data.page !== current.data.page + 1 || !next.data.items.length) {
+      throw new Error("Данные изменились во время загрузки списка. Обновите страницу.");
+    }
+    for (const item of next.data.items) {
+      if (seen.has(item.organization_ref)) throw new Error("Список изменился во время загрузки. Обновите страницу.");
+      seen.add(item.organization_ref);
+      items.push(item);
+    }
+    current = next;
+  }
+  if (items.length !== first.data.total) throw new Error("Получен неполный список организаций. Обновите страницу.");
+  return { ...first, data: { ...first.data, items, has_next: false } };
 }

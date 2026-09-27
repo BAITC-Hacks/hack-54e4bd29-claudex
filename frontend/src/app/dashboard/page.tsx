@@ -2,7 +2,8 @@
 
 import { Activity, AlertTriangle, Ban, Building2, ClipboardList } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 import { AuthGate } from "@/features/auth/auth-gate";
 import { useAuth } from "@/features/auth/auth-context";
@@ -30,12 +31,19 @@ const INITIAL_QUERY: AnalyticsQuery = {
   granularity: "DAY",
 };
 
-export default function DashboardPage() {
+function DashboardContent() {
+  const params = useSearchParams();
   const { isAuthenticated } = useAuth();
-  const [query, setQuery] = useState(INITIAL_QUERY);
+  const [query, setQuery] = useState<AnalyticsQuery>(() => {
+    const from = params.get("from");
+    const to = params.get("to");
+    const region = params.get("region");
+    const validPeriod = Boolean(from && to && Number.isFinite(Date.parse(from)) && Number.isFinite(Date.parse(to)) && from! <= to!);
+    return { ...(validPeriod ? { ...INITIAL_QUERY, dateFrom: from!, dateTo: to! } : INITIAL_QUERY), ...(region ? { region } : {}) };
+  });
   const analytics = useSituationCenter(isAuthenticated, query);
   const referralForecast = useLatestReferralForecast(isAuthenticated);
-  const signals = useSignals(isAuthenticated, { page: 1, pageSize: 5 });
+  const signals = useSignals(isAuthenticated, { page: 1, pageSize: 5, regionId: query.region });
   const overview = analytics.overview.data;
   const referrals = analytics.referrals.data;
   const refusals = analytics.refusals.data;
@@ -68,6 +76,7 @@ export default function DashboardPage() {
       </section>
       <AuthGate>
         <FilterBar value={query} onChange={setQuery} />
+        <p className="text-sm text-muted-foreground">{query.region ? "Показатели отфильтрованы по региону, выбранному на карте." : "Показатели для всей доступной области данных."} <Link href="/command-center" className="underline">Выбрать регион на карте</Link></p>
         {pending && <LoadingState />}
         {error && <ErrorState label="Агрегированные показатели временно недоступны. Повторите позже." />}
         {overview &&
@@ -103,13 +112,14 @@ export default function DashboardPage() {
               error={referralForecast.error}
               isSyntheticDemo={syntheticDemoLabelEnabled(process.env.NEXT_PUBLIC_APP_ENV, process.env.NEXT_PUBLIC_SYNTHETIC_DEMO)}
             />
+            <p className="text-sm text-muted-foreground">Прогноз имеет собственный период и область, указанные в карточке. Фильтры аналитики его не меняют.</p>
             <section className="rounded-lg border bg-card p-5">
               <h2 className="font-semibold">Расчётный сценарий</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Сравните исторический объём направлений с фиксированным гипотетическим изменением потока.
               </p>
               <Link className="mt-3 inline-block text-sm text-primary hover:underline" href="/scenarios">
-                Открыть Scenario Analysis
+                Открыть сценарии
               </Link>
             </section>
             <section className="space-y-3">
@@ -120,7 +130,7 @@ export default function DashboardPage() {
                     <h2 className="font-semibold">Сигналы контроля</h2>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Правила обнаруживают измеримые отклонения. Решение принимает сотрудник.
+                    Предупреждения для выбранной области. У каждого своя дата обнаружения; фильтр периода событий к ним не применяется. Решение принимает сотрудник.
                   </p>
                 </div>
                 <Link className="text-sm text-primary hover:underline" href="/signals">
@@ -141,15 +151,15 @@ export default function DashboardPage() {
               <div className="mt-4 flex flex-wrap gap-6 text-sm">
                 <span>
                   Медиана:{" "}
-                  <b>{formatDays(observed.data.median_days.value)}</b>
+                  <b>{observed.data.median_days.suppressed ? "Скрыто" : formatDays(observed.data.median_days.value)}</b>
                 </span>
                 <span>
-                  P90: <b>{formatDays(observed.data.p90_days.value)}</b>
+                  P90: <b>{observed.data.p90_days.suppressed ? "Скрыто" : formatDays(observed.data.p90_days.value)}</b>
                 </span>
                 <span>
                   Исключено:{" "}
                   <b>
-                    {observed.data.excluded_chronology_conflicts.value?.toLocaleString(
+                    {observed.data.excluded_chronology_conflicts.suppressed ? "Скрыто" : observed.data.excluded_chronology_conflicts.value?.toLocaleString(
                       "ru-RU",
                     ) ?? "—"}
                   </b>
@@ -159,7 +169,7 @@ export default function DashboardPage() {
             <section className="space-y-3">
               <div>
                 <h2 className="font-semibold">
-                  Организации, требующие внимания к данным
+                  Организации в выбранной области
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   Каждая строка остаётся в пространстве идентификаторов своего
@@ -167,7 +177,7 @@ export default function DashboardPage() {
                 </p>
               </div>
               {organizations.data.items.length ? (
-                <OrganizationTable items={organizations.data.items} />
+                <><OrganizationTable items={organizations.data.items} /><p className="mt-3 text-sm">Показано {organizations.data.items.length} из {organizations.data.total}. <Link href="/command-center" className="text-primary underline">Полный список и поиск на карте</Link></p></>
               ) : (
                 <EmptyState />
               )}
@@ -208,9 +218,12 @@ export default function DashboardPage() {
   );
 }
 
+export default function DashboardPage() {
+  return <Suspense fallback={<p role="status">Загрузка аналитики…</p>}><DashboardContent /></Suspense>;
+}
+
 function formatDays(value: number | null): string {
   return value === null
     ? "—"
     : `${value.toLocaleString("ru-RU", { maximumFractionDigits: 1 })} дн.`;
 }
-

@@ -11,7 +11,7 @@ export function formatCell(cell: AnalyticsCell): string {
 
 export function formatDate(value: string | null): string {
   if (!value) return "Не определено";
-  return new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium" }).format(new Date(value));
+  return new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value));
 }
 
 export function formatPeriod(from: string, to: string): string {

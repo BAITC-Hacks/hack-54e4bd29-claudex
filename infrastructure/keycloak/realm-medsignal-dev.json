@@ -1,11 +1,12 @@
 {
   "realm": "medsignal",
   "displayName": "MedSignal (локальная разработка)",
+  "loginTheme": "medsignal",
   "enabled": true,
   "sslRequired": "none",
   "registrationAllowed": false,
   "resetPasswordAllowed": false,
-  "rememberMe": false,
+  "rememberMe": true,
   "verifyEmail": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
