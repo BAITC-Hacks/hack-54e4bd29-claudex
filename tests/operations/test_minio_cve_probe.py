@@ -15,6 +15,33 @@ from scripts.operations import minio_cve_probe
 PROJECT = "phase8-iam-test123"
 
 
+def test_mc_uses_rootless_container_root_for_bind_mounts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def fake_command(*args: str, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args[:2] == ("info", "--format"):
+            return subprocess.CompletedProcess(
+                list(args), 0, '["name=seccomp","name=rootless"]', ""
+            )
+        return subprocess.CompletedProcess(list(args), 0, "", "")
+
+    monkeypatch.setattr(minio_cve_probe, "_command", fake_command)
+    monkeypatch.setattr(minio_cve_probe.os, "name", "posix")
+    monkeypatch.setattr(minio_cve_probe.os, "getuid", lambda: 1003, raising=False)
+    monkeypatch.setattr(minio_cve_probe.os, "getgid", lambda: 1003, raising=False)
+
+    minio_cve_probe._mc(
+        "synthetic-client", "synthetic-net", tmp_path / "env", tmp_path, "ls"
+    )
+
+    run = next(args for args in calls if args[0] == "run")
+    assert run[run.index("--user") + 1] == "0:0"
+    assert "--privileged" not in run
+
+
 def test_escalation_archive_uses_synthetic_mapping(tmp_path: Path) -> None:
     original = tmp_path / "original.zip"
     with zipfile.ZipFile(original, "w") as archive:

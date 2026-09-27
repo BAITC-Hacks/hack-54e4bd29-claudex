@@ -163,7 +163,33 @@ def _mc(
     getgid = getattr(os, "getgid", None)
     if not callable(getuid) or not callable(getgid):
         raise RuntimeError("Disposable IAM probe cannot resolve runner identity")
-    runner_user = f"{getuid()}:{getgid()}"
+    docker_info = _command(
+        "info", "--format", "{{json .SecurityOptions}}", success=False
+    )
+    if docker_info.returncode:
+        raise ProbeCommandError(
+            docker_info.returncode,
+            "DOCKER_INFO_FAILED",
+            "Disposable IAM probe cannot determine Docker security mode",
+        )
+    try:
+        security_options = json.loads(docker_info.stdout)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "Disposable IAM probe cannot determine Docker security mode"
+        ) from exc
+    if not isinstance(security_options, list) or not all(
+        isinstance(item, str) for item in security_options
+    ):
+        raise RuntimeError("Disposable IAM probe cannot determine Docker security mode")
+    # In rootless Docker, container root maps to the unprivileged daemon owner
+    # and can safely write this user's 0700 bind-mounted probe directory. A host
+    # UID override instead maps through the subordinate UID range and cannot write.
+    runner_user = (
+        "0:0"
+        if "name=rootless" in security_options
+        else f"{getuid()}:{getgid()}"
+    )
     return _command(
         "run",
         "--rm",
