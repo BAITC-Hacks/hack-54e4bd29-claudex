@@ -17,7 +17,7 @@ test("fresh synthetic signal persists one action, rejects stale card and keeps e
   await signalLink.click();
 
   await expect(page.getByText("SYNTHETIC_DEV_SEED", { exact: true })).toBeVisible();
-  await expect(page.getByText("Новый", { exact: true })).toBeVisible();
+  await expect(page.getByText("новый", { exact: true })).toBeVisible();
   const acknowledge = page.getByRole("button", { name: "Принять в работу" });
   await expect(acknowledge, "state-changing test requires a fresh NEW synthetic signal").toBeVisible();
   const signalPath = new URL(page.url()).pathname;

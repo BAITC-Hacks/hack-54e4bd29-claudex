@@ -13,7 +13,7 @@ test("admin journey through analytics, signal, scenario and logout", async ({ pa
 
   await test.step("OIDC callback and historical waiting snapshot", async () => {
     await login(page, "admin");
-    await expect(page.getByRole("link", { name: "MedSignal — главная" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "MedSignal — ситуационный центр" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Ситуационный центр" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Возраст очереди в снимке" })).toBeVisible();
     await expect(page.getByText("2025-01-03T03:00:00", { exact: true })).toBeVisible();
@@ -53,7 +53,7 @@ test("admin journey through analytics, signal, scenario and logout", async ({ pa
     await page.getByRole("button", { name: "Открыть меню" }).click();
     await page.getByRole("navigation", { name: "Мобильная навигация" })
       .getByRole("link", { name: "Сигналы" }).click();
-    await expect(page.getByRole("heading", { name: "Лента предупреждений" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Сигналы" })).toBeVisible();
   });
 
   await test.step("human acknowledges a synthetic signal", async () => {

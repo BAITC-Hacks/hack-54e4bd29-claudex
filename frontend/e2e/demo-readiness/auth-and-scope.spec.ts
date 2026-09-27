@@ -18,7 +18,7 @@ test("protected routes require real Keycloak login and return to the requested p
 
   await login(page, "admin", "/signals");
   await expect(page).toHaveURL(/\/signals$/);
-  await expect(page.getByRole("heading", { name: "Лента предупреждений" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Сигналы" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Основная навигация" })).toBeVisible();
 });
 

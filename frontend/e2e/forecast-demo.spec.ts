@@ -29,7 +29,7 @@ test("ADMIN sees the same persisted historical forecast in API and dashboard", a
   const card = page.getByRole("heading", { name: "Краткосрочный прогноз потока направлений" })
     .locator("..").locator("..").locator("..");
   await expect(card.getByText(`Идентификатор прогноза: ${forecast.id}`)).toBeVisible();
-  await expect(card.getByText(/область: глобальная/)).toBeVisible();
+  await expect(card.getByText("Область: вся система (GLOBAL)")).toBeVisible();
   await expect(card.getByText(/Источник: ИС БГ/)).toBeVisible();
   await expect(card.getByText(/Историческая проверка прогноза/)).toBeVisible();
   await expect(card.getByText(/Прогноз на синтетических демонстрационных данных/)).toBeVisible();
