@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ErrorState } from "@/features/analytics/components/states";
 import { useScenarioPreview, useScenarioSave } from "@/features/scenarios/hooks";
 import type {
   ScenarioAssumption,
@@ -119,7 +120,7 @@ export function ScenarioWorkbench({
             <Button disabled={!canSubmit || preview.isPending} onClick={() => preview.mutate(request)}>Рассчитать preview</Button>
             <Button variant="outline" disabled={!preview.data || save.isPending} onClick={() => save.mutate({ ...request, client_request_id: crypto.randomUUID() })}>Сохранить сценарий</Button>
           </div>
-          {(preview.error || save.error) && <p role="alert" className="text-sm text-destructive">{(preview.error ?? save.error)?.message}</p>}
+          {(preview.error || save.error) && <ErrorState label="Не удалось выполнить расчётный сценарий. Проверьте параметры и повторите позже." />}
         </CardContent>
       </Card>
 

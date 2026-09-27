@@ -9,15 +9,16 @@ import { SuppressedValue } from "@/features/analytics/components/suppressed-valu
 import { EmptyState, ErrorState, LoadingState } from "@/features/analytics/components/states";
 
 describe("analytics presentation states", () => {
-  it("renders loading, empty and backend error states", () => {
+  it("renders loading, empty and user-safe error states", () => {
     const { rerender } = render(<LoadingState />);
     expect(screen.getByText("Загрузка аналитики…")).toBeInTheDocument();
 
     rerender(<EmptyState />);
     expect(screen.getByText("За выбранный период данных нет.")).toBeInTheDocument();
 
-    rerender(<ErrorState message="ClickHouse недоступен" />);
-    expect(screen.getByRole("alert")).toHaveTextContent("ClickHouse недоступен");
+    rerender(<ErrorState label="Данные временно недоступны. Повторите позже." />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Данные временно недоступны. Повторите позже.");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("ClickHouse");
   });
 
   it("does not render the exact value of a suppressed small cell", () => {

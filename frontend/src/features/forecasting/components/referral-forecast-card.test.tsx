@@ -41,7 +41,7 @@ describe("ReferralForecastCard", () => {
     expect(screen.getByText(/weekly_naive/)).toBeInTheDocument();
     expect(screen.getByText(/Годовая сезонность не подтверждена\./)).toBeInTheDocument();
     expect(screen.getByText(forecast.disclaimer)).toBeInTheDocument();
-    expect(screen.getByText(/Историческая проверка прогноза/)).toBeInTheDocument();
+    expect(screen.getByText(/Историческая валидация прогноза/)).toBeInTheDocument();
     expect(screen.getByText(/Прогноз на синтетических демонстрационных данных/)).toBeInTheDocument();
     expect(screen.getByText(/Историческая валидация модели/)).toBeInTheDocument();
     expect(screen.getByText(/MAE модели: 12,3 направлений\/день/)).toBeInTheDocument();
@@ -50,6 +50,8 @@ describe("ReferralForecastCard", () => {
     expect(screen.getByText(/Источник: ИС БГ/)).toBeInTheDocument();
     expect(screen.getByText(/Исходные данные:/)).toBeInTheDocument();
     expect(screen.getByText(/Период оценки:/)).toBeInTheDocument();
+    expect(screen.getByText(/Целевой показатель: ежедневное число направлений/i)).toBeInTheDocument();
+    expect(screen.getByText(/Область: вся система \(GLOBAL\)/i)).toBeInTheDocument();
     expect(screen.queryByText(/перегрузк/i)).not.toBeInTheDocument();
   });
 

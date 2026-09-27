@@ -88,13 +88,19 @@ export function ReferralForecastCard({ forecast, isLoading, error, isSyntheticDe
   return (
     <Card>
       <CardContent className="p-5">
-        <h2 className="text-base font-semibold">Краткосрочный прогноз потока направлений</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-700">Прогнозирование</p>
+            <h2 className="mt-1 text-base font-extrabold tracking-[-0.02em] text-[#102f45]">Краткосрочный прогноз потока направлений</h2>
+          </div>
+          <span className="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-wide text-slate-600">{forecast.scope_type === "GLOBAL" ? "Вся система" : forecast.scope_type === "REGION" ? "Регион" : "Организация"}</span>
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
           Горизонт: {forecast.horizon_days} дней · модель: {forecast.selected_model} · baseline: {forecast.baseline_model}
         </p>
         {forecast.freshness_status === "STALE" ? (
           <p className="mt-2 text-sm font-medium text-amber-800" role="status">
-            Историческая проверка прогноза. Исторический прогноз: период его действия завершён. MAE измерена на предшествующих временных окнах, не на показанных прогнозных датах.
+            Историческая валидация прогноза. Исторический прогноз: период его действия завершён. MAE измерена на предшествующих временных окнах, не на показанных прогнозных датах.
           </p>
         ) : null}
         {isSyntheticDemo ? (
@@ -124,7 +130,7 @@ export function ReferralForecastCard({ forecast, isLoading, error, isSyntheticDe
           </ul>
         </div>
         <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-          <p>Источник: ИС БГ · показатель: зарегистрированные направления за день · область: {forecast.scope_type === "GLOBAL" ? "глобальная" : forecast.scope_type === "REGION" ? "региональная" : "организация"}</p>
+          <p>Источник: ИС БГ · Целевой показатель: ежедневное число направлений · Область: {forecast.scope_type === "GLOBAL" ? "вся система (GLOBAL)" : forecast.scope_type === "REGION" ? "регион (REGION)" : "организация (HOSPITAL)"}</p>
           <p>Исходные данные: {formatDate(forecast.input_period_start)} — {formatDate(forecast.input_period_end)} · горизонт: {formatDate(forecast.forecast_start)} — {formatDate(forecast.forecast_end)}</p>
           <p>Историческая валидация модели:</p>
           <p>Период оценки: {forecast.validation_period_start && forecast.validation_period_end ? `${formatDate(forecast.validation_period_start)} — ${formatDate(forecast.validation_period_end)}` : "не указан"}</p>

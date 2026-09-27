@@ -2,6 +2,7 @@
 
 import { AuthGate } from "@/features/auth/auth-gate";
 import { useAuth } from "@/features/auth/auth-context";
+import { ErrorState } from "@/features/analytics/components/states";
 import { useRegions } from "@/hooks/use-domain";
 
 export default function RegionsPage() {
@@ -22,11 +23,7 @@ export default function RegionsPage() {
         {regions.isPending && (
           <p className="text-sm text-muted-foreground">Загрузка…</p>
         )}
-        {regions.isError && (
-          <p className="text-sm text-destructive">
-            Недоступно: {regions.error.message}
-          </p>
-        )}
+        {regions.isError && <ErrorState label="Список регионов временно недоступен. Повторите позже." />}
         {regions.data && regions.data.items.length === 0 && (
           <p className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
             Доступных регионов нет.

@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { AuthGate } from "@/features/auth/auth-gate";
 import { useAuth } from "@/features/auth/auth-context";
+import { ErrorState } from "@/features/analytics/components/states";
 import { useHospitals } from "@/hooks/use-domain";
 
 export default function HospitalsPage() {
@@ -25,11 +26,7 @@ export default function HospitalsPage() {
         {hospitals.isPending && (
           <p className="text-sm text-muted-foreground">Загрузка…</p>
         )}
-        {hospitals.isError && (
-          <p className="text-sm text-destructive">
-            Недоступно: {hospitals.error.message}
-          </p>
-        )}
+        {hospitals.isError && <ErrorState label="Список организаций временно недоступен. Повторите позже." />}
         {hospitals.data && hospitals.data.items.length === 0 && (
           <p className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
             Доступных организаций нет. Возможно, область данных ещё
