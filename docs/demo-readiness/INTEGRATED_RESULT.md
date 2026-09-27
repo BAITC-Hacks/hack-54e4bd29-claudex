@@ -7,7 +7,7 @@
 Объединённый код подготовлен, статические проверки выполнены, runtime ожидает восстановления среды.
 
 - Ветка: `demo/integration` в отдельном managed worktree.
-- Проверенный code HEAD: `2654deb8b6455bc601319a4293a2040629c426a6`.
+- Проверенный code HEAD: `785a53e40e5328ac2802f16a537f02763e3dcf9d`.
 - Merge commit forecast + QA/cold-start: `5a8669167ed7f504a36b0c74c4a1f86c30d88ef8`.
 - Product/Copilot ancestor: `78ff9fffc0eaee2c01d4568e5b8b9adf84712ab4`.
 - Forecast: `6014bd784f8f863f20d08ff731ffc027087a3f26`.
@@ -16,14 +16,15 @@
 - Integration bridge: `48adc3720c1c93f0f874a4e26aba1d7e0a777bc4` добавляет обязательный frontend build arg `NEXT_PUBLIC_SYNTHETIC_DEMO=true` рядом с уже существующим `NEXT_PUBLIC_APP_ENV=test` и loopback OIDC issuer.
 - Readiness review fix: `9de6bde4e96f91beae3926a88501ffb83e478b51` ограничивает общим deadline весь response body read, включая последовательный chunked drip.
 - MLflow test guard: `2654deb8b6455bc601319a4293a2040629c426a6` отдельно запрещает публикацию host ports сервисом `mlflow`.
+- Frontend demo polish: финальный source SHA `aacdc8b753c944eb22557fd1a7f100a5b00e9d94` объединён merge commit `785a53e40e5328ac2802f16a537f02763e3dcf9d`.
 
 `bc140f5` уже содержит QA `e73776b`, оба cold-start commits и общего Copilot ancestor, поэтому QA/Copilot повторно не переносились. Исходные ветки и их worktree не изменялись.
 
 ## Дизайн
 
-`DESIGN_INTEGRATION = PENDING`.
+`DESIGN_INTEGRATION = INCLUDED`.
 
-Финальный handoff агента 3 получен после recovery-preflight: ветка `feature/frontend-demo-polish`, base `5a8669167ed7f504a36b0c74c4a1f86c30d88ef8`, HEAD `aacdc8b753c944eb22557fd1a7f100a5b00e9d94`, пять frontend-only commits и 32 файла под `frontend/`. Агент сообщил Vitest `23 files / 130 tests`, lint, typecheck и production build PASS, но integration HEAD ещё не содержит этот commit и интегратор ещё не повторил проверки на объединённом SHA. Поэтому дизайн остаётся PENDING, а результаты агента 3 не записываются как integrated PASS.
+Финальный handoff агента 3: ветка `feature/frontend-demo-polish`, base `5a8669167ed7f504a36b0c74c4a1f86c30d88ef8`, HEAD `aacdc8b753c944eb22557fd1a7f100a5b00e9d94`, пять frontend-only commits и 32 файла под `frontend/`. Интегратор повторно подтвердил scope, clean merge-tree и объединил exact SHA без конфликтов. На объединённом SHA Vitest `23 files / 130 tests`, lint, typecheck и production build с demo build flags прошли. Защищённый browser runtime не проверен из-за недоступного Engine.
 
 ## Проверка точек пересечения
 
@@ -48,9 +49,9 @@
 | Operations pytest | PASS: `179 passed, 1 skipped` | Skip — существующий opt-in PostgreSQL roundtrip, которому нужен isolated Compose project. |
 | Backend pytest | PASS: `660 passed, 12 skipped` | Все 12 skips требуют выделенные PostgreSQL/ClickHouse; это не runtime proof. Остались 14 dependency/deprecation warnings. |
 | ML pytest | PASS: `18 passed` | Локальные unit/synthetic tests, не новый model run. |
-| Frontend Vitest | PASS: `19 files, 123 tests` | Synthetic unit fixtures; не browser runtime. |
+| Frontend Vitest | PASS: `23 files, 130 tests` | Повторено после включения финального дизайна; synthetic unit fixtures, не browser runtime. |
 | Frontend lint/typecheck | PASS | ESLint exit 0; TypeScript exit 0. |
-| Frontend production build | PASS | Build выполнен с `NEXT_PUBLIC_APP_ENV=test`, `NEXT_PUBLIC_SYNTHETIC_DEMO=true` и loopback OIDC issuer; 12/12 static pages generated. |
+| Frontend production build | PASS | Повторён после дизайна с `NEXT_PUBLIC_APP_ENV=test`, `NEXT_PUBLIC_SYNTHETIC_DEMO=true` и loopback OIDC issuer; 12/12 static pages generated. |
 | Backend Ruff/format/mypy | PASS | Ruff clean, 238 files formatted, mypy clean для 165 source files. |
 | ML Ruff/format/mypy | PASS | Ruff clean, 27 files formatted, mypy clean для 27 source files. |
 | Integration Python Ruff/format/mypy | PASS | Девять изменённых operations/forecast test/source files clean; четыре source files clean в mypy. |
@@ -88,6 +89,8 @@
 
 Разрешённый следующий recovery-цикл остановлен на шаге 2. Preflight повторно подтвердил `wslEngineEnabled=True`, после чего штатный `docker desktop stop --timeout 60` завершился `exit 1` с категорией `context deadline exceeded`; Docker Desktop/backend процессы остались запущены. В соответствии с условием остановки при зависшем Quit команда `wsl --shutdown` не выполнялась, Docker Desktop повторно не запускался, повторный stop/recovery и более сильные действия не предпринимались. Engine recovery: **FAIL AT DESKTOP STOP**.
 
+После того как владелец компьютера вручную отключил и снова запустил Docker Desktop, интегратор выполнил новое bounded-наблюдение без дополнительных restart. Context — `desktop-linux`, Docker Desktop control plane — `running`, но пять последовательных `docker version` server-checks завершились 15-second timeout в пределах суммарного пятиминутного окна. Повторная server-проверка и безопасный image inspect не могли пройти, поэтому `ENGINE_SERVER_API = UNRESPONSIVE`; локальные runtime-попытки остановлены.
+
 | Проверка | Статус |
 | --- | --- |
 | Integrated image build и запись image IDs/build flags | NOT RUN |
@@ -106,8 +109,7 @@
 
 | Блокер | Владелец | Критерий снятия |
 | --- | --- | --- |
-| `P0-ENV`: WSL 2 подтверждён, штатный Desktop stop завершился timeout до `wsl --shutdown` | Владелец проекта / отдельное recovery-решение | Docker Desktop штатно останавливается и Engine после согласованного восстановления дважды отвечает на bounded `docker version`; текущий цикл не повторяется. |
-| `DESIGN_INTEGRATION = PENDING` | Автор дизайна | Передан конкретный commit; после объединения повторены затронутые проверки. |
+| `P0-ENV`: после ручного запуска control plane `running`, но server API не ответил пять раз за пять минут | Владелец проекта / отдельное recovery-решение | Engine дважды отвечает на bounded `docker version`, затем проходит безопасный inspect существующего image; текущий recovery не повторяется автоматически. |
 | Integrated runtime evidence отсутствует | Интегратор после environment-ready signal | Два последовательных clean cold start, manifests/image IDs, bootstrap/scope, forecast DB/API verification и 5 реально выполненных browser tests. |
 
 `SECURITY_ADMISSION` остаётся не-PASS до runtime evidence. После расширения истории старые PASS не переносятся автоматически. Runtime будет выполняться только в новых собственных `phase8-demo-integration-*` projects; ожидаемые counts, forecast UUID, MAE и даты должны быть сверены с фактически опубликованными manifests и сохранённым pipeline result без изменения модели, provenance или assertions.
