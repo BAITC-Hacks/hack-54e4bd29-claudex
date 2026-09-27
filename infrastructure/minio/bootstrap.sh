@@ -47,7 +47,7 @@ run_quiet() {
   "$@" >/dev/null 2>&1 || fail "$stage"
 }
 
-run_quiet alias mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+run_quiet alias mc alias set -- local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
 for bucket in medsignal-imports medsignal-models medsignal-exports \
   medsignal-reports medsignal-raw medsignal-quarantine \
   medsignal-quality medsignal-artifacts; do
@@ -61,7 +61,7 @@ provision() {
   secret=$3
   run_quiet policy-create mc admin policy create local "medsignal-$role" \
     "/opt/medsignal/minio/policies/$role.json"
-  run_quiet user-create mc admin user add local "$key" "$secret"
+  run_quiet user-create mc admin user add -- local "$key" "$secret"
   run_quiet policy-attach mc admin policy attach local "medsignal-$role" --user "$key"
 }
 
