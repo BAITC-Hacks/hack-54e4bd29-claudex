@@ -43,7 +43,18 @@ test("hospital-scoped identity cannot list or open another synthetic organizatio
     await expect(restrictedPage.getByRole("link", { name: /Медицинская организация B1/ })).toHaveCount(0);
 
     await restrictedPage.goto(foreignPath!);
-    await expect(restrictedPage.getByRole("alert")).toContainText("Не удалось получить агрегированные данные");
+    await expect(restrictedPage.getByRole("heading", { name: "Войдите в ситуационный центр" })).toBeVisible();
+    const foreignApi = restrictedPage.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname.startsWith("/api/v1/analytics/organizations/canonical%3A")
+        && response.request().method() === "GET";
+    });
+    await restrictedPage.getByRole("button", { name: "Войти через Keycloak" }).click();
+    await restrictedPage.waitForURL((url) => url.pathname === foreignPath);
+    expect((await foreignApi).status()).toBe(404);
+    await expect(restrictedPage.getByRole("alert").filter({
+      hasText: "Аналитика организации временно недоступна. Повторите позже.",
+    })).toBeVisible();
     await expect(restrictedPage.getByText(/Медицинская организация B1/)).toHaveCount(0);
   } finally {
     await restrictedContext.close();

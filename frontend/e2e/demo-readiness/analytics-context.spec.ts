@@ -29,25 +29,49 @@ test("analytics requests preserve period context, scope organizations and label 
   }).last();
   const organizationLinks = organizationTable.locator("tbody a");
   expect(await organizationLinks.count(), "synthetic fixture must expose at least two organizations").toBeGreaterThan(1);
+  const firstOrganizationName = (await organizationLinks.nth(0).innerText()).split(/\r?\n/, 1)[0]?.trim();
   const firstPath = await organizationLinks.nth(0).getAttribute("href");
   const secondPath = await organizationLinks.nth(1).getAttribute("href");
+  expect(firstOrganizationName).toBeTruthy();
+  expect(firstPath).toMatch(/^\/hospitals\/[0-9a-f-]+$/);
+  expect(secondPath).toMatch(/^\/hospitals\/[0-9a-f-]+$/);
   expect(firstPath).not.toBe(secondPath);
 
-  await organizationLinks.nth(0).click();
-  const firstOrganization = await page.getByRole("heading", { level: 1 }).innerText();
-  await expect(page.getByText(/2025/).first()).toBeVisible();
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === firstPath),
+    organizationLinks.nth(0).click(),
+  ]);
+  const firstHeading = page.getByRole("heading", { level: 1 });
+  await expect(firstHeading).toHaveText(firstOrganizationName!);
+  await expect(page.getByText("Каноническая организация")).toBeVisible();
+  await expect(page.getByText("Направления", { exact: true })).toBeVisible();
+  const firstOrganization = await firstHeading.innerText();
 
-  await page.goBack();
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === "/dashboard"),
+    page.goBack(),
+  ]);
+  await expect(page.getByRole("heading", { name: "Ситуационный центр" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Выйти" })).toBeVisible();
   await expect(page.getByLabel("Конец")).toHaveValue("2025-03-30");
   await expect(page.getByLabel("Группировка")).toHaveValue("WEEK");
 
-  await page.goto(secondPath!);
+  const secondLink = page.locator(`a[href="${secondPath}"]`).first();
+  await expect(secondLink).toBeVisible();
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === secondPath),
+    secondLink.click(),
+  ]);
   const secondHeading = page.getByRole("heading", { level: 1 });
   await expect(secondHeading).toBeVisible();
   await expect(secondHeading).not.toHaveText(firstOrganization);
 
-  await page.getByRole("navigation", { name: "Основная навигация" })
-    .getByRole("link", { name: "Карта" }).click();
+  const mapLink = page.getByRole("navigation", { name: "Основная навигация" })
+    .getByRole("link", { name: "Карта" });
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === "/map"),
+    mapLink.click(),
+  ]);
   await expect(page.getByText("Историческая сводка записей о направлениях, ожидании и отказах.")).toBeVisible();
   await expect(page.getByText("Показатели не измеряют загрузку коек.")).toBeVisible();
   const marker = page.locator(".leaflet-marker-icon[title]").first();
