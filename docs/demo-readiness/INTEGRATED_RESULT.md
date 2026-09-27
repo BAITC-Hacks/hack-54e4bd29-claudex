@@ -7,7 +7,7 @@
 Объединённый код подготовлен, статические проверки выполнены, runtime ожидает восстановления среды.
 
 - Ветка: `demo/integration` в отдельном managed worktree.
-- Проверенный code HEAD: `9de6bde4e96f91beae3926a88501ffb83e478b51`.
+- Проверенный code HEAD: `2654deb8b6455bc601319a4293a2040629c426a6`.
 - Merge commit forecast + QA/cold-start: `5a8669167ed7f504a36b0c74c4a1f86c30d88ef8`.
 - Product/Copilot ancestor: `78ff9fffc0eaee2c01d4568e5b8b9adf84712ab4`.
 - Forecast: `6014bd784f8f863f20d08ff731ffc027087a3f26`.
@@ -15,6 +15,7 @@
 - Cold-start fix: `291e8012f20988e89ae6b327886678ff6d39d22a` и `bc140f5e45ae975d842c842b2c023e37ae839618`.
 - Integration bridge: `48adc3720c1c93f0f874a4e26aba1d7e0a777bc4` добавляет обязательный frontend build arg `NEXT_PUBLIC_SYNTHETIC_DEMO=true` рядом с уже существующим `NEXT_PUBLIC_APP_ENV=test` и loopback OIDC issuer.
 - Readiness review fix: `9de6bde4e96f91beae3926a88501ffb83e478b51` ограничивает общим deadline весь response body read, включая последовательный chunked drip.
+- MLflow test guard: `2654deb8b6455bc601319a4293a2040629c426a6` отдельно запрещает публикацию host ports сервисом `mlflow`.
 
 `bc140f5` уже содержит QA `e73776b`, оба cold-start commits и общего Copilot ancestor, поэтому QA/Copilot повторно не переносились. Исходные ветки и их worktree не изменялись.
 
@@ -44,7 +45,7 @@
 | Проверка | Результат | Граница результата |
 | --- | --- | --- |
 | SHA/ancestry и merge-tree | PASS | Forecast и QA/cold расходятся от `78ff9ff`; пересекающихся изменённых путей и merge conflicts не было. |
-| Operations pytest | PASS: `178 passed, 1 skipped` | Skip — существующий opt-in PostgreSQL roundtrip, которому нужен isolated Compose project. |
+| Operations pytest | PASS: `179 passed, 1 skipped` | Skip — существующий opt-in PostgreSQL roundtrip, которому нужен isolated Compose project. |
 | Backend pytest | PASS: `660 passed, 12 skipped` | Все 12 skips требуют выделенные PostgreSQL/ClickHouse; это не runtime proof. Остались 14 dependency/deprecation warnings. |
 | ML pytest | PASS: `18 passed` | Локальные unit/synthetic tests, не новый model run. |
 | Frontend Vitest | PASS: `19 files, 123 tests` | Synthetic unit fixtures; не browser runtime. |
@@ -57,21 +58,33 @@
 | Secret scanner | PASS: `3 passed` | Credentials, realm, cookies, tokens и storage state в evidence не сохранялись. |
 | Playwright discovery | PASS only as discovery | 4 QA tests и 1 opt-in forecast test перечислены; discovery не считается выполнением. |
 
-Финальное независимое review первоначально нашло Important: одиночный `response.read()` мог превысить общий deadline на последовательных коротких chunk reads. Regression test на настоящем `HTTPResponse` воспроизвёл RED (~156 ms при deadline 70 ms); после `9de6bde` полный read прерывается общим бюджетом, targeted helper `16 passed`, operations `178 passed, 1 skipped`. Оставшийся Minor касается только отсутствующего отдельного `ports` assertion в MLflow-тесте и передан владельцу инфраструктуры вместе с review.
+Независимое AI-review первоначально нашло Important: одиночный `response.read()` мог превысить общий deadline на последовательных коротких chunk reads. Regression test на настоящем `HTTPResponse` воспроизвёл RED (~156 ms при deadline 70 ms); после `9de6bde` полный read прерывается общим бюджетом, targeted helper `16 passed`.
 
 ## MLflow base Compose review
 
-Изменение общего `docker-compose.yml` использует точный allowlist:
+### Разрешение владельца проекта
+
+Владелец проекта 2026-09-27 явно разрешил для текущей локальной demo-интеграции изменение общего `docker-compose.yml` только с точным allowlist:
 
 `mlflow:5000,mlflow,localhost:5000,localhost,127.0.0.1:5000,127.0.0.1`.
 
-Предварительное независимое read-only review не обнаружило Critical/Important: wildcard отсутствует, security middleware не отключён, host ports и новая сеть не добавлены. Minor: `tests/operations/test_mlflow_host_allowlist.py` фиксирует exact allowlist и запрет отключения middleware, но не утверждает отдельно отсутствие `ports`.
+Разрешение не включает произвольные адреса, wildcard, отключение Host validation, публикацию host ports, изменение сетевых границ или production deployment.
 
-`INFRA_OWNER_REVIEW = PENDING` — запрос адресован владельцу У2 / `@Alim-Rakhmet`. До его подтверждения общее изменение base Compose не считается согласованным.
+Исторически предыдущая версия отчёта содержала `INFRA_OWNER_REVIEW = PENDING` и ожидание `@Alim-Rakhmet`. Это ожидание снято решением владельца проекта: `@Alim-Rakhmet` не участвовал, review ему не приписывается.
+
+### Техническое AI-review и тесты
+
+Первоначальное независимое read-only review AI-агентом на integration SHA `48adc3720c1c93f0f874a4e26aba1d7e0a777bc4` не обнаружило Critical/Important: exact allowlist соблюдён, wildcard отсутствует, security middleware не отключён, host ports и новая сеть не добавлены. Было одно Minor — отсутствие отдельного тестового assertion для `ports`.
+
+После test-only commit `2654deb8b6455bc601319a4293a2040629c426a6` агент 1 проверил только изменившуюся часть в read-only режиме: Critical/Important/Minor — none. `docker-compose.yml` byte-identical проверенному SHA `48adc3720c1c93f0f874a4e26aba1d7e0a777bc4`, blob `74ca4013eca7bb4f5bfde22aa1e43e7ee4497040`; exact allowlist и запрет отключения middleware не менялись. Это техническое AI-review, не человеческое review.
+
+Новый `test_mlflow_does_not_publish_host_ports` безопасно проверен mutation-run только в памяти: при синтетическом `ports` получен ожидаемый RED, фактический Compose дал `2 passed`; полный operations-набор — `179 passed, 1 skipped`. Предыдущее Minor закрыто.
 
 ## Runtime и browser status
 
-Docker Engine восстанавливает отдельно назначенный владелец. В этом прогоне Docker не запускался и не перезапускался; чужие containers, volumes и проекты не изменялись.
+Общим Docker управляет только интегратор. В этом статическом прогоне containers не запускались и Docker повторно не перезапускался; чужие containers, volumes и проекты не изменялись.
+
+Ограниченная read-only диагностика после ранее выполненного однократного restart: активный context — `desktop-linux`, но server-часть `docker version` не вернула ответ за 30 секунд. Диагностический CLI после timeout завершён; Docker Desktop/Engine и другие Docker CLI процессы не останавливались. Фактическое состояние: `ENGINE_SERVER_API = UNRESPONSIVE`, поэтому runtime не начат. В пределах текущего разрешения повторный restart, reset, prune и WSL shutdown запрещены; требуется восстановление Engine вне этого прогона либо отдельное решение владельца проекта о следующем recovery-действии.
 
 | Проверка | Статус |
 | --- | --- |
@@ -91,9 +104,8 @@ Docker Engine восстанавливает отдельно назначенн
 
 | Блокер | Владелец | Критерий снятия |
 | --- | --- | --- |
-| `P0-ENV`: Docker server API не подтверждён готовым | Назначенный владелец общей среды | Явное подтверждение стабильной доступности Engine; интегратор сам Engine не перезапускает. |
-| `INFRA_OWNER_REVIEW = PENDING` | У2 / `@Alim-Rakhmet` | Review точечного MLflow allowlist без wildcard/disable/widening. |
+| `P0-ENV`: context `desktop-linux`, server API не ответил за 30 секунд | Владелец проекта / восстановление среды | Engine отвечает на bounded `docker version`; без повторного restart, reset, prune или WSL shutdown в текущем разрешении. |
 | `DESIGN_INTEGRATION = PENDING` | Автор дизайна | Передан конкретный commit; после объединения повторены затронутые проверки. |
 | Integrated runtime evidence отсутствует | Интегратор после environment-ready signal | Два последовательных clean cold start, manifests/image IDs, bootstrap/scope, forecast DB/API verification и 5 реально выполненных browser tests. |
 
-После расширения истории старые PASS не переносятся автоматически. Runtime будет выполняться только в новых собственных `phase8-demo-integration-*` projects; ожидаемые counts, forecast UUID, MAE и даты должны быть сверены с фактически опубликованными manifests и сохранённым pipeline result без изменения модели, provenance или assertions.
+`SECURITY_ADMISSION` остаётся не-PASS до runtime evidence. После расширения истории старые PASS не переносятся автоматически. Runtime будет выполняться только в новых собственных `phase8-demo-integration-*` projects; ожидаемые counts, forecast UUID, MAE и даты должны быть сверены с фактически опубликованными manifests и сохранённым pipeline result без изменения модели, provenance или assertions.
