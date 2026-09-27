@@ -2,12 +2,6 @@ import { expect, test } from "@playwright/test";
 
 import { login } from "./auth";
 
-// The browser tests share one loopback edge IP and its real OIDC rate limit.
-// One admin session covers the end-to-end journey without repeated logins.
-test.beforeEach(async () => {
-  await new Promise((resolve) => setTimeout(resolve, 2_000));
-});
-
 test("admin journey through analytics, signal, scenario and logout", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
 

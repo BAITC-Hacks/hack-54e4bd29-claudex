@@ -34,7 +34,6 @@ test("hospital-scoped identity cannot list or open another synthetic organizatio
   const foreignPath = await foreignLink.getAttribute("href");
   expect(foreignPath).toMatch(/^\/hospitals\/[0-9a-f-]+$/);
 
-  await new Promise((resolve) => setTimeout(resolve, 2_000));
   const restrictedContext = await browser.newContext({ baseURL });
   const restrictedPage = await restrictedContext.newPage();
   try {

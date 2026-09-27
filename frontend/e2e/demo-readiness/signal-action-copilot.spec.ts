@@ -21,8 +21,15 @@ test("fresh synthetic signal persists one action, rejects stale card and keeps e
   const acknowledge = page.getByRole("button", { name: "Принять в работу" });
   await expect(acknowledge, "state-changing test requires a fresh NEW synthetic signal").toBeVisible();
   const signalPath = new URL(page.url()).pathname;
+  const signalTitle = await page.getByRole("heading", { level: 1 }).innerText();
+  const versionValue = page.getByText("Версия карточки", { exact: true }).locator("..").locator("dd");
+  const initialVersion = Number(await versionValue.innerText());
+  expect(initialVersion).toBeGreaterThan(0);
+  const algorithmicCard = page.getByText("Алгоритмическое объяснение", { exact: true })
+    .locator("..").locator("..");
+  const originalExplanation = await algorithmicCard.innerText();
+  expect(originalExplanation).not.toContain("Объяснение не построено");
 
-  await new Promise((resolve) => setTimeout(resolve, 2_000));
   const staleContext = await browser.newContext({ baseURL });
   const stalePage = await staleContext.newPage();
   await login(stalePage, "admin", signalPath);
@@ -36,8 +43,13 @@ test("fresh synthetic signal persists one action, rejects stale card and keeps e
     new URL(response.url()).pathname.endsWith("/acknowledge"));
   await page.getByLabel("Причина").fill("Demo readiness isolated synthetic check");
   await acknowledge.click();
-  expect((await accepted).status()).toBe(200);
+  const acceptedResponse = await accepted;
+  expect(acceptedResponse.status()).toBe(200);
+  const acceptedSignal = await acceptedResponse.json() as { status: string; version: number };
+  expect(acceptedSignal.status).toBe("IN_PROGRESS");
+  expect(acceptedSignal.version).toBe(initialVersion + 1);
   expect(acknowledgeRequests).toBe(1);
+  await expect(versionValue).toHaveText(String(initialVersion + 1));
   await expect(page.getByRole("button", { name: "Закрыть как обработанный" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Принять в работу" })).toHaveCount(0);
 
@@ -54,7 +66,10 @@ test("fresh synthetic signal persists one action, rejects stale card and keeps e
   await page.getByRole("button", { name: "Войти через Keycloak" }).click();
   await page.waitForURL((url) => url.pathname === signalPath);
   await expect(page.getByRole("button", { name: "Закрыть как обработанный" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Принять в работу" })).toHaveCount(0);
+  await expect(versionValue).toHaveText(String(initialVersion + 1));
   await expect(page.getByText("Demo readiness isolated synthetic check")).toBeVisible();
+  expect(await algorithmicCard.innerText()).toBe(originalExplanation);
 
   let copilotRequests = 0;
   page.on("request", (request) => {
@@ -67,11 +82,40 @@ test("fresh synthetic signal persists one action, rejects stale card and keeps e
   expect(disabledResponse.status()).toBe(503);
   expect((await disabledResponse.json()).error.code).toBe("COPILOT_DISABLED");
   await expect(page.getByRole("dialog").getByText(/Функция отключена/)).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Объяснение", exact: true })).toBeVisible();
+  expect(await algorithmicCard.innerText()).toBe(originalExplanation);
   expect(copilotRequests).toBe(1);
 
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Объяснить сигнал" }).click();
   await expect(page.getByRole("dialog").getByText(/Функция отключена/)).toBeVisible();
   expect(copilotRequests).toBe(1);
+
+  await page.keyboard.press("Escape");
+  const signalsLink = page.getByRole("navigation", { name: "Основная навигация" })
+    .getByRole("link", { name: "Сигналы" });
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === "/signals"),
+    signalsLink.click(),
+  ]);
+  await expect(page.getByRole("heading", { name: "Сигналы" })).toBeVisible();
+  const otherSignalLinks = page.getByRole("table").getByRole("link");
+  await expect.poll(() => otherSignalLinks.count()).toBeGreaterThan(1);
+  const otherPaths = await otherSignalLinks.evaluateAll((links) =>
+    links.map((link) => link.getAttribute("href")).filter((href): href is string => href !== null),
+  );
+  const otherIndex = otherPaths.findIndex((path) => path !== signalPath);
+  const otherPath = otherPaths[otherIndex];
+  if (otherIndex < 0 || !otherPath) throw new Error("Synthetic fixture must expose another signal");
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === otherPath),
+    otherSignalLinks.nth(otherIndex).click(),
+  ]);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1 })).not.toHaveText(signalTitle);
+  const secondDisabled = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/v1/copilot/explain-signal");
+  await page.getByRole("button", { name: "Объяснить сигнал" }).click();
+  expect((await secondDisabled).status()).toBe(503);
+  await expect(page.getByRole("dialog").getByText(/Функция отключена/)).toBeVisible();
+  expect(copilotRequests).toBe(2);
 });

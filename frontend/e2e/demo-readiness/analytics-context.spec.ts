@@ -67,22 +67,22 @@ test("analytics requests preserve period context, scope organizations and label 
   await expect(secondHeading).not.toHaveText(firstOrganization);
 
   const mapLink = page.getByRole("navigation", { name: "Основная навигация" })
-    .getByRole("link", { name: "Карта" });
+    .getByRole("link", { name: "Обзор" });
   await Promise.all([
-    page.waitForURL((url) => url.pathname === "/map"),
+    page.waitForURL((url) => url.pathname === "/command-center"),
     mapLink.click(),
   ]);
-  await expect(page.getByText("Историческая сводка записей о направлениях, ожидании и отказах.")).toBeVisible();
+  await expect(page.getByText(/Исторические агрегаты направлений, ожидания и отказов/)).toBeVisible();
   await expect(page.getByText("Показатели не измеряют загрузку коек.")).toBeVisible();
-  const marker = page.locator(".leaflet-marker-icon[title]").first();
-  await expect(marker).toBeVisible();
-  const regionResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return url.pathname === "/api/v1/analytics/overview"
-      && url.searchParams.has("region")
-      && response.status() === 200;
-  });
-  await marker.click();
-  await regionResponse;
-  await expect(page.getByText("Выбран регион")).toBeVisible();
+  await expect(page.getByLabel("Карта региональных показателей Казахстана")).toBeVisible();
+  await expect(page.locator(".leaflet-marker-icon[title]")).toHaveCount(0);
+  await expect(page.getByText("Выберите регион на карте, чтобы сузить аналитику.")).toBeVisible();
+
+  const signalsLink = page.getByRole("navigation", { name: "Основная навигация" })
+    .getByRole("link", { name: "Сигналы" });
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === "/signals"),
+    signalsLink.click(),
+  ]);
+  await expect(page.getByRole("heading", { name: "Сигналы" })).toBeVisible();
 });
