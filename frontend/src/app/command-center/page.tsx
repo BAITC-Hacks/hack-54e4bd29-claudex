@@ -45,9 +45,8 @@ const metricMeta: Record<MapMetric, { label: string; source: string; icon: Lucid
 
 function cellValue(overview: Overview | undefined, metric: MapMetric): number | null {
   if (!overview) return null;
-  if (metric === "waiting") return overview.data.waiting_records.value;
-  if (metric === "referrals") return overview.data.referrals_total.value;
-  return overview.data.refusals_total.value;
+  const cell = metric === "waiting" ? overview.data.waiting_records : metric === "referrals" ? overview.data.referrals_total : overview.data.refusals_total;
+  return cell.suppressed ? null : cell.value;
 }
 
 function formatNumber(value: number | null | undefined): string {
@@ -85,12 +84,18 @@ export default function CommandCenterPage() {
   });
 
   const points = useMemo<RegionPoint[]>(
-    () => (regions.data?.items ?? []).map((region, index) => ({
-      id: region.id,
-      name: region.name,
-      code: region.code,
-      value: cellValue(regionQueries[index]?.data, metric),
-    })),
+    () => (regions.data?.items ?? []).map((region, index) => {
+      const result = regionQueries[index];
+      const overview = result?.data;
+      const cell = overview ? metric === "waiting" ? overview.data.waiting_records : metric === "referrals" ? overview.data.referrals_total : overview.data.refusals_total : null;
+      return {
+        id: region.id,
+        name: region.name,
+        code: region.code,
+        value: cellValue(overview, metric),
+        state: result?.isError ? "error" as const : result?.isPending ? "loading" as const : cell?.suppressed ? "suppressed" as const : "ready" as const,
+      };
+    }),
     [metric, regionQueries, regions.data?.items],
   );
   const onSelect = useCallback((id: string | null) => setSelectedRegionId(id), []);
@@ -98,7 +103,10 @@ export default function CommandCenterPage() {
   const overview = analytics.overview.data;
   const referrals = analytics.referrals.data;
   const waiting = analytics.waiting.data;
-  const organizations = analytics.organizations.data?.data.items ?? [];
+  const organizations = useMemo(
+    () => mergeOrganizationItems(analytics.organizations.data?.data.items ?? []),
+    [analytics.organizations.data?.data.items],
+  );
   const visibleOrganizations = organizations.filter((item) =>
     (item.display_name ?? item.identity_label ?? item.organization_ref).toLowerCase().includes(search.toLowerCase()),
   );
@@ -198,7 +206,7 @@ export default function CommandCenterPage() {
                     <MetricLine label="Направления" value={overview.data.referrals_total.value} />
                     <MetricLine label="Ожидающие" value={overview.data.waiting_records.value} />
                     <MetricLine label="Отказы" value={overview.data.refusals_total.value} />
-                    <MetricLine label="Организации в данных" value={overview.data.represented_organizations.value} />
+                    <MetricLine label="Уникальные организации" value={organizations.length} />
                   </dl>
                   <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-5 text-amber-950">
                     Для расчёта загрузки коек необходим подтверждённый справочник мощностей. Этот экран его не заменяет.
@@ -276,6 +284,39 @@ function EmptyPanel({ title, message }: { title: string; message: string }) {
 
 type OrganizationItem = NonNullable<ReturnType<typeof useSituationCenter>["organizations"]["data"]>["data"]["items"][number];
 
+function mergeOrganizationItems(items: OrganizationItem[]): OrganizationItem[] {
+  const merged = new Map<string, OrganizationItem>();
+  for (const item of items) {
+    const current = merged.get(item.organization_ref);
+    if (!current) {
+      merged.set(item.organization_ref, item);
+      continue;
+    }
+    merged.set(item.organization_ref, {
+      ...current,
+      display_name: current.display_name ?? item.display_name,
+      identity_label: current.identity_label ?? item.identity_label,
+      canonical_hospital_id: current.canonical_hospital_id ?? item.canonical_hospital_id,
+      region_id: current.region_id ?? item.region_id,
+      referrals_total: largerCell(current.referrals_total, item.referrals_total),
+      waiting_records: largerCell(current.waiting_records, item.waiting_records),
+      refusals_total: largerCell(current.refusals_total, item.refusals_total),
+      observed_waiting_median_days: largerCell(current.observed_waiting_median_days, item.observed_waiting_median_days),
+    });
+  }
+  return [...merged.values()];
+}
+
+function largerCell<T extends { value: number | null; suppressed: boolean }>(left: T, right: T): T {
+  if (left.suppressed && !right.suppressed) return right;
+  if (right.suppressed) return left;
+  return (right.value ?? Number.NEGATIVE_INFINITY) > (left.value ?? Number.NEGATIVE_INFINITY) ? right : left;
+}
+
+function organizationValue(cell: { value: number | null; suppressed: boolean }): number | null {
+  return cell.suppressed ? null : cell.value;
+}
+
 function OrganizationsPanel({ items, search, onSearch }: { items: OrganizationItem[]; search: string; onSearch: (value: string) => void }) {
   return (
     <section className="surface-card overflow-hidden rounded-2xl">
@@ -303,10 +344,10 @@ function OrganizationsPanel({ items, search, onSearch }: { items: OrganizationIt
               <tbody className="divide-y divide-slate-100">{items.slice(0, 12).map((organization) => (
                 <tr key={organization.organization_ref} className="hover:bg-cyan-50/30">
                   <td className="px-6 py-3.5"><OrganizationIdentity organization={organization} /></td>
-                  <td className="px-5 py-3.5 font-bold">{formatNumber(organization.referrals_total.value)}</td>
-                  <td className="px-5 py-3.5 font-bold">{formatNumber(organization.waiting_records.value)}</td>
-                  <td className="px-5 py-3.5 font-bold">{formatNumber(organization.refusals_total.value)}</td>
-                  <td className="px-5 py-3.5">{organization.observed_waiting_median_days.value === null ? "—" : `${formatNumber(organization.observed_waiting_median_days.value)} дн.`}</td>
+                  <td className="px-5 py-3.5 font-bold">{formatNumber(organizationValue(organization.referrals_total))}</td>
+                  <td className="px-5 py-3.5 font-bold">{formatNumber(organizationValue(organization.waiting_records))}</td>
+                  <td className="px-5 py-3.5 font-bold">{formatNumber(organizationValue(organization.refusals_total))}</td>
+                  <td className="px-5 py-3.5">{organizationValue(organization.observed_waiting_median_days) === null ? "—" : `${formatNumber(organizationValue(organization.observed_waiting_median_days))} дн.`}</td>
                   <td className="px-5 py-3.5"><MappingStatus status={organization.mapping_status} /></td>
                 </tr>
               ))}</tbody>
@@ -322,7 +363,7 @@ function OrganizationCard({ organization }: { organization: OrganizationItem }) 
   return (
     <article className="rounded-xl border border-slate-200 p-4">
       <div className="flex items-start justify-between gap-3"><OrganizationIdentity organization={organization} /><MappingStatus status={organization.mapping_status} /></div>
-      <dl className="mt-4 grid grid-cols-3 gap-2 text-center"><MiniMetric label="Направления" value={organization.referrals_total.value} /><MiniMetric label="Ожидающие" value={organization.waiting_records.value} /><MiniMetric label="Отказы" value={organization.refusals_total.value} /></dl>
+      <dl className="mt-4 grid grid-cols-3 gap-2 text-center"><MiniMetric label="Направления" value={organizationValue(organization.referrals_total)} /><MiniMetric label="Ожидающие" value={organizationValue(organization.waiting_records)} /><MiniMetric label="Отказы" value={organizationValue(organization.refusals_total)} /></dl>
     </article>
   );
 }

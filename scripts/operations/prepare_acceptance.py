@@ -485,6 +485,10 @@ def prepare_files(
         f"{(output / 'realm.json').resolve().as_posix()}:"
         "/opt/keycloak/data/import/realm-medsignal-dev.json:ro"
     )
+    theme_mount = json.dumps(
+        f"{(ROOT / 'infrastructure' / 'keycloak' / 'themes' / 'medsignal').resolve().as_posix()}:"
+        "/opt/keycloak/themes/medsignal:ro"
+    )
     clickhouse_readiness_source = (
         ROOT / "scripts" / "operations" / "wait_for_clickhouse.py"
     ).resolve()
@@ -582,6 +586,7 @@ def prepare_files(
         + "  keycloak:\n"
         "    volumes: !override\n"
         f"      - {realm_mount}\n"
+        f"      - {theme_mount}\n"
     )
     (output / "compose.override.yml").write_text(overlay, encoding="utf-8")
     manifest = {

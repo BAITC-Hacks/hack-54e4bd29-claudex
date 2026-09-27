@@ -147,9 +147,9 @@
   background: currentColor;
 }
 
-.region-marker.normal { background: #0b9b7d; }
-.region-marker.warning { background: #e3a42d; }
-.region-marker.critical { background: #df4b55; }
+.region-marker.volume-low { background: #548aa5; }
+.region-marker.volume-medium { background: #24718c; }
+.region-marker.volume-high { background: #123b56; }
 .region-marker.empty { background: #64748b; }
 
 .region-map-tooltip {
@@ -178,3 +178,8 @@
 
 .region-map-tooltip::before { border-top-color: white !important; }
 .leaflet-control-attribution { font-size: 8px !important; }
+
+.leaflet-container img.leaflet-tile {
+  max-width: none !important;
+  max-height: none !important;
+}

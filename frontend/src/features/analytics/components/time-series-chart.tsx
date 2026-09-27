@@ -21,7 +21,7 @@ export function TimeSeriesChart({ title, description, series, color }: { title: 
         tooltip: { trigger: "axis" },
         xAxis: { type: "category", boundaryGap: false, data: series.data.points.map((item) => formatDate(item.period)), axisLabel: { hideOverlap: true } },
         yAxis: { type: "value", min: 0 },
-        series: [{ type: "line", smooth: true, showSymbol: false, lineStyle: { width: 3, color }, areaStyle: { color, opacity: 0.08 }, data: series.data.points.map((item) => item.value.value) }],
+        series: [{ type: "line", smooth: true, showSymbol: false, lineStyle: { width: 3, color }, areaStyle: { color, opacity: 0.08 }, data: series.data.points.map((item) => item.value.suppressed ? null : item.value.value) }],
       });
       const resize = () => chart.resize();
       window.addEventListener("resize", resize);

@@ -286,6 +286,7 @@ services:
       # Монтируется только файл области: каталог содержит и документацию,
       # а Keycloak пытается импортировать всё, что найдёт.
       - ./infrastructure/keycloak/realm-medsignal-dev.json:/opt/keycloak/data/import/realm-medsignal-dev.json:ro
+      - ./infrastructure/keycloak/themes/medsignal:/opt/keycloak/themes/medsignal:ro
     networks:
       - edge
 

@@ -80,6 +80,11 @@ vi.mock("@/features/analytics/hooks", () => ({
       identity_label: null, mapping_status: "MAPPED", source_system: "TEST_SOURCE", region_id: null,
       referrals_total: { value: 300, suppressed: false }, waiting_records: { value: 24, suppressed: false },
       refusals_total: { value: 3, suppressed: false }, observed_waiting_median_days: { value: 4.2, suppressed: false },
+    }, {
+      organization_ref: "org-1", canonical_hospital_id: null, display_name: "Городская больница",
+      identity_label: null, mapping_status: "MAPPED", source_system: "TEST_SOURCE", region_id: null,
+      referrals_total: { value: 0, suppressed: false }, waiting_records: { value: 0, suppressed: false },
+      refusals_total: { value: 8, suppressed: false }, observed_waiting_median_days: { value: null, suppressed: false },
     }], page: 1, page_size: 20, total: 1, has_next: false } } },
   }),
 }));
@@ -111,6 +116,7 @@ it("prioritizes current operational evidence without overstating synthetic or hi
   expect(screen.getByRole("heading", { name: "Динамика направлений" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Последние сигналы" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Организации в текущей выборке" })).toBeInTheDocument();
+  expect(screen.getAllByRole("link", { name: "Городская больница" })).toHaveLength(2);
   expect(screen.getByText(/Глобальный прогноз/)).toBeInTheDocument();
   expect(screen.getAllByText(/Историческая валидация/).length).toBeGreaterThan(0);
   expect(screen.getByText(/12,3 направления в день/)).toBeInTheDocument();
