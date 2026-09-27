@@ -160,6 +160,14 @@ typecheck и production Next.js build с `NEXT_PUBLIC_APP_ENV=test` и
 проверок не меняется. Подробная передача интеграции:
 [`FORECAST_INTEGRATION_HANDOFF.md`](FORECAST_INTEGRATION_HANDOFF.md).
 
+Добавлен opt-in Playwright `frontend/e2e/forecast-demo.spec.ts`: он сравнивает
+реальный ответ latest API с карточкой после настоящего ADMIN OIDC login.
+Обычный browser job исключает его, пока не задан
+`MEDSIGNAL_FORECAST_DEMO=1`; проверено через `playwright test --list` в обоих
+режимах. Lint и typecheck прошли. Сам сценарий в браузере **NOT TESTED**:
+нужны новые frontend/backend образы, опубликованный synthetic forecast и
+доступный Docker/HTTP стенд.
+
 ## Воспроизведение
 
 Запускать **только** после подготовки отдельного synthetic-only phase8

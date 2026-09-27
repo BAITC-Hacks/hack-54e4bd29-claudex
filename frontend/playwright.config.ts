@@ -13,6 +13,7 @@ export default defineConfig({
   testIgnore: [
     ...(process.env.MEDSIGNAL_E2E_DEGRADED === "1" ? [] : ["**/degraded.spec.ts"]),
     ...(process.env.MEDSIGNAL_COPILOT_FRONTEND_URL ? [] : ["**/copilot.spec.ts"]),
+    ...(process.env.MEDSIGNAL_FORECAST_DEMO === "1" ? [] : ["**/forecast-demo.spec.ts"]),
   ],
   outputDir: "../tmp/playwright-results",
   preserveOutput: "never",

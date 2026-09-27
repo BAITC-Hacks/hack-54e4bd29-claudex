@@ -25,6 +25,7 @@
 | Synthetic evidence | `scripts/acceptance/forecast_demo_fixture.py`, `scripts/acceptance/verify_forecast_pairs.py`, `tests/operations/test_forecast_demo_fixture.py`, `tests/operations/test_verify_forecast_pairs.py` |
 | API | `backend/app/business/forecasting/contracts.py`, `backend/app/business/forecasting/service.py`, `backend/app/schemas/forecasting.py`, `backend/app/api/v1/forecasts.py`, три forecast test files в `backend/tests/` |
 | UI | `frontend/src/features/forecasting/components/referral-forecast-card.tsx` и `.test.tsx`, `frontend/src/features/forecasting/types.ts`, `frontend/src/features/forecasting/demo-context.ts` и `.test.ts`, `frontend/src/app/dashboard/page.tsx`, `frontend/Dockerfile`, `.env.example` |
+| Opt-in browser QA | `frontend/e2e/forecast-demo.spec.ts`, `frontend/playwright.config.ts` |
 | Инфраструктура | `docker-compose.yml`, `tests/operations/test_mlflow_host_allowlist.py` |
 | Документация | `docs/acceptance/FORECAST_DEMO_VERIFICATION.md`, этот handoff |
 
@@ -136,6 +137,9 @@ PostgreSQL/ClickHouse → 42 пары и та же MAE. Backend: 672 теста,
 import-linter: 12/12. После test-env fix frontend: 123 Vitest tests, lint,
 typecheck и production build с `NEXT_PUBLIC_APP_ENV=test`,
 `NEXT_PUBLIC_SYNTHETIC_DEMO=true` — PASS.
+Новый browser spec успешно обнаруживается через `playwright test --list` при
+`MEDSIGNAL_FORECAST_DEMO=1` и исключается из обычного job без этого флага.
+Его **выполнение** остаётся NOT TESTED.
 
 **NOT TESTED:** обновлённые backend/frontend образы из этого SHA в
 работающем проекте; дополнительные DB verifier assertions
@@ -145,6 +149,20 @@ typecheck и production build с `NEXT_PUBLIC_APP_ENV=test`,
 пользовательский маршрут QA. Старый acceptance HTTP endpoint недоступен, а
 Docker daemon не отвечал на `docker version`; общий daemon здесь не
 перезапускался. Тесты и старые контейнеры не превращают эти пункты в PASS.
+
+Когда обновлённый synthetic project доступен, browser проверка запускается
+только по явному opt-in:
+
+```powershell
+$env:MEDSIGNAL_FORECAST_DEMO = '1'
+$env:MEDSIGNAL_E2E_BASE_URL = 'http://127.0.0.1:<loopback-port>'
+$env:MEDSIGNAL_E2E_REALM = '<ignored phase8 project>/realm.json'
+cd frontend
+npm exec -- playwright test e2e/forecast-demo.spec.ts
+```
+
+Тест использует настоящий OIDC и backend, не подменяет ответ. Выводить
+секреты realm, Bearer token или полный ответ API в отчёт нельзя.
 
 QA должен проверить на **одном и том же фактическом forecast ID**:
 точки и период 01–07.04.2025, GLOBAL, MAE и baseline с единицей,
