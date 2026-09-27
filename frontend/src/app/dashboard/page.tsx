@@ -2,8 +2,8 @@
 
 import { Activity, AlertTriangle, Ban, Building2, ClipboardList } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useState } from "react";
 
 import { AuthGate } from "@/features/auth/auth-gate";
 import { useAuth } from "@/features/auth/auth-context";
@@ -58,17 +58,20 @@ export default function DashboardPage() {
 
 function DashboardContent() {
   const { isAuthenticated } = useAuth();
-  const pathname = usePathname();
-  const router = useRouter();
   const search = useSearchParams();
-  const query = useMemo(() => dashboardQuery(search), [search]);
+  const [query, setQueryState] = useState<AnalyticsQuery>(() => dashboardQuery(search));
   const setQuery = useCallback((next: AnalyticsQuery) => {
     const params = new URLSearchParams();
     params.set("date_from", (next.dateFrom ?? INITIAL_QUERY.dateFrom!).slice(0, 10));
     params.set("date_to", (next.dateTo ?? INITIAL_QUERY.dateTo!).slice(0, 10));
     params.set("granularity", next.granularity === "WEEK" ? "WEEK" : "DAY");
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [pathname, router]);
+    setQueryState(next);
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}?${params.toString()}`,
+    );
+  }, []);
   const analytics = useSituationCenter(isAuthenticated, query);
   const referralForecast = useLatestReferralForecast(isAuthenticated);
   const signals = useSignals(isAuthenticated, { page: 1, pageSize: 5 });
