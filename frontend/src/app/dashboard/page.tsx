@@ -69,7 +69,7 @@ export default function DashboardPage() {
       <AuthGate>
         <FilterBar value={query} onChange={setQuery} />
         {pending && <LoadingState />}
-        {error && <ErrorState message={error.message} />}
+        {error && <ErrorState label="Агрегированные показатели временно недоступны. Повторите позже." />}
         {overview &&
           referrals &&
           refusals &&
@@ -128,7 +128,7 @@ export default function DashboardPage() {
                 </Link>
               </div>
               {signals.isPending && <LoadingState />}
-              {signals.isError && <ErrorState message={signals.error.message} />}
+              {signals.isError && <ErrorState label="Сигналы временно недоступны. Повторите позже." />}
               {signals.data && <SignalTable items={signals.data.items} />}
             </section>
             <WaitingAgeSummary summary={waiting} />

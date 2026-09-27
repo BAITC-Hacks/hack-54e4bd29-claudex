@@ -26,7 +26,7 @@ export function OrganizationAnalyticsView({ organizationRef }: { organizationRef
   return (
     <AuthGate>
       {pending && <LoadingState />}
-      {error && <ErrorState message={error.message} />}
+      {error && <ErrorState label="Аналитика организации временно недоступна. Повторите позже." />}
       {analytics.detail.data &&
         analytics.referrals.data &&
         analytics.refusals.data &&
