@@ -2,6 +2,8 @@
 
 Дата статической проверки: **2026-09-27**.
 
+`ENGINE = UNRESPONSIVE`.
+
 ## Версия и состав
 
 Объединённый код подготовлен, статические проверки выполнены, runtime ожидает восстановления среды.
@@ -91,6 +93,8 @@
 
 После того как владелец компьютера вручную отключил и снова запустил Docker Desktop, интегратор выполнил новое bounded-наблюдение без дополнительных restart. Context — `desktop-linux`, Docker Desktop control plane — `running`, но пять последовательных `docker version` server-checks завершились 15-second timeout в пределах суммарного пятиминутного окна. Повторная server-проверка и безопасный image inspect не могли пройти, поэтому `ENGINE_SERVER_API = UNRESPONSIVE`; локальные runtime-попытки остановлены.
 
+После последующей перезагрузки Windows владельцем выполнено отдельное трёхминутное окно наблюдения без Docker restart и WSL shutdown. Пять попыток точной команды `docker version --format '{{.Server.Version}}'`, каждая с 15-second limit, снова завершились категорией `TIMEOUT`; server version не получена. Поэтому подтверждение context после успешного server response, повторный server response и inspect существующего image не выполнялись. Это не `IMAGE_NOT_FOUND`: запрос к Engine не дошёл до стадии image lookup.
+
 | Проверка | Статус |
 | --- | --- |
 | Integrated image build и запись image IDs/build flags | NOT RUN |
@@ -105,11 +109,22 @@
 
 Реально выполненных browser tests: **0**. Skipped/discovery/zero tests не считаются PASS. Платные LLM-вызовы не выполнялись.
 
+## Краткий план проверки на другом исправном Docker-хосте
+
+Сам перенос и публикация кода не выполнялись. После отдельного разрешения владельца:
+
+1. Передать локальный commit `54a5642b22eb18440fbbfbdeb131b361a64c7c37` утверждённым способом на заранее доступный исправный Docker-хост; не использовать main, deployment или платные cloud-ресурсы.
+2. Проверить exact HEAD, ancestry источников, clean worktree, `docker version` дважды, ожидаемый context и безопасный inspect одного существующего image.
+3. Собрать образы из exact checkout с `NEXT_PUBLIC_APP_ENV=test`, `NEXT_PUBLIC_SYNTHETIC_DEMO=true` и согласованным OIDC issuer; записать только image IDs и build flags.
+4. Последовательно создать два уникальных `phase8-demo-integration-*` project с отдельными volumes, ports, synthetic accounts и entities. Каждый первый start считать самостоятельным результатом; очищать только ресурсы завершённого собственного project.
+5. Выполнить bootstrap/scope, публикацию forecast fixture, существующий pipeline, DB/API verifier, validation fields, четыре QA Playwright tests и один forecast browser test без ослабления assertions/security gates.
+6. Обновить этот отчёт фактическими manifests, image IDs, counts и test outcomes без credentials, cookies, storage state, realm contents или реальных данных.
+
 ## Оставшиеся блокеры и владельцы
 
 | Блокер | Владелец | Критерий снятия |
 | --- | --- | --- |
-| `P0-ENV`: после ручного запуска control plane `running`, но server API не ответил пять раз за пять минут | Владелец проекта / отдельное recovery-решение | Engine дважды отвечает на bounded `docker version`, затем проходит безопасный inspect существующего image; текущий recovery не повторяется автоматически. |
+| `P0-ENV`: после Windows reboot server API пять раз не ответил за трёхминутное окно | Владелец проекта / другой исправный Docker-хост или отдельное recovery-решение | Engine дважды отвечает на bounded `docker version`, затем проходит безопасный inspect существующего image; локальные recovery-попытки не повторяются автоматически. |
 | Integrated runtime evidence отсутствует | Интегратор после environment-ready signal | Два последовательных clean cold start, manifests/image IDs, bootstrap/scope, forecast DB/API verification и 5 реально выполненных browser tests. |
 
 `SECURITY_ADMISSION` остаётся не-PASS до runtime evidence. После расширения истории старые PASS не переносятся автоматически. Runtime будет выполняться только в новых собственных `phase8-demo-integration-*` projects; ожидаемые counts, forecast UUID, MAE и даты должны быть сверены с фактически опубликованными manifests и сохранённым pipeline result без изменения модели, provenance или assertions.
