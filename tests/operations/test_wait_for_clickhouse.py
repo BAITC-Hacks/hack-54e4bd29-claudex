@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import socket
+import time
 from dataclasses import replace
 from http.client import HTTPResponse
 from io import BytesIO
@@ -243,6 +244,49 @@ def test_successful_response_completed_after_deadline_fails(
     )
 
     assert exit_code == wait_for_clickhouse.EXIT_DEADLINE
+    assert "category=DEADLINE_EXCEEDED" in lines[-1]
+
+
+def test_chunked_response_read_is_interrupted_at_overall_deadline(
+    config: wait_for_clickhouse.ReadinessConfig,
+) -> None:
+    class DripBody(BytesIO):
+        def _drip(self, size: int) -> bytes:
+            time.sleep(0.05)
+            return super().read(size)
+
+        def read(self, size: int = -1) -> bytes:
+            return self._drip(size)
+
+        def read1(self, size: int = -1) -> bytes:
+            return self._drip(size)
+
+    class DripSocket:
+        def makefile(self, _mode: str) -> BytesIO:
+            return DripBody(
+                b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+                b"1\r\n1\r\n1\r\n\n\r\n0\r\n\r\n"
+            )
+
+    response = HTTPResponse(DripSocket())  # type: ignore[arg-type]
+    response.begin()
+    lines: list[str] = []
+    start = time.monotonic()
+
+    exit_code = wait_for_clickhouse.wait_until_ready(
+        replace(
+            config,
+            request_timeout_seconds=0.06,
+            deadline_seconds=0.07,
+            retry_interval_seconds=0,
+        ),
+        open_url=lambda *_args, **_kwargs: response,
+        emit=lines.append,
+    )
+    elapsed = time.monotonic() - start
+
+    assert exit_code == wait_for_clickhouse.EXIT_DEADLINE
+    assert elapsed < 0.14
     assert "category=DEADLINE_EXCEEDED" in lines[-1]
 
 

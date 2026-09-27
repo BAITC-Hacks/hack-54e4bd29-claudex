@@ -14,8 +14,10 @@ import math
 import os
 import re
 import socket
+import threading
 import time
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -45,6 +47,10 @@ EXIT_HTTP = 2
 EXIT_RESPONSE = 3
 EXIT_CONFIG = 4
 EXIT_NETWORK = 5
+
+
+class _ReadDeadlineError(TimeoutError):
+    """The complete response body exceeded the remaining overall budget."""
 
 
 @dataclass(frozen=True)
@@ -135,6 +141,42 @@ def _request(config: ReadinessConfig) -> Request:
     )
 
 
+def _read_bounded_body(
+    response: Any,
+    *,
+    deadline: float,
+    monotonic: Callable[[], float],
+) -> bytes:
+    """Bound the complete response read, not only each underlying socket read."""
+    body: list[bytes] = []
+    errors: list[Exception] = []
+
+    def read_response() -> None:
+        try:
+            body.append(response.read(MAX_RESPONSE_BYTES + 1))
+        except Exception as error:  # pragma: no cover - re-raised in caller thread
+            errors.append(error)
+
+    worker = threading.Thread(
+        target=read_response,
+        name="clickhouse-readiness-response",
+        daemon=True,
+    )
+    worker.start()
+    worker.join(max(0.0, deadline - monotonic()))
+    if worker.is_alive():
+        close = getattr(response, "close", None)
+        if callable(close):
+            with suppress(OSError):
+                close()
+        raise _ReadDeadlineError("ClickHouse readiness deadline exceeded")
+    if errors:
+        raise errors[0]
+    if not body:
+        raise OSError("ClickHouse readiness response read failed")
+    return body[0]
+
+
 def wait_until_ready(
     config: ReadinessConfig,
     *,
@@ -168,7 +210,18 @@ def wait_until_ready(
             ) as response:
                 status = int(response.status)
                 declared_length = response.headers.get("Content-Length")
-                body = response.read(MAX_RESPONSE_BYTES + 1)
+                body = _read_bounded_body(
+                    response,
+                    deadline=deadline,
+                    monotonic=monotonic,
+                )
+        except _ReadDeadlineError:
+            emit(
+                "CLICKHOUSE_READY_FAIL "
+                f"elapsed_ms={_elapsed_ms(start, monotonic)} attempts={attempts} "
+                "category=DEADLINE_EXCEEDED http_status=none"
+            )
+            return EXIT_DEADLINE
         except HTTPError as error:
             emit(
                 "CLICKHOUSE_READY_FAIL "
