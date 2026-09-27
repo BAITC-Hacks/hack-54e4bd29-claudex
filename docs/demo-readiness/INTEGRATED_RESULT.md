@@ -23,7 +23,7 @@
 
 `DESIGN_INTEGRATION = PENDING`.
 
-Конкретный авторский commit дизайна не передан. В integration HEAD нет самостоятельного design commit; наличие отдельной рабочей ветки без переданного результата не считается интеграцией дизайна.
+Финальный handoff агента 3 получен после recovery-preflight: ветка `feature/frontend-demo-polish`, base `5a8669167ed7f504a36b0c74c4a1f86c30d88ef8`, HEAD `aacdc8b753c944eb22557fd1a7f100a5b00e9d94`, пять frontend-only commits и 32 файла под `frontend/`. Агент сообщил Vitest `23 files / 130 tests`, lint, typecheck и production build PASS, но integration HEAD ещё не содержит этот commit и интегратор ещё не повторил проверки на объединённом SHA. Поэтому дизайн остаётся PENDING, а результаты агента 3 не записываются как integrated PASS.
 
 ## Проверка точек пересечения
 
@@ -86,6 +86,8 @@
 
 Ограниченная read-only диагностика после ранее выполненного однократного restart: активный context — `desktop-linux`, но server-часть `docker version` не вернула ответ за 30 секунд. Диагностический CLI после timeout завершён; Docker Desktop/Engine и другие Docker CLI процессы не останавливались. Фактическое состояние: `ENGINE_SERVER_API = UNRESPONSIVE`, поэтому runtime не начат. В пределах текущего разрешения повторный restart, reset, prune и WSL shutdown запрещены; требуется восстановление Engine вне этого прогона либо отдельное решение владельца проекта о следующем recovery-действии.
 
+Разрешённый следующий recovery-цикл остановлен на шаге 2. Preflight повторно подтвердил `wslEngineEnabled=True`, после чего штатный `docker desktop stop --timeout 60` завершился `exit 1` с категорией `context deadline exceeded`; Docker Desktop/backend процессы остались запущены. В соответствии с условием остановки при зависшем Quit команда `wsl --shutdown` не выполнялась, Docker Desktop повторно не запускался, повторный stop/recovery и более сильные действия не предпринимались. Engine recovery: **FAIL AT DESKTOP STOP**.
+
 | Проверка | Статус |
 | --- | --- |
 | Integrated image build и запись image IDs/build flags | NOT RUN |
@@ -104,7 +106,7 @@
 
 | Блокер | Владелец | Критерий снятия |
 | --- | --- | --- |
-| `P0-ENV`: context `desktop-linux`, server API не ответил за 30 секунд | Владелец проекта / восстановление среды | Engine отвечает на bounded `docker version`; без повторного restart, reset, prune или WSL shutdown в текущем разрешении. |
+| `P0-ENV`: WSL 2 подтверждён, штатный Desktop stop завершился timeout до `wsl --shutdown` | Владелец проекта / отдельное recovery-решение | Docker Desktop штатно останавливается и Engine после согласованного восстановления дважды отвечает на bounded `docker version`; текущий цикл не повторяется. |
 | `DESIGN_INTEGRATION = PENDING` | Автор дизайна | Передан конкретный commit; после объединения повторены затронутые проверки. |
 | Integrated runtime evidence отсутствует | Интегратор после environment-ready signal | Два последовательных clean cold start, manifests/image IDs, bootstrap/scope, forecast DB/API verification и 5 реально выполненных browser tests. |
 
