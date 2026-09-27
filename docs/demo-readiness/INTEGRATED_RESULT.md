@@ -7,13 +7,14 @@
 Объединённый код подготовлен, статические проверки выполнены, runtime ожидает восстановления среды.
 
 - Ветка: `demo/integration` в отдельном managed worktree.
-- Проверенный code HEAD: `48adc3720c1c93f0f874a4e26aba1d7e0a777bc4`.
+- Проверенный code HEAD: `9de6bde4e96f91beae3926a88501ffb83e478b51`.
 - Merge commit forecast + QA/cold-start: `5a8669167ed7f504a36b0c74c4a1f86c30d88ef8`.
 - Product/Copilot ancestor: `78ff9fffc0eaee2c01d4568e5b8b9adf84712ab4`.
 - Forecast: `6014bd784f8f863f20d08ff731ffc027087a3f26`.
 - QA: `e73776be606bae48fe6537ef9d41029752bef4e1`.
 - Cold-start fix: `291e8012f20988e89ae6b327886678ff6d39d22a` и `bc140f5e45ae975d842c842b2c023e37ae839618`.
 - Integration bridge: `48adc3720c1c93f0f874a4e26aba1d7e0a777bc4` добавляет обязательный frontend build arg `NEXT_PUBLIC_SYNTHETIC_DEMO=true` рядом с уже существующим `NEXT_PUBLIC_APP_ENV=test` и loopback OIDC issuer.
+- Readiness review fix: `9de6bde4e96f91beae3926a88501ffb83e478b51` ограничивает общим deadline весь response body read, включая последовательный chunked drip.
 
 `bc140f5` уже содержит QA `e73776b`, оба cold-start commits и общего Copilot ancestor, поэтому QA/Copilot повторно не переносились. Исходные ветки и их worktree не изменялись.
 
@@ -27,7 +28,7 @@
 
 | Контракт | Фактическое состояние |
 | --- | --- |
-| ClickHouse readiness | Generated acceptance overlay содержит `clickhouse-ready`: authenticated HTTP `SELECT 1` в сети `data`, bounded response/deadline и read-only mount helper. |
+| ClickHouse readiness | Generated acceptance overlay содержит `clickhouse-ready`: authenticated HTTP `SELECT 1` в сети `data`, bounded body и hard overall deadline для полного read, read-only mount helper. |
 | Acceptance verifier | `READY` запрещён при missing/nonzero `clickhouse-ready` или failed migration; штатная команда `python -m app.cli.clickhouse migrate` не заменена. |
 | Frontend synthetic build | Launcher теперь передаёт `NEXT_PUBLIC_APP_ENV=test` и `NEXT_PUBLIC_SYNTHETIC_DEMO=true` именно как Docker build args; runtime `.env` не используется как замена build-time embedding. |
 | Synthetic label safety | UI включает подпись только при `NEXT_PUBLIC_SYNTHETIC_DEMO=true` и `NEXT_PUBLIC_APP_ENV=local|test`; production не разрешён. Флаг не считается доказательством provenance. |
@@ -43,7 +44,7 @@
 | Проверка | Результат | Граница результата |
 | --- | --- | --- |
 | SHA/ancestry и merge-tree | PASS | Forecast и QA/cold расходятся от `78ff9ff`; пересекающихся изменённых путей и merge conflicts не было. |
-| Operations pytest | PASS: `177 passed, 1 skipped` | Skip — существующий opt-in PostgreSQL roundtrip, которому нужен isolated Compose project. |
+| Operations pytest | PASS: `178 passed, 1 skipped` | Skip — существующий opt-in PostgreSQL roundtrip, которому нужен isolated Compose project. |
 | Backend pytest | PASS: `660 passed, 12 skipped` | Все 12 skips требуют выделенные PostgreSQL/ClickHouse; это не runtime proof. Остались 14 dependency/deprecation warnings. |
 | ML pytest | PASS: `18 passed` | Локальные unit/synthetic tests, не новый model run. |
 | Frontend Vitest | PASS: `19 files, 123 tests` | Synthetic unit fixtures; не browser runtime. |
@@ -55,6 +56,8 @@
 | Import-linter | PASS: `12 kept, 0 broken` | 283 files / 1541 dependencies; Windows runner запускался с `PYTHONUTF8=1`. |
 | Secret scanner | PASS: `3 passed` | Credentials, realm, cookies, tokens и storage state в evidence не сохранялись. |
 | Playwright discovery | PASS only as discovery | 4 QA tests и 1 opt-in forecast test перечислены; discovery не считается выполнением. |
+
+Финальное независимое review первоначально нашло Important: одиночный `response.read()` мог превысить общий deadline на последовательных коротких chunk reads. Regression test на настоящем `HTTPResponse` воспроизвёл RED (~156 ms при deadline 70 ms); после `9de6bde` полный read прерывается общим бюджетом, targeted helper `16 passed`, operations `178 passed, 1 skipped`. Оставшийся Minor касается только отсутствующего отдельного `ports` assertion в MLflow-тесте и передан владельцу инфраструктуры вместе с review.
 
 ## MLflow base Compose review
 
