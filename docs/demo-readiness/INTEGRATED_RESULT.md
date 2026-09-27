@@ -120,9 +120,10 @@
 5. Выполнить bootstrap/scope, публикацию forecast fixture, существующий pipeline, DB/API verifier, validation fields, четыре QA Playwright tests и один forecast browser test без ослабления assertions/security gates.
 6. Обновить этот отчёт фактическими manifests, image IDs, counts и test outcomes без credentials, cookies, storage state, realm contents или реальных данных.
 
-## VPS runtime preflight, 2026-09-27
+## Исторический VPS preflight до установки Docker, 2026-09-27
 
-`VPS_ENGINE = MISSING`.
+`VPS_ENGINE = MISSING` — историческое состояние, снято последующей установкой
+rootless Docker владельцем VPS. Актуальный результат приведён ниже.
 
 Закрытый synthetic runtime проверялся на VPS `82.115.43.223` в новой SSH-сессии
 пользователя `claudex`, без `sudo` и без системных изменений. Проверенный release
@@ -175,12 +176,99 @@ Docker Engine и Compose plugin штатным административным 
 проверенного integration HEAD. Удалённый release не менялся, push, registry
 publication, main merge и deployment не выполнялись.
 
+## VPS rootless runtime validation, 2026-09-27
+
+`DOCKER_RUNTIME = PASS`, но `PRIVATE_RUNTIME = BLOCKED` до cold start.
+
+Проверка выполнена на `82.115.43.223` в новой SSH-сессии `claudex`, без `sudo`.
+Docker Client и Server — `29.8.1`, Compose — `5.5.1`, context — `rootless`.
+Engine использует `unix:///run/user/1003/docker.sock`, socket принадлежит UID 1003,
+user service активен, security options включают `name=rootless`, Docker root dir —
+`/home/claudex/.local/share/docker`. До нашей работы контейнеров и Compose projects
+у этого daemon не было; порт 8003 имел 0 listeners и не использовался.
+
+Исходный transferred checkout `1038995ce9a1a57a85303b31090c71d3108a95eb`
+был clean. Два минимальных runtime fix выполнены test-first в локальной ветке и
+переданы новыми SHA256-verified bundles в отдельные release directories:
+
+- `4b7939478334a79f5e61d97ec67337453f0fb267` — image scan использует
+  `timezone.utc` вместо недоступного в Python 3.10 `datetime.UTC`;
+- `81317a98209a0a4170273e5d5e765b127f941bdb` — IAM probe в rootless mode
+  запускает client как container `0:0`, который отображается на непривилегированного
+  владельца rootless daemon и может писать только в bind-mounted probe directory.
+
+Финальный проверявшийся checkout:
+`/home/claudex/medflow-demo/releases/81317a9`, ветка
+`feature/vps-demo-runtime`, HEAD `81317a98209a0a4170273e5d5e765b127f941bdb`,
+Git status clean. Regression evidence: image-scan RED на Python 3.10 import,
+затем `10 passed`; rootless IAM RED `1003:1003 != 0:0`, затем `14 passed`;
+совместный MinIO/security набор — `55 passed, 1 skipped`.
+
+### Pre-start security gates и images
+
+Patched source-build использовал signed/pinned MinIO tags и существующий
+`PATCHED_ACCEPTANCE` contract. Advisory gate — PASS для synthetic functional
+acceptance при 10 рассмотренных noncritical advisories. Pinned Trivy `0.58.2`,
+DB updated at `2026-09-27 13:06:25 UTC`, обнаружил Go inventory:
+
+| Image | Content ID | Результат |
+| --- | --- | --- |
+| MinIO server | `sha256:8e4bf689880e8d1afd4e689851aa1aa448ff69868e86bb6b4faeaa4d0444799a` | 50 HIGH / 0 CRITICAL |
+| MinIO client | `sha256:bf43dc38f4ab139bdc006e1c78a7fd02f07fa71880c9bf5cf4592bb2e8fc0a8e` | 44 HIGH / 0 CRITICAL |
+| Backend | `sha256:6272e6b514a8c840414b63fe1ce23e06646f479e32e165bd3fdc3bda709f7765` | built with target `production`; full application scan NOT RUN |
+| Worker | `sha256:967c1bb279ee80aca39866959e1fa446dc8d9db565452bb24c7f8ef43aeb2302` | built with target `production`; full application scan NOT RUN |
+
+MinIO build flags: pinned `linux/amd64`, patched acceptance variant, exact reviewed
+source commits and build contract. Frontend image не был построен, поэтому
+обязательные build args `NEXT_PUBLIC_APP_ENV=test`,
+`NEXT_PUBLIC_SYNTHETIC_DEMO=true` и loopback OIDC issuer ещё не получили runtime
+image evidence. MLflow, frontend, nginx и pipeline images также NOT BUILT.
+
+IAM CVE regression на disposable internal network: PASS; limited user и service
+account import — DENIED, admin import — ALLOWED, permission unchanged, cleanup —
+PASS. Наружные порты, privileged, host network и Docker socket mount не
+использовались.
+
+### Подтверждённые resource/pre-start blockers
+
+Rootless Docker хранится под user quota: soft `4096 MiB`, hard `5120 MiB`.
+После MinIO gates адресно удалены только два exact reclaimable cache records
+нашего build (никаких system/volume/network prune); usage временно снизился до
+`2592 MiB`. Штатный последовательный acceptance `prepare` затем успешно собрал
+backend и worker, но остановился на следующем по порядку MLflow build с
+`AcceptanceCommandError`. На момент остановки quota usage — `4275 MiB`, build
+cache — `3.828 GB`, hard limit близок; acceptance directory ещё не создан,
+Compose config/start не выполнялись, project containers/volumes/networks — 0.
+
+Отдельно на host отсутствует `setfacl`. Текущий fail-closed launcher требует его,
+чтобы дать проверенному non-root Keycloak UID адресный read-доступ к generated
+realm, не делая secret world-readable. Пакет не устанавливался, fallback и
+permissions не ослаблялись.
+
+Host RAM: 3911 MiB total; минимальное observed available во время builds —
+2550 MiB, то есть максимальное наблюдаемое host usage около 1361 MiB. OOM не
+наблюдался. Ограничивающим ресурсом стала дисковая quota, не RAM.
+
+| Runtime-область | Актуальный статус |
+| --- | --- |
+| Cold start 1 / cold start 2 | NOT RUN — prepare blocked до Compose config/start |
+| Bootstrap / signed-token scope | NOT RUN |
+| Forecast fixture / pipeline / DB / API | NOT RUN; forecast ID и MAE отсутствуют |
+| QA Playwright | 0 реально выполненных tests |
+| Forecast Playwright | 0 реально выполненных tests |
+| Design | INCLUDED в source ancestry; VPS browser runtime NOT TESTED |
+| Copilot | `COPILOT_ENABLED=false` запланирован; disabled-state NOT TESTED, `LLM_API_KEY` не задавался |
+| `PRIVATE_RUNTIME` | BLOCKED_BY_VPS_QUOTA_AND_ACL_TOOLING |
+| `PUBLIC_ACCESS` | NOT ATTEMPTED; 8003, reverse proxy, firewall и ingress не менялись |
+| `SECURITY_ADMISSION` | FAIL из-за оставшихся HIGH findings и отсутствия полного runtime evidence |
+
 ## Оставшиеся блокеры и владельцы
 
 | Блокер | Владелец | Критерий снятия |
 | --- | --- | --- |
 | `P0-ENV`: после Windows reboot server API пять раз не ответил за трёхминутное окно | Владелец проекта / другой исправный Docker-хост или отдельное recovery-решение | Engine дважды отвечает на bounded `docker version`, затем проходит безопасный inspect существующего image; локальные recovery-попытки не повторяются автоматически. |
-| `P0-VPS-ENV`: на VPS отсутствуют Docker CLI, daemon socket/service, Compose plugin и группа `docker` | Владелец VPS | На `82.115.43.223` в новой SSH-сессии `claudex` Docker client/server и Compose возвращают версии, context подтверждён, user access проходит без изменения socket permissions. |
+| `P0-VPS-QUOTA`: quota `4096/5120 MiB`, usage `4275 MiB` после только двух из шести app images | Владелец VPS | Увеличить quota для `claudex` либо предоставить согласованный build host/export; затем exact images должны быть собраны и проверены без global prune. |
+| `P0-VPS-ACL`: `setfacl` отсутствует | Владелец VPS | Предоставить штатный `acl/setfacl` либо отдельно согласовать и протестировать столь же адресный rootless-safe механизм; realm не должен стать world-readable. |
 | Integrated runtime evidence отсутствует | Интегратор после environment-ready signal | Два последовательных clean cold start, manifests/image IDs, bootstrap/scope, forecast DB/API verification и 5 реально выполненных browser tests. |
 
 `SECURITY_ADMISSION` остаётся не-PASS до runtime evidence. После расширения истории старые PASS не переносятся автоматически. Следующий VPS runtime будет выполняться только в новых собственных `phase8-claudex-vps-*` projects; прежнее имя `phase8-demo-integration-*` относится только к локальному плану до переноса. Ожидаемые counts, forecast UUID, MAE и даты должны быть сверены с фактически опубликованными manifests и сохранённым pipeline result без изменения модели, provenance или assertions.
