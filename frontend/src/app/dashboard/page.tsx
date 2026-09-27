@@ -115,7 +115,7 @@ function DashboardContent() {
         <FilterBar value={query} onChange={setQuery} />
         <p className="text-sm text-muted-foreground">{query.region ? "Показатели отфильтрованы по региону, выбранному на карте." : "Показатели для всей доступной области данных."} <Link href="/command-center" className="underline">Выбрать регион на карте</Link></p>
         {pending && <LoadingState />}
-        {error && <ErrorState label="Агрегированные показатели временно недоступны. Повторите позже." />}
+        {error && <ErrorState label="Не удалось получить агрегированные данные. Повторите позже." />}
         {overview &&
           referrals &&
           refusals &&
