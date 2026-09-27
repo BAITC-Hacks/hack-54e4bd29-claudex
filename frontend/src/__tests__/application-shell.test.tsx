@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApplicationShell } from "@/components/application-shell";
 
-const state = vi.hoisted(() => ({ isAuthenticated: true, pathname: "/signals" }));
+const state = vi.hoisted(() => ({ isAuthenticated: true, pathname: "/signals", disclaimerEnabled: true }));
 
 vi.mock("next/navigation", () => ({ usePathname: () => state.pathname }));
 vi.mock("next/link", () => ({
@@ -15,10 +15,15 @@ vi.mock("@/features/monitoring/local-research", () => ({ useLocalResearch: () =>
 vi.mock("@/features/auth/auth-context", () => ({
   useAuth: () => ({ isAuthenticated: state.isAuthenticated, login: vi.fn(), logout: vi.fn() }),
 }));
+vi.mock("@/config/env", () => ({
+  DECISION_SUPPORT_NOTICE: "Решение принимает уполномоченный сотрудник.",
+  env: { get disclaimerEnabled() { return state.disclaimerEnabled; } },
+}));
 
 afterEach(() => {
   state.isAuthenticated = true;
   state.pathname = "/signals";
+  state.disclaimerEnabled = true;
 });
 
 describe("ApplicationShell", () => {
@@ -53,5 +58,12 @@ describe("ApplicationShell", () => {
 
     expect(screen.queryByRole("navigation", { name: "Основная навигация" })).not.toBeInTheDocument();
     expect(screen.getByText("Публичная страница")).toBeInTheDocument();
+  });
+
+  it("honors the existing disclaimer feature flag", () => {
+    state.disclaimerEnabled = false;
+    render(<ApplicationShell><p>Рабочая область</p></ApplicationShell>);
+
+    expect(screen.queryByText("Решение принимает уполномоченный сотрудник.")).not.toBeInTheDocument();
   });
 });

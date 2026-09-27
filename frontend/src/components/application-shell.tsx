@@ -20,7 +20,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
-import { DECISION_SUPPORT_NOTICE } from "@/config/env";
+import { DECISION_SUPPORT_NOTICE, env } from "@/config/env";
 import { useAuth } from "@/features/auth/auth-context";
 import { cn } from "@/utils/cn";
 import { SiteHeader } from "@/components/site-header";
@@ -125,6 +125,8 @@ function AppBrand() {
 }
 
 function AppFooter() {
+  if (!env.disclaimerEnabled) return null;
+
   return (
     <footer className="border-t border-slate-200 bg-white px-4 py-4 sm:px-6 lg:px-8">
       <p className="mx-auto max-w-[1440px] text-[11px] leading-5 text-slate-500">{DECISION_SUPPORT_NOTICE}</p>
