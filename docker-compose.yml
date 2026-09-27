@@ -117,6 +117,7 @@ services:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
       NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-local}
       NEXT_PUBLIC_DISCLAIMER_ENABLED: ${NEXT_PUBLIC_DISCLAIMER_ENABLED:-true}
+      NEXT_PUBLIC_SYNTHETIC_DEMO: ${NEXT_PUBLIC_SYNTHETIC_DEMO:-false}
       WATCHPACK_POLLING: "true"
     volumes:
       # Монтируются только исходники. Корень /app остаётся во владении
@@ -411,6 +412,10 @@ services:
       - server
       - --host=0.0.0.0
       - --port=5000
+      # MLflow 3 checks Host headers; internal clients address this service as
+      # mlflow:5000. Keep its private DNS name explicit instead of disabling
+      # the host-validation middleware.
+      - --allowed-hosts=mlflow:5000,mlflow,localhost:5000,localhost,127.0.0.1:5000,127.0.0.1
       - --backend-store-uri=postgresql://${POSTGRES_USER:-medsignal}:${POSTGRES_PASSWORD}@postgres:5432/${MLFLOW_DB_NAME:-mlflow}
       - --artifacts-destination=s3://medsignal-models
       - --serve-artifacts
