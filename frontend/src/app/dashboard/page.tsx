@@ -19,6 +19,7 @@ import { formatPeriod } from "@/features/analytics/format";
 import { useSituationCenter } from "@/features/analytics/hooks";
 import type { AnalyticsQuery } from "@/features/analytics/types";
 import { ReferralForecastCard } from "@/features/forecasting/components/referral-forecast-card";
+import { syntheticDemoLabelEnabled } from "@/features/forecasting/demo-context";
 import { useLatestReferralForecast } from "@/features/forecasting/hooks";
 import { SignalTable } from "@/features/signals/signal-table";
 import { useSignals } from "@/hooks/use-domain";
@@ -100,7 +101,7 @@ export default function DashboardPage() {
               forecast={referralForecast.data}
               isLoading={referralForecast.isPending}
               error={referralForecast.error}
-              isSyntheticDemo={process.env.NEXT_PUBLIC_APP_ENV === "local" && process.env.NEXT_PUBLIC_SYNTHETIC_DEMO === "true"}
+              isSyntheticDemo={syntheticDemoLabelEnabled(process.env.NEXT_PUBLIC_APP_ENV, process.env.NEXT_PUBLIC_SYNTHETIC_DEMO)}
             />
             <section className="rounded-lg border bg-card p-5">
               <h2 className="font-semibold">Расчётный сценарий</h2>
