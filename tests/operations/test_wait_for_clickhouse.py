@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import socket
 from dataclasses import replace
+from http.client import HTTPResponse
 from io import BytesIO
+from typing import Any
 from urllib.error import HTTPError, URLError
 
 import pytest
@@ -23,8 +26,11 @@ class FakeClock:
 
 
 class FakeResponse:
-    def __init__(self, body: bytes, *, status: int = 200) -> None:
+    def __init__(
+        self, body: bytes, *, status: int = 200, headers: dict[str, str] | None = None
+    ) -> None:
         self.status = status
+        self.headers = headers or {}
         self._body = BytesIO(body)
         self.read_sizes: list[int] = []
 
@@ -37,6 +43,20 @@ class FakeResponse:
     def read(self, size: int = -1) -> bytes:
         self.read_sizes.append(size)
         return self._body.read(size)
+
+
+class FakeSocket:
+    def __init__(self, response: bytes) -> None:
+        self._response = response
+
+    def makefile(self, _mode: str) -> BytesIO:
+        return BytesIO(self._response)
+
+
+def parsed_http_response(response: bytes) -> HTTPResponse:
+    parsed = HTTPResponse(FakeSocket(response))  # type: ignore[arg-type]
+    parsed.begin()
+    return parsed
 
 
 @pytest.fixture
@@ -165,3 +185,137 @@ def test_http_200_with_unexpected_body_fails_without_retry(
     assert calls == 1
     assert "category=UNEXPECTED_RESPONSE" in lines[-1]
     assert "http_status=200" in lines[-1]
+
+
+def test_truncated_declared_body_cannot_report_ready(
+    config: wait_for_clickhouse.ReadinessConfig,
+) -> None:
+    response = parsed_http_response(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n1\n")
+    lines: list[str] = []
+
+    exit_code = wait_for_clickhouse.wait_until_ready(
+        config,
+        open_url=lambda *_args, **_kwargs: response,
+        monotonic=lambda: 0.0,
+        sleep=lambda _seconds: None,
+        emit=lines.append,
+    )
+
+    assert exit_code != 0
+    assert "category=INCOMPLETE_RESPONSE" in lines[-1]
+
+
+def test_complete_chunked_select_response_can_report_ready(
+    config: wait_for_clickhouse.ReadinessConfig,
+) -> None:
+    response = parsed_http_response(
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n" b"2\r\n1\n\r\n0\r\n\r\n"
+    )
+
+    exit_code = wait_for_clickhouse.wait_until_ready(
+        config,
+        open_url=lambda *_args, **_kwargs: response,
+        monotonic=lambda: 0.0,
+        sleep=lambda _seconds: None,
+        emit=lambda _line: None,
+    )
+
+    assert exit_code == 0
+
+
+def test_successful_response_completed_after_deadline_fails(
+    config: wait_for_clickhouse.ReadinessConfig,
+) -> None:
+    clock = FakeClock()
+    lines: list[str] = []
+
+    class LateResponse(FakeResponse):
+        def read(self, size: int = -1) -> bytes:
+            clock.now = 2.0
+            return super().read(size)
+
+    exit_code = wait_for_clickhouse.wait_until_ready(
+        replace(config, deadline_seconds=1.0),
+        open_url=lambda *_args, **_kwargs: LateResponse(b"1\n"),
+        monotonic=clock.monotonic,
+        sleep=clock.sleep,
+        emit=lines.append,
+    )
+
+    assert exit_code == wait_for_clickhouse.EXIT_DEADLINE
+    assert "category=DEADLINE_EXCEEDED" in lines[-1]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("request_timeout_seconds", float("inf")),
+        ("deadline_seconds", float("nan")),
+        ("retry_interval_seconds", float("inf")),
+    ],
+)
+def test_nonfinite_timing_configuration_is_rejected(
+    field: str,
+    value: float,
+    config: wait_for_clickhouse.ReadinessConfig,
+) -> None:
+    with pytest.raises(ValueError, match="timeout|interval"):
+        replace(config, **{field: value}).validate()
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        PermissionError(13, "synthetic permission denial"),
+        socket.gaierror(socket.EAI_NONAME, "synthetic permanent DNS failure"),
+    ],
+)
+def test_permanent_network_errors_fail_immediately_without_retry(
+    reason: OSError,
+    config: wait_for_clickhouse.ReadinessConfig,
+) -> None:
+    clock = FakeClock()
+    lines: list[str] = []
+    calls = 0
+
+    def rejected(_request: object, *, timeout: float) -> Any:
+        nonlocal calls
+        calls += 1
+        raise URLError(reason)
+
+    exit_code = wait_for_clickhouse.wait_until_ready(
+        config,
+        open_url=rejected,
+        monotonic=clock.monotonic,
+        sleep=clock.sleep,
+        emit=lines.append,
+    )
+
+    assert exit_code == wait_for_clickhouse.EXIT_NETWORK
+    assert calls == 1
+    assert "category=NETWORK_ERROR" in lines[-1]
+
+
+def test_temporary_dns_error_retries_then_succeeds(
+    config: wait_for_clickhouse.ReadinessConfig,
+) -> None:
+    clock = FakeClock()
+    calls = 0
+
+    def open_url(_request: object, *, timeout: float) -> FakeResponse:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise URLError(socket.gaierror(socket.EAI_AGAIN, "synthetic temporary DNS"))
+        return FakeResponse(b"1\n")
+
+    exit_code = wait_for_clickhouse.wait_until_ready(
+        config,
+        open_url=open_url,
+        monotonic=clock.monotonic,
+        sleep=clock.sleep,
+        emit=lambda _line: None,
+    )
+
+    assert exit_code == 0
+    assert calls == 2

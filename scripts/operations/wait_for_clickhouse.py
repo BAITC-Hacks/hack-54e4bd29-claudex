@@ -9,8 +9,11 @@ never logged.
 from __future__ import annotations
 
 import base64
+import errno
+import math
 import os
 import re
+import socket
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -23,6 +26,18 @@ DEFAULT_REQUEST_TIMEOUT_SECONDS = 2.0
 DEFAULT_DEADLINE_SECONDS = 90.0
 DEFAULT_RETRY_INTERVAL_SECONDS = 0.5
 HOST_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]*")
+RETRYABLE_NETWORK_ERRNOS = frozenset(
+    {
+        errno.ECONNABORTED,
+        errno.ECONNREFUSED,
+        errno.ECONNRESET,
+        errno.EHOSTUNREACH,
+        errno.ENETDOWN,
+        errno.ENETUNREACH,
+        errno.EPIPE,
+        errno.ETIMEDOUT,
+    }
+)
 
 EXIT_READY = 0
 EXIT_DEADLINE = 1
@@ -78,9 +93,14 @@ class ReadinessConfig:
             raise ValueError("invalid ClickHouse port")
         if not self.username or not self.password:
             raise ValueError("missing ClickHouse credentials")
-        if self.request_timeout_seconds <= 0 or self.deadline_seconds <= 0:
+        if not all(
+            math.isfinite(value)
+            for value in (self.request_timeout_seconds, self.deadline_seconds)
+        ) or (self.request_timeout_seconds <= 0 or self.deadline_seconds <= 0):
             raise ValueError("invalid ClickHouse timeout")
-        if self.retry_interval_seconds < 0:
+        if not math.isfinite(self.retry_interval_seconds) or (
+            self.retry_interval_seconds < 0
+        ):
             raise ValueError("invalid ClickHouse retry interval")
 
 
@@ -91,9 +111,14 @@ def _elapsed_ms(start: float, monotonic: Callable[[], float]) -> int:
 def _retryable_network_error(error: BaseException) -> bool:
     if isinstance(error, HTTPError):
         return False
-    if isinstance(error, URLError):
-        return isinstance(error.reason, OSError)
-    return isinstance(error, OSError)
+    reason = error.reason if isinstance(error, URLError) else error
+    if isinstance(reason, PermissionError):
+        return False
+    if isinstance(reason, socket.gaierror):
+        return reason.errno == socket.EAI_AGAIN
+    if isinstance(reason, TimeoutError | ConnectionError):
+        return True
+    return isinstance(reason, OSError) and reason.errno in RETRYABLE_NETWORK_ERRNOS
 
 
 def _request(config: ReadinessConfig) -> Request:
@@ -142,6 +167,7 @@ def wait_until_ready(
                 timeout=min(config.request_timeout_seconds, remaining),
             ) as response:
                 status = int(response.status)
+                declared_length = response.headers.get("Content-Length")
                 body = response.read(MAX_RESPONSE_BYTES + 1)
         except HTTPError as error:
             emit(
@@ -173,6 +199,13 @@ def wait_until_ready(
             sleep(min(config.retry_interval_seconds, max(0.0, deadline - monotonic())))
             continue
 
+        if monotonic() > deadline:
+            emit(
+                "CLICKHOUSE_READY_FAIL "
+                f"elapsed_ms={_elapsed_ms(start, monotonic)} attempts={attempts} "
+                "category=DEADLINE_EXCEEDED http_status=none"
+            )
+            return EXIT_DEADLINE
         if status != 200:
             emit(
                 "CLICKHOUSE_READY_FAIL "
@@ -180,6 +213,22 @@ def wait_until_ready(
                 f"category=HTTP_ERROR http_status={status}"
             )
             return EXIT_HTTP
+        try:
+            expected_length = (
+                int(declared_length) if declared_length is not None else None
+            )
+        except ValueError:
+            expected_length = -1
+        if expected_length is not None and (
+            expected_length < 0 or expected_length != len(body)
+        ):
+            emit(
+                "CLICKHOUSE_READY_FAIL "
+                f"elapsed_ms={_elapsed_ms(start, monotonic)} attempts={attempts} "
+                "category=INCOMPLETE_RESPONSE http_status=200 "
+                f"response_bytes={len(body)}"
+            )
+            return EXIT_RESPONSE
         if len(body) > MAX_RESPONSE_BYTES or body.strip() != b"1":
             emit(
                 "CLICKHOUSE_READY_FAIL "
