@@ -29,6 +29,8 @@ export const referralForecastSchema = z.object({
   horizon_days: z.number().int().positive(),
   input_period_start: z.string(),
   input_period_end: z.string(),
+  validation_period_start: z.string().nullable().optional(),
+  validation_period_end: z.string().nullable().optional(),
   forecast_start: z.string(),
   forecast_end: z.string(),
   generated_at: z.string(),

@@ -14,6 +14,7 @@ class QueryScope:
     include_unmapped: bool
     mapping_version: str | None = None
     published_import_ids: tuple[uuid.UUID, ...] | None = None
+    waiting_import_ids: tuple[uuid.UUID, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)

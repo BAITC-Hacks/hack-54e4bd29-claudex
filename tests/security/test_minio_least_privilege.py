@@ -73,6 +73,14 @@ def test_application_services_never_receive_minio_root_credentials() -> None:
     assert "APP_ENV: production" in production[production.index("  minio-init:\n") :]
 
 
+def test_bootstrap_treats_generated_secrets_as_positional_values() -> None:
+    bootstrap = (ROOT / "infrastructure" / "minio" / "bootstrap.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "mc alias set -- local" in bootstrap
+    assert 'mc admin user add -- local "$key" "$secret"' in bootstrap
+
+
 def test_bucket_policies_do_not_grant_raw_or_cross_role_access() -> None:
     for policy in ("app", "worker", "pipeline", "mlflow"):
         resources = _resources(policy)
@@ -233,3 +241,34 @@ if printf 'synthetic' | mc pipe worker/medsignal-models/no-write \
         # project or source dataset is ever touched.
         cleanup = compose("down", "--volumes", "--remove-orphans")
         assert cleanup.returncode == 0, cleanup.stderr
+
+
+def test_bootstrap_passes_dash_prefixed_secrets_as_positional_args(tmp_path: Path) -> None:
+    """Random URL-safe secrets may start with '-'; mc must not parse them as flags."""
+    mc = tmp_path / "mc"
+    mc.write_text(
+        '#!/bin/sh\n'
+        'if [ "$1 $2" = "alias set" ]; then [ "$3" = "--" ] || exit 42; fi\n'
+        'if [ "$1 $2 $3" = "admin user add" ]; then [ "$4" = "--" ] || exit 43; fi\n'
+        'exit 0\n',
+        encoding="utf-8",
+    )
+    mc.chmod(0o700)
+    environment = {
+        **os.environ,
+        "PATH": f"{tmp_path}:{os.environ['PATH']}",
+        "APP_ENV": "local",
+        "MINIO_ROOT_USER": "synthetic-root",
+        "MINIO_ROOT_PASSWORD": "-synthetic-root-password",
+    }
+    for role in ("APP", "WORKER", "PIPELINE", "MLFLOW"):
+        environment[f"MINIO_{role}_ACCESS_KEY"] = f"synthetic-{role}"
+        environment[f"MINIO_{role}_SECRET_KEY"] = f"-synthetic-{role}-password"
+    result = subprocess.run(
+        ["/bin/sh", str(ROOT / "infrastructure/minio/bootstrap.sh")],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

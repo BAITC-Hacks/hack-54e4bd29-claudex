@@ -29,6 +29,8 @@ class StubForecastService:
             generated_at=datetime(2025, 4, 2, tzinfo=UTC),
             input_period_start=datetime(2025, 1, 1, tzinfo=UTC),
             input_period_end=datetime(2025, 3, 31, tzinfo=UTC),
+            validation_period_start=date(2025, 2, 12),
+            validation_period_end=date(2025, 3, 25),
             forecast_start=date(2025, 4, 1),
             forecast_end=date(2025, 4, 7),
             model_version="referrals-global-v1",
@@ -68,6 +70,8 @@ def test_latest_referral_forecast_has_provenance_and_no_confidence_claim(
     assert body["target"] == "DAILY_REFERRAL_COUNT"
     assert body["scope_type"] == "GLOBAL"
     assert body["model_version"] == "referrals-global-v1"
+    assert body["validation_period_start"] == "2025-02-12"
+    assert body["validation_period_end"] == "2025-03-25"
     assert body["forecast"][0] == {
         "date": "2025-04-01",
         "predicted_value": 101.0,

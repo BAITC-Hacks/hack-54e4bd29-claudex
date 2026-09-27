@@ -57,7 +57,14 @@ class FakeEngine:
             metrics=ForecastMetricSet(3.0, 0.02, 4.0),
             strongest_baseline="weekly_naive",
             baseline_metrics=ForecastMetricSet(3.0, 0.02, 4.0),
-            validation_folds=({"index": 1},),
+            validation_folds=(
+                {
+                    "index": 1,
+                    "train_end": "2025-02-11",
+                    "validation_start": "2025-02-12",
+                    "validation_end": "2025-02-18",
+                },
+            ),
             candidate_metrics=({"model": "weekly_naive", "mae": 3.0},),
             selection_rationale="baseline retained",
             points=tuple(
@@ -191,6 +198,8 @@ def test_expired_forecast_is_returned_as_stale_with_explicit_limitation() -> Non
     result = service.latest_referral_forecast(_context(Role.ADMIN, global_scope=True))
 
     assert result.freshness_status == "STALE"
+    assert result.validation_period_start == date(2025, 2, 12)
+    assert result.validation_period_end == date(2025, 2, 18)
     assert any("период действия" in item.lower() for item in result.limitations)
 
 

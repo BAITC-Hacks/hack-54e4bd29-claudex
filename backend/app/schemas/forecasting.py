@@ -38,6 +38,8 @@ class ReferralForecastResponse(BaseModel):
     horizon_days: int
     input_period_start: datetime
     input_period_end: datetime
+    validation_period_start: date | None = None
+    validation_period_end: date | None = None
     forecast_start: date
     forecast_end: date
     generated_at: datetime

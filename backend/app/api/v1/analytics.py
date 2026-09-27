@@ -242,6 +242,8 @@ def waiting_summary(
     )
     return WaitingSummaryResponse(
         data=WaitingSummaryData(
+            snapshot_at=result.snapshot_at,
+            snapshot_semantics_confirmed=result.snapshot_semantics_confirmed,
             waiting_records=_cell(result.waiting_records),
             median_days=_cell(result.median_days),
             p75_days=_cell(result.p75_days),

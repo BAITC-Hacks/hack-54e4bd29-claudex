@@ -442,7 +442,7 @@ def test_mixed_waiting_delta_snapshot_age_uses_own_verified_snapshot_ids(databas
 
         def waiting_summary(self, _filters, scope):
             self.scope = scope
-            age = 59.0 if ids[0] in scope.published_import_ids else 31.0
+            age = 59.0 if ids[0] in scope.waiting_import_ids else 31.0
             return RawWaitingSummary(
                 datetime(2025, 2, 1, tzinfo=UTC), 1, 0, age, age, age, age
             )
@@ -451,7 +451,8 @@ def test_mixed_waiting_delta_snapshot_age_uses_own_verified_snapshot_ids(databas
     result = make_service(probe, metadata, FakeCache()).waiting_summary(
         context, DATE_FILTER
     )
-    assert probe.scope.published_import_ids == (ids[1],)
+    assert set(probe.scope.published_import_ids) == set(ids)
+    assert probe.scope.waiting_import_ids == (ids[1],)
     assert result.median_days.value == 31.0
     readiness = metadata.delivery_readiness("WAITING")
     assert set(readiness.published_import_ids) == set(ids)

@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ReferralForecastCard } from "@/features/forecasting/components/referral-forecast-card";
+import { ApiError } from "@/services/api-client";
 import type { ReferralForecast } from "@/features/forecasting/types";
 
 vi.mock("echarts", () => ({
@@ -15,6 +16,8 @@ const forecast: ReferralForecast = {
   horizon_days: 7,
   input_period_start: "2025-01-01T00:00:00Z",
   input_period_end: "2025-03-31T00:00:00Z",
+  validation_period_start: "2025-02-12",
+  validation_period_end: "2025-03-25",
   forecast_start: "2025-04-01",
   forecast_end: "2025-04-07",
   generated_at: "2025-04-01T10:00:00Z",
@@ -33,21 +36,37 @@ const forecast: ReferralForecast = {
 
 describe("ReferralForecastCard", () => {
   it("shows persisted forecast provenance, baseline and limitation", () => {
-    render(<ReferralForecastCard forecast={forecast} isLoading={false} error={null} />);
+    render(<ReferralForecastCard forecast={forecast} isLoading={false} error={null} isSyntheticDemo />);
 
     expect(screen.getByText("Краткосрочный прогноз потока направлений")).toBeInTheDocument();
     expect(screen.getByText(/weekly_naive/)).toBeInTheDocument();
     expect(screen.getByText(/Годовая сезонность не подтверждена\./)).toBeInTheDocument();
     expect(screen.getByText(forecast.disclaimer)).toBeInTheDocument();
-    expect(screen.getByText(/Исторический прогноз/)).toBeInTheDocument();
+    expect(screen.getByText(/Историческая валидация прогноза/)).toBeInTheDocument();
+    expect(screen.getByText(/Прогноз на синтетических демонстрационных данных/)).toBeInTheDocument();
+    expect(screen.getByText(/Историческая валидация модели/)).toBeInTheDocument();
+    expect(screen.getByText(/MAE модели: 12,3 направлений\/день/)).toBeInTheDocument();
+    expect(screen.getByText(/MAE baseline: 12,3 направлений\/день/)).toBeInTheDocument();
+    expect(screen.getByText(/Идентификатор прогноза:/)).toBeInTheDocument();
+    expect(screen.getByText(/Источник: ИС БГ/)).toBeInTheDocument();
+    expect(screen.getByText(/Исходные данные:/)).toBeInTheDocument();
+    expect(screen.getByText(/Период оценки:/)).toBeInTheDocument();
+    expect(screen.getByText(/Целевой показатель: ежедневное число направлений/i)).toBeInTheDocument();
+    expect(screen.getByText(/Область: вся система \(GLOBAL\)/i)).toBeInTheDocument();
     expect(screen.queryByText(/перегрузк/i)).not.toBeInTheDocument();
   });
 
   it("shows an explicit unavailable state instead of a zero forecast", () => {
-    render(<ReferralForecastCard forecast={undefined} isLoading={false} error={new Error("404")} />);
+    render(<ReferralForecastCard forecast={undefined} isLoading={false} error={new ApiError("NOT_FOUND", "Not found", 404, null)} />);
 
     expect(screen.getByText(/Прогноз пока недоступен/)).toBeInTheDocument();
     expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
+  });
+
+  it("distinguishes a transport error from an unpublished forecast", () => {
+    render(<ReferralForecastCard forecast={undefined} isLoading={false} error={new Error("Network failed")} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Не удалось загрузить прогноз");
+    expect(screen.queryByText(/Прогноз пока недоступен/)).not.toBeInTheDocument();
   });
 
   it("shows a loading state", () => {

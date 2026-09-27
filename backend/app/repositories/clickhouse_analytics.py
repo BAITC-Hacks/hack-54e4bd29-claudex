@@ -183,6 +183,11 @@ class ClickHouseAnalyticsRepository:
                 else ""
             )
             expected_source = "ЭРСБ" if table == "fact_treated_snapshot" else "ИС БГ"
+            waiting_publication = (
+                "AND f.import_id IN {waiting_import_ids:Array(UUID)}"
+                if table == "fact_waiting_events"
+                else ""
+            )
             relation = f"""FROM (
                 SELECT f.* EXCEPT ({excluded}),
                        m.resolved_id AS {hospital}{region_select}
@@ -195,12 +200,21 @@ class ClickHouseAnalyticsRepository:
                 ) AS m ON f.{key} = m.source_key AND f.source_system = '{expected_source}'
                 {region_join}
                 WHERE f.import_id IN {{published_import_ids:Array(UUID)}}
+                  {waiting_publication}
             )"""
             query = query.replace(source, relation)
         params = dict(parameters or {})
         params.update(
             mapping_version=scope.mapping_version or "",
             published_import_ids=[str(i) for i in scope.published_import_ids or ()],
+            waiting_import_ids=[
+                str(i)
+                for i in (
+                    scope.waiting_import_ids
+                    if scope.waiting_import_ids is not None
+                    else scope.published_import_ids or ()
+                )
+            ],
         )
         with observe_clickhouse_query("fact_read"):
             return self._client.query(query, parameters=params)
@@ -283,6 +297,9 @@ class ClickHouseAnalyticsRepository:
     def waiting_summary(
         self, filters: AnalyticsFilter, scope: QueryScope
     ) -> RawWaitingSummary:
+        snapshot = self._latest_waiting_snapshot(filters, scope)
+        if snapshot is None:
+            return RawWaitingSummary(None, 0, 0, None, None, None, None)
         scope_sql, scope_params = _scope_sql("hospital_id", scope)
         identity_sql, identity_params = _organization_sql(
             filters,
@@ -297,17 +314,7 @@ class ClickHouseAnalyticsRepository:
         profile_sql = _profile_sql(filters)
         query = f"""
             /* analytics:waiting-summary */
-            WITH (
-                SELECT max(snapshot_dt)
-                FROM fact_waiting_events
-                WHERE registration_dt >= {{date_from:DateTime64(3)}}
-                  AND registration_dt <= {{date_to:DateTime64(3)}}
-                  AND {scope_sql}
-                  AND {identity_sql}
-                  AND {profile_sql}
-            ) AS latest_snapshot
             SELECT
-                latest_snapshot,
                 count(),
                 countIf(snapshot_dt < registration_dt),
                 quantileTDigestIf(0.5)({age}, snapshot_dt >= registration_dt),
@@ -315,7 +322,7 @@ class ClickHouseAnalyticsRepository:
                 quantileTDigestIf(0.9)({age}, snapshot_dt >= registration_dt),
                 maxIf({age}, snapshot_dt >= registration_dt)
             FROM fact_waiting_events
-            WHERE snapshot_dt = latest_snapshot
+            WHERE snapshot_dt = {{selected_snapshot:DateTime64(3)}}
               AND registration_dt >= {{date_from:DateTime64(3)}}
               AND registration_dt <= {{date_to:DateTime64(3)}}
               AND {scope_sql}
@@ -325,23 +332,51 @@ class ClickHouseAnalyticsRepository:
         rows = self._query(
             scope,
             query,
-            parameters=_base_parameters(filters) | scope_params | identity_params,
+            parameters=_base_parameters(filters)
+            | scope_params
+            | identity_params
+            | {"selected_snapshot": snapshot},
         ).result_rows
         if not rows:
             return RawWaitingSummary(None, 0, 0, None, None, None, None)
         row = rows[0]
-        waiting_records = int(row[1])
+        waiting_records = int(row[0])
         if waiting_records == 0:
-            return RawWaitingSummary(None, 0, int(row[2]), None, None, None, None)
+            return RawWaitingSummary(snapshot, 0, int(row[1]), None, None, None, None)
         return RawWaitingSummary(
-            snapshot_dt=row[0],
+            snapshot_dt=snapshot,
             waiting_records=waiting_records,
-            excluded_chronology_conflicts=int(row[2]),
-            median_days=_finite_float(row[3]),
-            p75_days=_finite_float(row[4]),
-            p90_days=_finite_float(row[5]),
-            oldest_days=_finite_float(row[6]),
+            excluded_chronology_conflicts=int(row[1]),
+            median_days=_finite_float(row[2]),
+            p75_days=_finite_float(row[3]),
+            p90_days=_finite_float(row[4]),
+            oldest_days=_finite_float(row[5]),
         )
+
+    def _latest_waiting_snapshot(
+        self, filters: AnalyticsFilter, scope: QueryScope
+    ) -> Any | None:
+        """Choose the latest published snapshot before filtering registration cohorts."""
+        scope_sql, scope_params = _scope_sql("hospital_id", scope)
+        identity_sql, identity_params = _organization_sql(
+            filters,
+            identity_space="IS_BG:WAITING:DESTINATION",
+            source_column="hospital_source",
+            hospital_column="hospital_id",
+        )
+        query = f"""
+            /* analytics:latest-waiting-snapshot */
+            SELECT maxOrNull(snapshot_dt)
+            FROM fact_waiting_events
+            WHERE {scope_sql}
+              AND {identity_sql}
+        """
+        rows = self._query(
+            scope,
+            query,
+            parameters=scope_params | identity_params,
+        ).result_rows
+        return rows[0][0] if rows else None
 
     def observed_waiting(
         self, filters: AnalyticsFilter, scope: QueryScope
@@ -399,6 +434,7 @@ class ClickHouseAnalyticsRepository:
         )
 
     def overview(self, filters: AnalyticsFilter, scope: QueryScope) -> RawOverview:
+        waiting_snapshot = self._latest_waiting_snapshot(filters, scope)
         referral_scope, referral_params = _scope_sql("receiving_hospital_id", scope)
         waiting_scope, waiting_params = _scope_sql("hospital_id", scope)
         refusal_scope, refusal_params = _scope_sql("hospital_id", scope)
@@ -445,7 +481,8 @@ class ClickHouseAnalyticsRepository:
             /* analytics:overview-waiting */
             SELECT count(), uniqExact(hospital_source), uniqExact(region_source)
             FROM fact_waiting_events
-            WHERE registration_dt >= {{date_from:DateTime64(3)}}
+            WHERE snapshot_dt = {{selected_snapshot:DateTime64(3)}}
+              AND registration_dt >= {{date_from:DateTime64(3)}}
               AND registration_dt <= {{date_to:DateTime64(3)}}
               AND {waiting_scope}
               AND {waiting_identity}
@@ -465,11 +502,18 @@ class ClickHouseAnalyticsRepository:
             referral_query,
             parameters=common | referral_params | referral_identity_params,
         ).result_rows[0]
-        waiting = self._query(
-            scope,
-            waiting_query,
-            parameters=common | waiting_params | waiting_identity_params,
-        ).result_rows[0]
+        waiting = (
+            self._query(
+                scope,
+                waiting_query,
+                parameters=common
+                | waiting_params
+                | waiting_identity_params
+                | {"selected_snapshot": waiting_snapshot},
+            ).result_rows[0]
+            if waiting_snapshot is not None
+            else (0, 0, 0)
+        )
         refusal = self._query(
             scope,
             refusal_query,
@@ -493,6 +537,12 @@ class ClickHouseAnalyticsRepository:
         limit: int,
         offset: int,
     ) -> tuple[tuple[RawOrganization, ...], int]:
+        waiting_snapshot = self._latest_waiting_snapshot(filters, scope)
+        waiting_snapshot_sql = (
+            "f.snapshot_dt = {selected_snapshot:DateTime64(3)}"
+            if waiting_snapshot is not None
+            else "0"
+        )
         referral_scope, referral_params = _scope_sql("m.resolved_id", scope)
         waiting_scope, waiting_params = _scope_sql("m.resolved_id", scope)
         refusal_scope, refusal_params = _scope_sql("m.resolved_id", scope)
@@ -568,6 +618,8 @@ class ClickHouseAnalyticsRepository:
                            count() AS waiting_records
                     FROM fact_waiting_events AS f
                     WHERE f.import_id IN {{published_import_ids:Array(UUID)}}
+                      AND f.import_id IN {{waiting_import_ids:Array(UUID)}}
+                      AND {waiting_snapshot_sql}
                       AND f.registration_dt >= {{date_from:DateTime64(3)}}
                       AND f.registration_dt <= {{date_to:DateTime64(3)}}
                       AND {_profile_sql(filters, 'f.profile_source')}
@@ -624,6 +676,15 @@ class ClickHouseAnalyticsRepository:
                 "published_import_ids": [
                     str(item) for item in scope.published_import_ids or ()
                 ],
+                "waiting_import_ids": [
+                    str(item)
+                    for item in (
+                        scope.waiting_import_ids
+                        if scope.waiting_import_ids is not None
+                        else scope.published_import_ids or ()
+                    )
+                ],
+                "selected_snapshot": waiting_snapshot,
             }
         )
         # Publication filtering precedes aggregation; mapping follows it. The

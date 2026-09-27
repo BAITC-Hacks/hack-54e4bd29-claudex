@@ -7,7 +7,7 @@ type BrandMarkProps = SVGProps<SVGSVGElement> & {
 };
 
 /**
- * Собственный знак MedFlow: медицинский крест образован четырьмя потоками,
+ * Собственный знак MedSignal: медицинский крест образован четырьмя потоками,
  * сходящимися к единой точке принятия решений.
  */
 export function BrandMark({ className, compact = false, ...props }: BrandMarkProps) {

@@ -216,6 +216,8 @@ class WaitingAgeStatistics:
     p75_days: AnalyticsCell[int | float]
     p90_days: AnalyticsCell[int | float]
     oldest_days: AnalyticsCell[int | float]
+    snapshot_at: datetime | None = None
+    snapshot_semantics_confirmed: bool = False
 
 
 @dataclass(frozen=True, slots=True)

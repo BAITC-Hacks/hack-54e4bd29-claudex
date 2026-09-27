@@ -4,11 +4,13 @@ import { useEffect, useRef } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import type { ReferralForecast } from "@/features/forecasting/types";
+import { ApiError } from "@/services/api-client";
 
 interface Props {
   forecast: ReferralForecast | undefined;
   isLoading: boolean;
   error: Error | null;
+  isSyntheticDemo?: boolean;
 }
 
 function formatDate(value: string): string {
@@ -19,7 +21,7 @@ function formatNumber(value: number): string {
   return value.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
 }
 
-export function ReferralForecastCard({ forecast, isLoading, error }: Props) {
+export function ReferralForecastCard({ forecast, isLoading, error, isSyntheticDemo = false }: Props) {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,13 +50,13 @@ export function ReferralForecastCard({ forecast, isLoading, error }: Props) {
         animationDuration: 300,
         grid: { left: 52, right: 20, top: 32, bottom: 44 },
         tooltip: { trigger: "axis" },
-        legend: { data: ["История", "Прогноз", "Baseline"] },
+        legend: { data: ["История", "Прогноз", "Простое сравнение"] },
         xAxis: { type: "category", boundaryGap: false, data: dates.map(formatDate) },
         yAxis: { type: "value", min: 0 },
         series: [
           { name: "История", type: "line", showSymbol: false, data: history, lineStyle: { color: "#2563eb", width: 2 } },
           { name: "Прогноз", type: "line", showSymbol: true, data: forecastValues, lineStyle: { color: "#7c3aed", width: 3 } },
-          { name: "Baseline", type: "line", showSymbol: false, data: baselineValues, lineStyle: { color: "#64748b", type: "dashed" } },
+          { name: "Простое сравнение", type: "line", showSymbol: false, data: baselineValues, lineStyle: { color: "#64748b", type: "dashed" } },
         ],
       });
       const resize = () => chart.resize();
@@ -73,7 +75,10 @@ export function ReferralForecastCard({ forecast, isLoading, error }: Props) {
   if (isLoading) {
     return <p className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">Загрузка сохранённого прогноза…</p>;
   }
-  if (error || !forecast) {
+  if (error && (!(error instanceof ApiError) || error.httpStatus !== 404)) {
+    return <section role="alert" className="rounded-lg border bg-card p-5"><h2 className="font-semibold">Не удалось загрузить прогноз</h2><p className="mt-2 text-sm">Проверьте соединение и повторите запрос. Ошибка загрузки не означает отсутствие прогноза.</p></section>;
+  }
+  if (!forecast) {
     return (
       <section className="rounded-lg border bg-card p-5" aria-live="polite">
         <h2 className="font-semibold">Краткосрочный прогноз потока направлений</h2>
@@ -87,13 +92,24 @@ export function ReferralForecastCard({ forecast, isLoading, error }: Props) {
   return (
     <Card>
       <CardContent className="p-5">
-        <h2 className="text-base font-semibold">Краткосрочный прогноз потока направлений</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-700">Прогнозирование</p>
+            <h2 className="mt-1 text-base font-extrabold tracking-[-0.02em] text-[#102f45]">Краткосрочный прогноз потока направлений</h2>
+          </div>
+          <span className="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-wide text-slate-600">{forecast.scope_type === "GLOBAL" ? "Вся система" : forecast.scope_type === "REGION" ? "Регион" : "Организация"}</span>
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Горизонт: {forecast.horizon_days} дней · модель: {forecast.selected_model} · baseline: {forecast.baseline_model}
+          Горизонт: {forecast.horizon_days} дней · период: {formatDate(forecast.forecast_start)} — {formatDate(forecast.forecast_end)}
         </p>
         {forecast.freshness_status === "STALE" ? (
           <p className="mt-2 text-sm font-medium text-amber-800" role="status">
-            Исторический прогноз: период его действия завершён.
+            Историческая валидация прогноза. Исторический прогноз: период его действия завершён. MAE измерена на предшествующих временных окнах, не на показанных прогнозных датах.
+          </p>
+        ) : null}
+        {isSyntheticDemo ? (
+          <p className="mt-2 text-sm font-medium" role="status">
+            Прогноз на синтетических демонстрационных данных.
           </p>
         ) : null}
         <div
@@ -106,7 +122,7 @@ export function ReferralForecastCard({ forecast, isLoading, error }: Props) {
           <summary className="cursor-pointer text-primary">Табличное представление прогноза</summary>
           <div className="mt-3 overflow-auto rounded-md border">
             <table className="w-full text-left text-xs">
-              <thead className="bg-muted"><tr><th className="px-3 py-2">Дата</th><th className="px-3 py-2 text-right">Прогноз</th><th className="px-3 py-2 text-right">Baseline</th><th className="px-3 py-2 text-right">Δ</th></tr></thead>
+              <thead className="bg-muted"><tr><th className="px-3 py-2">Дата</th><th className="px-3 py-2 text-right">Прогноз</th><th className="px-3 py-2 text-right">Простое сравнение</th><th className="px-3 py-2 text-right">Δ</th></tr></thead>
               <tbody>{forecast.forecast.map((item) => <tr key={item.date} className="border-t"><td className="px-3 py-2">{formatDate(item.date)}</td><td className="px-3 py-2 text-right">{formatNumber(item.predicted_value)}</td><td className="px-3 py-2 text-right">{formatNumber(item.baseline_value)}</td><td className="px-3 py-2 text-right">{formatNumber(item.delta_from_baseline)}</td></tr>)}</tbody>
             </table>
           </div>
@@ -117,9 +133,17 @@ export function ReferralForecastCard({ forecast, isLoading, error }: Props) {
             {forecast.limitations.map((item) => <li key={item}>— {item}</li>)}
           </ul>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Версия: {forecast.model_version} · сформирован {formatDate(forecast.generated_at)} · MAE {formatNumber(forecast.metrics.mae)}
-        </p>
+        <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+          <p>Источник: ИС БГ · Целевой показатель: ежедневное число направлений · Область: {forecast.scope_type === "GLOBAL" ? "вся система (GLOBAL)" : forecast.scope_type === "REGION" ? "регион (REGION)" : "организация (HOSPITAL)"}</p>
+          <p>Исходные данные: {formatDate(forecast.input_period_start)} — {formatDate(forecast.input_period_end)} · горизонт: {formatDate(forecast.forecast_start)} — {formatDate(forecast.forecast_end)}</p>
+          <p>Историческая валидация модели:</p>
+          <p>Период оценки: {forecast.validation_period_start && forecast.validation_period_end ? `${formatDate(forecast.validation_period_start)} — ${formatDate(forecast.validation_period_end)}` : "не указан"}</p>
+          <p>MAE модели: {formatNumber(forecast.metrics.mae)} направлений/день</p>
+          <p>MAE baseline: {formatNumber(forecast.baseline_metrics.mae)} направлений/день</p>
+          <p>Модель: {forecast.selected_model} · простое сравнение: {forecast.baseline_model}</p>
+          <p>Версия модели: {forecast.model_version} · сформирован {formatDate(forecast.generated_at)}</p>
+          <p>Идентификатор прогноза: {forecast.id}</p>
+        </div>
       </CardContent>
     </Card>
   );

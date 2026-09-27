@@ -1,5 +1,9 @@
 # Container image vulnerability admission
 
+The latest local branch triage and its unresolved gate are recorded in
+[CURRENT_IMAGE_FINDINGS.md](CURRENT_IMAGE_FINDINGS.md). The historical image IDs
+below are retained as past evidence, not as approval of rebuilt images.
+
 The `image-scan` CI matrix builds the current production stages for backend,
 frontend and worker, builds the current MLflow image, and pulls the exact nginx
 digest from Compose. Each image is exported to a temporary archive. Pinned

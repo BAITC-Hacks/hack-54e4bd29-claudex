@@ -22,7 +22,7 @@ export function MonitorPage() {
    <p className="mt-2 max-w-2xl text-sm text-muted-foreground">Обученная модель прогнозирует направления на 7 дней. Откройте предупреждение, чтобы проверить основания и план действий.</p></div>
    <Link className={button} href="/monitor/model">Как проверена модель <ArrowRight size={16}/></Link></div>
   <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
-   <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="font-semibold">Историческое воспроизведение · реальные данные</p>
+   <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="font-semibold">Историческое воспроизведение · тестовые данные</p>
     <p className="mt-1 text-sm">{data ? `Данные по ${day(data.as_of)}. Один шаг — один день. Автоматически — каждые 10 секунд.` : 'Загружаем результаты обучения…'}</p></div>
     <div className="flex gap-2"><button className={button} disabled={!data || command.isPending || data.finished} onClick={()=>command.mutate(data?.running?'pause':'play')}>{data?.running?<Pause size={16}/>:<Play size={16}/>} {data?.running?'Пауза':'Запустить'}</button>
      <button aria-label="Следующий день" className={button} disabled={!data || command.isPending || data.finished || data.running} onClick={()=>command.mutate('step')}><SkipForward size={16}/> День</button>
@@ -31,7 +31,7 @@ export function MonitorPage() {
    <p className="mt-3 text-xs">Это не подключение к больницам в реальном времени. На каждом шаге сохранённая модель заново рассчитывает прогноз по доступной на эту дату истории. Будущие записи не входят в признаки.</p>
    {data?.finished && <p className="mt-2 font-medium">Достигнут конец выгрузки. Новые данные не выдумываются; можно повторить воспроизведение.</p>}
   </section>
-  {(query.error || command.error) && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">{(query.error || command.error)?.message}</p>}
+  {(query.error || command.error) && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">Не удалось обновить историческое воспроизведение. Повторите позже.</p>}
   {data && <><div className="grid gap-4 sm:grid-cols-3">{[
    ['Предупреждений за день',data.alerts.length],['Организаций проверено',data.hospitals_checked],['Записей за новый день',data.new_records]
   ].map(([label,value])=><div key={label} className="rounded-xl border bg-card p-5"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-2 text-3xl font-semibold">{number(Number(value))}</p></div>)}</div>

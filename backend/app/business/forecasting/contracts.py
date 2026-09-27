@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import Literal
 
 from app.shared.forecasting import (
     DailyReferralCount,
@@ -70,13 +71,15 @@ class ReferralForecastSnapshot:
     metrics: dict[str, object]
     baseline_metrics: dict[str, object]
     dataset_watermark: dict[str, object]
-    freshness_status: str
+    freshness_status: Literal["CURRENT", "STALE"]
     limitations: tuple[str, ...]
     historical: tuple[DailyReferralCount, ...]
     points: tuple[ForecastPointResult, ...]
     scope_type: str = "GLOBAL"
     hospital_id: uuid.UUID | None = None
     region_id: uuid.UUID | None = None
+    validation_period_start: date | None = None
+    validation_period_end: date | None = None
 
 
 __all__ = [

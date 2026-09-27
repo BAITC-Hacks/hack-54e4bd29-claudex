@@ -42,6 +42,8 @@ def _response(result: ReferralForecastSnapshot) -> ReferralForecastResponse:
         horizon_days=len(result.points),
         input_period_start=result.input_period_start,
         input_period_end=result.input_period_end,
+        validation_period_start=result.validation_period_start,
+        validation_period_end=result.validation_period_end,
         forecast_start=result.forecast_start,
         forecast_end=result.forecast_end,
         generated_at=result.generated_at,

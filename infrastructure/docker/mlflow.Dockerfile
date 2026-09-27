@@ -15,7 +15,7 @@ RUN apt-get update \
         GitPython==3.1.59 \
         cryptography==50.0.0 \
         boto3==1.35.* \
-        psycopg2-binary==2.9.* \
+        "psycopg[binary]==3.2.*" \
     && useradd --system --uid 1001 --create-home mlflow
 
 USER mlflow

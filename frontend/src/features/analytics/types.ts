@@ -48,6 +48,8 @@ export const timeSeriesSchema = z.object({
 
 export const waitingSummarySchema = z.object({
   data: z.object({
+    snapshot_at: z.string().nullable().optional().default(null),
+    snapshot_semantics_confirmed: z.boolean().optional().default(false),
     waiting_records: cellSchema,
     median_days: cellSchema,
     p75_days: cellSchema,

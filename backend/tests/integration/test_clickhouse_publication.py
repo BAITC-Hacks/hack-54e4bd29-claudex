@@ -215,3 +215,134 @@ def test_failed_import_rows_are_invisible_before_clickhouse_cleanup(isolated_ch)
     )
     assert revoked_rows == ()
     assert revoked_total == 0
+
+
+def test_waiting_endpoints_select_one_published_snapshot_per_scope(isolated_ch):
+    """Synthetic old/new/unpublished exports must not be added as one queue."""
+    client = isolated_ch
+    hospital, other_hospital, old_import, new_import, other_import, unpublished = (
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+    )
+    registration = datetime(2025, 1, 1, tzinfo=UTC)
+    new_registration = datetime(2025, 1, 2, tzinfo=UTC)
+    old_snapshot = datetime(2025, 1, 3, tzinfo=UTC)
+    new_snapshot = datetime(2025, 1, 4, tzinfo=UTC)
+    hidden_snapshot = datetime(2025, 1, 5, tzinfo=UTC)
+    newer_other_snapshot = datetime(2025, 1, 5, tzinfo=UTC)
+    client.insert(
+        "fact_waiting_events",
+        [
+            (
+                "synthetic-1",
+                registration,
+                old_snapshot,
+                "org-a",
+                old_import,
+                "ИС БГ",
+                old_snapshot,
+            ),
+            (
+                "synthetic-2",
+                new_registration,
+                new_snapshot,
+                "org-a",
+                new_import,
+                "ИС БГ",
+                new_snapshot,
+            ),
+            (
+                "synthetic-3",
+                new_registration,
+                new_snapshot,
+                "org-a",
+                new_import,
+                "ИС БГ",
+                new_snapshot,
+            ),
+            (
+                "synthetic-4",
+                registration,
+                hidden_snapshot,
+                "org-a",
+                unpublished,
+                "ИС БГ",
+                hidden_snapshot,
+            ),
+            (
+                "synthetic-5",
+                registration,
+                newer_other_snapshot,
+                "org-b",
+                other_import,
+                "ИС БГ",
+                newer_other_snapshot,
+            ),
+        ],
+        column_names=[
+            "patient_key",
+            "registration_dt",
+            "snapshot_dt",
+            "hospital_source",
+            "import_id",
+            "source_system",
+            "ingested_at",
+        ],
+    )
+    projection = ClickHouseMappingRepository(client)
+    projection.publish(
+        MappingSnapshot.from_rows(
+            "mapping-waiting",
+            [
+                ("ORGANIZATION", "IS_BG:WAITING:DESTINATION", "org-a", str(hospital)),
+                (
+                    "ORGANIZATION",
+                    "IS_BG:WAITING:DESTINATION",
+                    "org-b",
+                    str(other_hospital),
+                ),
+            ],
+        )
+    )
+    repository = ClickHouseAnalyticsRepository(client)
+    filters = AnalyticsFilter(registration, datetime(2025, 1, 6, tzinfo=UTC))
+    scope = QueryScope(
+        (hospital,),
+        False,
+        False,
+        "mapping-waiting",
+        (old_import, new_import, other_import),
+        (old_import, new_import, other_import, unpublished),
+    )
+
+    summary = repository.waiting_summary(filters, scope)
+    overview = repository.overview(filters, scope)
+    organizations, _ = repository.organizations(filters, scope, limit=20, offset=0)
+
+    # DateTime64 without an explicit timezone preserves the source clock time.
+    assert summary.snapshot_dt == new_snapshot.replace(tzinfo=None)
+    assert summary.waiting_records == overview.waiting_records == 2
+    assert sum(item.waiting_records for item in organizations) == 2
+    old_cohort = AnalyticsFilter(registration, registration)
+    old_cohort_summary = repository.waiting_summary(old_cohort, scope)
+    assert old_cohort_summary.snapshot_dt == new_snapshot.replace(tzinfo=None)
+    assert old_cohort_summary.waiting_records == 0
+    assert repository.overview(old_cohort, scope).waiting_records == 0
+    global_scope = replace(scope, all_canonical=True, include_unmapped=True)
+    assert repository.waiting_summary(filters, global_scope).snapshot_dt == (
+        newer_other_snapshot.replace(tzinfo=None)
+    )
+    assert repository.overview(filters, global_scope).waiting_records == 1
+    assert repository.waiting_summary(
+        filters, replace(scope, waiting_import_ids=(old_import,))
+    ).snapshot_dt == old_snapshot.replace(tzinfo=None)
+    assert (
+        repository.overview(
+            filters, replace(scope, waiting_import_ids=())
+        ).waiting_records
+        == 0
+    )

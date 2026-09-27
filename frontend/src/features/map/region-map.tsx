@@ -1,7 +1,9 @@
 "use client";
 
 import type { Map as LeafletMap } from "leaflet";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { centerFor, pointLabel, volumeClass } from "./geography";
 
 export type MapMetric = "waiting" | "referrals" | "refusals";
 
@@ -10,43 +12,7 @@ export interface RegionPoint {
   name: string;
   code: string;
   value: number | null;
-}
-
-const CENTERS: Array<{ keys: string[]; lat: number; lng: number }> = [
-  { keys: ["astana", "астана"], lat: 51.17, lng: 71.43 },
-  { keys: ["almaty city", "город алматы", "г. алматы"], lat: 43.24, lng: 76.89 },
-  { keys: ["shymkent", "шымкент"], lat: 42.32, lng: 69.59 },
-  { keys: ["akmola", "акмол"], lat: 52.0, lng: 69.1 },
-  { keys: ["aktobe", "актюб"], lat: 50.28, lng: 57.17 },
-  { keys: ["almaty", "алматин"], lat: 45.0, lng: 78.3 },
-  { keys: ["atyrau", "атырау"], lat: 47.1, lng: 51.92 },
-  { keys: ["west kazakhstan", "западно-казахстан"], lat: 50.7, lng: 51.5 },
-  { keys: ["zhambyl", "жамбыл"], lat: 44.2, lng: 72.0 },
-  { keys: ["karaganda", "караганд"], lat: 49.8, lng: 73.1 },
-  { keys: ["kostanay", "костан"], lat: 53.2, lng: 63.6 },
-  { keys: ["kyzylorda", "кызылорд"], lat: 45.0, lng: 64.8 },
-  { keys: ["mangystau", "мангист"], lat: 43.7, lng: 52.2 },
-  { keys: ["pavlodar", "павлодар"], lat: 52.3, lng: 76.95 },
-  { keys: ["north kazakhstan", "северо-казахстан"], lat: 54.9, lng: 69.2 },
-  { keys: ["turkistan", "туркестан"], lat: 43.4, lng: 68.3 },
-  { keys: ["east kazakhstan", "восточно-казахстан"], lat: 49.9, lng: 82.6 },
-  { keys: ["abai", "абай"], lat: 49.8, lng: 79.9 },
-  { keys: ["zhetisu", "жетісу", "жетысу"], lat: 45.0, lng: 78.4 },
-  { keys: ["ulytau", "ұлытау", "улытау"], lat: 48.0, lng: 67.8 },
-];
-
-function centerFor(name: string, code: string): [number, number] | null {
-  const value = `${name} ${code}`.toLowerCase();
-  // Города республиканского значения проверяются до одноимённых областей.
-  const center = CENTERS.find((item) => item.keys.some((key) => value.includes(key)));
-  return center ? [center.lat, center.lng] : null;
-}
-
-function statusFor(value: number | null, thresholds: [number, number]): "empty" | "normal" | "warning" | "critical" {
-  if (value === null) return "empty";
-  if (value >= thresholds[1]) return "critical";
-  if (value >= thresholds[0]) return "warning";
-  return "normal";
+  state?: "ready" | "error" | "loading" | "suppressed";
 }
 
 export function RegionMap({
@@ -60,7 +26,9 @@ export function RegionMap({
   selectedRegionId: string | null;
   onSelect: (id: string | null) => void;
 }) {
+  const [mapError, setMapError] = useState(false);
   const nodeRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<{ center: [number, number]; zoom: number }>({ center: [48.3, 67.2], zoom: 4 });
   const mapRef = useRef<LeafletMap | null>(null);
 
   useEffect(() => {
@@ -76,7 +44,7 @@ export function RegionMap({
         maxZoom: 9,
         zoomControl: false,
         scrollWheelZoom: true,
-      }).setView([48.3, 67.2], 4);
+      }).setView(viewRef.current.center, viewRef.current.zoom);
       mapRef.current = map;
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap",
@@ -84,41 +52,43 @@ export function RegionMap({
       }).addTo(map);
       L.control.zoom({ position: "bottomright" }).addTo(map);
 
-      const values = points.map((point) => point.value ?? 0).filter((value) => value > 0).sort((a, b) => a - b);
-      const at = (share: number) => values[Math.min(values.length - 1, Math.floor(values.length * share))] ?? Number.POSITIVE_INFINITY;
-      const thresholds: [number, number] = [at(0.5), at(0.8)];
+      const maximum = Math.max(0, ...points.map((point) => point.value ?? 0));
 
       points.forEach((point) => {
         const center = centerFor(point.name, point.code);
         if (!center) return;
-        const status = statusFor(point.value, thresholds);
+        const status = volumeClass(point.value, maximum);
         const selected = point.id === selectedRegionId ? " selected" : "";
-        const label = point.value === null ? "—" : point.value.toLocaleString("ru-RU");
+        const label = pointLabel(point);
+        const markerLabel = point.value === null ? point.state === "loading" ? "…" : point.state === "error" ? "!" : "—" : label;
         const icon = L.divIcon({
           className: "region-marker-shell",
-          html: `<div class="region-marker ${status}${selected}"><span></span><b>${label}</b></div>`,
+          html: `<div class="region-marker ${status}${selected}"><span></span><b>${markerLabel}</b></div>`,
           iconSize: [58, 36],
           iconAnchor: [29, 18],
         });
-        const marker = L.marker(center, { icon, title: point.name }).addTo(map);
-        marker.bindTooltip(`<strong>${point.name}</strong><span>${label}</span>`, {
-          className: "region-map-tooltip",
-          direction: "top",
-          offset: [0, -14],
-        });
+        const marker = L.marker(center, { icon, title: `${point.name}: ${label}` }).addTo(map);
+        const tooltip = document.createElement("div");
+        tooltip.textContent = `${point.name}: ${label}`;
+        marker.bindTooltip(tooltip, { className: "region-map-tooltip", direction: "top", offset: [0, -14] });
         marker.on("click", () => onSelect(point.id));
       });
 
       map.on("click", () => onSelect(null));
       window.setTimeout(() => map.invalidateSize(), 80);
     }
-    void render();
+    void render().catch(() => { if (!disposed) setMapError(true); });
     return () => {
       disposed = true;
+      if (mapRef.current) {
+        const center = mapRef.current.getCenter();
+        viewRef.current = { center: [center.lat, center.lng], zoom: mapRef.current.getZoom() };
+      }
       mapRef.current?.remove();
       mapRef.current = null;
     };
   }, [metric, onSelect, points, selectedRegionId]);
 
+  if (mapError) return <p role="alert" className="p-6">Карта недоступна. Выберите регион в списке рядом с картой.</p>;
   return <div ref={nodeRef} className="h-full min-h-[520px] w-full" aria-label="Карта региональных показателей Казахстана" />;
 }

@@ -14,6 +14,7 @@ from app.business.analytics.contracts import (
     AnalyticsFilter,
     AnalyticsMetadata,
     OverviewResult,
+    WaitingAgeStatistics,
 )
 from app.composition import build_analytics_service
 from app.security.context import Role
@@ -23,6 +24,27 @@ API = "/api/v1/analytics"
 
 
 class StubAnalyticsService:
+    def waiting_summary(
+        self, _context: object, filters: AnalyticsFilter
+    ) -> WaitingAgeStatistics:
+        return WaitingAgeStatistics(
+            metadata=AnalyticsMetadata(
+                date_from=filters.date_from,
+                date_to=filters.date_to,
+                sources=("ИС БГ:WAITING",),
+                generated_at=datetime(2026, 5, 14, tzinfo=UTC),
+                completed_import_watermark=None,
+                limitations=(),
+            ),
+            waiting_records=AnalyticsCell(value=12, suppressed=False),
+            median_days=AnalyticsCell(value=5.0, suppressed=False),
+            p75_days=AnalyticsCell(value=7.0, suppressed=False),
+            p90_days=AnalyticsCell(value=9.0, suppressed=False),
+            oldest_days=AnalyticsCell(value=11.0, suppressed=False),
+            snapshot_at=datetime(2025, 3, 1, tzinfo=UTC),
+            snapshot_semantics_confirmed=True,
+        )
+
     def overview(self, _context: object, filters: AnalyticsFilter) -> OverviewResult:
         filters.validate()
         metadata = AnalyticsMetadata(
@@ -78,6 +100,19 @@ def test_overview_has_data_and_metadata_contract(client: TestClient) -> None:
     assert body["meta"]["source"] == ["ИС БГ:REFERRALS"]
     assert body["meta"]["latest_import_id"] == ("00000000-0000-0000-0000-000000000001")
     assert body["meta"]["limitations"] == ["Сопоставление организаций неполное."]
+
+
+def test_waiting_summary_adds_snapshot_provenance_without_removing_old_fields(
+    client: TestClient,
+) -> None:
+    response = client.get(f"{API}/waiting/summary", headers=auth())
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["snapshot_at"] == "2025-03-01T00:00:00Z"
+    assert data["snapshot_semantics_confirmed"] is True
+    assert data["waiting_records"] == {"value": 12, "suppressed": False}
+    assert data["median_days"] == {"value": 5.0, "suppressed": False}
 
 
 def test_oversized_analytics_period_is_rejected(client: TestClient) -> None:

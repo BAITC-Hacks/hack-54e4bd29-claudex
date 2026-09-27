@@ -349,6 +349,164 @@ jobs:
       - name: Production build
         run: npm run build
 
+  keycloak-realm-access:
+    name: Keycloak realm mount — isolated preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ACCEPTANCE_PROJECT: phase8-keycloak-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Ensure targeted POSIX ACL tooling
+        run: command -v setfacl >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq acl)
+      - name: Check real image user, read-only realm mount and OIDC import
+        run: >-
+          python -m scripts.operations.keycloak_realm_probe
+          --project "$ACCEPTANCE_PROJECT"
+      - name: Preserve sanitized Keycloak read/import evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keycloak-realm-probe
+          path: tmp/keycloak-probe/${{ env.ACCEPTANCE_PROJECT }}/summary.json
+          if-no-files-found: ignore
+
+  browser-acceptance:
+    name: Synthetic browser acceptance — real OIDC/API
+    runs-on: ubuntu-latest
+    needs: keycloak-realm-access
+    timeout-minutes: 120
+    env:
+      ACCEPTANCE_PROJECT: phase8-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build patched signed-source MinIO for isolated acceptance
+        run: >-
+          python -m scripts.operations.minio_source_build build
+          --project "$ACCEPTANCE_PROJECT" --patched-acceptance
+
+      - name: Review current official MinIO advisories before runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python -m scripts.operations.minio_advisory_gate
+          --project "$ACCEPTANCE_PROJECT"
+
+      - name: Scan both project-built images before startup
+        run: >-
+          python -m scripts.operations.minio_source_scan
+          --project "$ACCEPTANCE_PROJECT"
+
+      - name: Deny unauthorized IAM import on disposable MinIO before Compose
+        run: >-
+          python -m scripts.operations.minio_cve_probe
+          --project "$ACCEPTANCE_PROJECT"
+
+      - name: Preserve MinIO provenance, SBOM and security evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minio-source-build-evidence
+          path: |
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/source-images.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/advisory-gate.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/iam-probe-summary.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/security/*-trivy.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/security/*-sbom.cdx.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/security/scan-summary.json
+          if-no-files-found: ignore
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install browser dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Ensure targeted POSIX ACL tooling
+        run: command -v setfacl >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq acl)
+
+      - name: Prepare fresh namespaced containers and volumes
+        run: |
+          python -m scripts.operations.prepare_acceptance prepare --project "$ACCEPTANCE_PROJECT" --minio-source-build
+          python -m scripts.operations.prepare_acceptance start --project "$ACCEPTANCE_PROJECT"
+
+      - name: Verify MinIO/mc bootstrap and scoped S3 operations
+        run: >-
+          python -m scripts.operations.verify_minio_source
+          --project "$ACCEPTANCE_PROJECT"
+
+      - name: Preserve numeric-only MinIO runtime result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minio-source-runtime
+          path: tmp/acceptance/${{ env.ACCEPTANCE_PROJECT }}/minio-runtime-summary.json
+          if-no-files-found: ignore
+
+      - name: Load invented fixtures through the normal publication path
+        run: python -m scripts.acceptance.bootstrap_synthetic --project "$ACCEPTANCE_PROJECT"
+
+      - name: Verify real test-token scopes
+        run: |
+          python -m pip install httpx
+          python -m scripts.acceptance.verify_scope --project-dir "tmp/acceptance/$ACCEPTANCE_PROJECT"
+
+      - name: Browser journey with production Next and test Keycloak
+        run: |
+          export MEDSIGNAL_E2E_BASE_URL="$(python -c 'import json,os,pathlib; p=pathlib.Path("tmp/acceptance")/os.environ["ACCEPTANCE_PROJECT"]/"manifest.json"; print(json.loads(p.read_text())["origin"])')"
+          export MEDSIGNAL_E2E_REALM="${{ github.workspace }}/tmp/acceptance/$ACCEPTANCE_PROJECT/realm.json"
+          npm --prefix frontend run test:e2e -- --timeout 45000
+
+      - name: Real HTTP 503 browser test with guaranteed ClickHouse restore
+        run: python -m scripts.acceptance.run_degraded_browser --project "$ACCEPTANCE_PROJECT"
+
+      - name: Verify dependency recovery
+        run: python -m scripts.operations.prepare_acceptance verify --project "$ACCEPTANCE_PROJECT"
+
+      - name: Preserve numeric-only browser counts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-browser-counts
+          path: |
+            tmp/playwright-summary.json
+            tmp/playwright-degraded-summary.json
+          if-no-files-found: warn
+
+      - name: Preserve sanitized acceptance startup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-start-diagnostics
+          path: tmp/acceptance/${{ env.ACCEPTANCE_PROJECT }}/sanitized-diagnostics.json
+          if-no-files-found: ignore
+
+      - name: Tear down only the namespaced disposable project
+        if: always()
+        run: |
+          [[ "$ACCEPTANCE_PROJECT" == phase8-* ]] || exit 1
+          project_dir="tmp/acceptance/$ACCEPTANCE_PROJECT"
+          if [ -f "$project_dir/.env" ] && [ -f "$project_dir/compose.override.yml" ]; then
+            docker compose --project-name "$ACCEPTANCE_PROJECT" \
+              --env-file "$project_dir/.env" \
+              -f docker-compose.yml -f "$project_dir/compose.override.yml" \
+              down --volumes --remove-orphans
+          fi
+
   phase8-contracts:
     name: Phase 8 — security and operations contracts
     runs-on: ubuntu-latest

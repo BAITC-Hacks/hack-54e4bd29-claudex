@@ -3,6 +3,7 @@ import {use} from 'react';
 import Link from 'next/link';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {pilotApi, number, day, severity, status} from '@/features/monitoring/api';
+import {ErrorState} from '@/features/analytics/components/states';
 import type {Alert} from '@/features/monitoring/types';
 
 export default function AlertPage({params}:{params:Promise<{id:string}>}) {
@@ -10,7 +11,7 @@ export default function AlertPage({params}:{params:Promise<{id:string}>}) {
  const query=useQuery({queryKey:['pilot-alert',id],queryFn:()=>pilotApi<Alert>(`alerts/${id}`),retry:1});
  const mutation=useMutation({mutationFn:(value:string)=>pilotApi<Alert>(`alerts/${id}`,'PATCH',{status:value}),onSuccess:data=>{client.setQueryData(['pilot-alert',id],data);void client.invalidateQueries({queryKey:['monitor']});}});
  const alert=query.data;
- if(query.error) return <p role="alert">{query.error.message} <Link href="/monitor">К предупреждениям</Link></p>;
+ if(query.error) return <div className="space-y-3"><ErrorState label="Предупреждение временно недоступно. Повторите позже."/><Link href="/monitor">К предупреждениям</Link></div>;
  if(!alert) return <p>Загрузка предупреждения…</p>;
  return <div className="mx-auto max-w-4xl space-y-6"><Link className="text-sm text-teal-700" href="/monitor">← Все предупреждения</Link>
   <div><div className="mb-3 flex gap-3 text-xs font-medium"><span className="rounded-full bg-amber-100 px-3 py-1 text-amber-950">Критичность: {severity[alert.severity]}</span><span className="rounded-full bg-secondary px-3 py-1">{status[alert.status]}</span></div>
@@ -26,6 +27,6 @@ export default function AlertPage({params}:{params:Promise<{id:string}>}) {
    <p className="mt-2 text-sm">Максимальная ошибка недельной суммы на этих двух проверках: {number(alert.quality.weekly_error_max)}. Это наблюдавшаяся ошибка, не гарантированный интервал.</p>
    <Link className="mt-4 inline-block text-sm text-teal-700 underline" href="/monitor/model">Данные, обучение и независимая проверка →</Link></section>
   <div className="flex flex-wrap gap-3">{Object.entries(status).map(([value,label])=><button key={value} disabled={mutation.isPending || alert.status===value} onClick={()=>mutation.mutate(value)} className="rounded-lg border px-4 py-2 text-sm disabled:opacity-40">{label}</button>)}</div>
-  {mutation.error && <p role="alert" className="text-red-700">{mutation.error.message}</p>}
+  {mutation.error && <ErrorState label="Не удалось изменить статус предупреждения. Повторите позже."/>}
  </div>;
 }

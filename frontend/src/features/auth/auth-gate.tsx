@@ -30,7 +30,7 @@ export function AuthGate({ children, returnTo }: { children: ReactNode; returnTo
       <h2 className="relative mt-2 text-xl font-extrabold tracking-[-0.035em] text-[#102f45]">Войдите в ситуационный центр</h2>
       <p className="relative mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-500">
         Данные медицинских организаций доступны после входа через провайдера
-        идентификации. MedFlow не хранит пароли.
+        идентификации. MedSignal не хранит пароли.
       </p>
       <Button className="relative mt-6 h-11 bg-[#0d7f87] px-6 shadow-[0_12px_24px_-14px_rgba(13,127,135,.9)] hover:bg-[#096b72]" onClick={() => void login(returnTo?.())}>
         <ShieldCheck size={16} /> Войти через Keycloak

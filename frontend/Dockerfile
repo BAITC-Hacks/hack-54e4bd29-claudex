@@ -31,8 +31,12 @@ COPY . .
 # Публичные переменные встраиваются в клиентский код на этапе сборки.
 ARG NEXT_PUBLIC_API_BASE_URL=/api/v1
 ARG NEXT_PUBLIC_APP_ENV=production
+ARG NEXT_PUBLIC_OIDC_ISSUER=http://localhost/auth/realms/medsignal
+ARG NEXT_PUBLIC_SYNTHETIC_DEMO=false
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
     NEXT_PUBLIC_APP_ENV=${NEXT_PUBLIC_APP_ENV} \
+    NEXT_PUBLIC_OIDC_ISSUER=${NEXT_PUBLIC_OIDC_ISSUER} \
+    NEXT_PUBLIC_SYNTHETIC_DEMO=${NEXT_PUBLIC_SYNTHETIC_DEMO} \
     NODE_ENV=production
 RUN npm run build
 

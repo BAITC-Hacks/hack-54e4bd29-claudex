@@ -85,6 +85,8 @@ def test_scoped_forecast_has_saved_provenance_and_historical_freshness(client, e
     assert payload["scope_type"] == "HOSPITAL"
     assert payload["hospital_id"] == str(evidence.hospital_id)
     assert payload["freshness_status"] == "STALE"
+    assert payload["validation_period_start"] is None
+    assert payload["validation_period_end"] is None
     assert payload["historical"] == []
     assert payload["dataset_watermark"]["mapping_version"] == "synthetic-mapping-v1"
 

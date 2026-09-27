@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { useAuth } from "@/features/auth/auth-context";
 import { AuthGate } from "@/features/auth/auth-gate";
+import { CopilotEntry } from "@/features/copilot/copilot-entry";
 import {
   SEVERITY_LABELS,
   SEVERITY_VARIANTS,
@@ -40,9 +41,10 @@ export default function SignalDetailPage() {
           <p className="text-sm text-muted-foreground">Загрузка…</p>
         )}
         {signal.isError && (
-          <p className="text-sm text-destructive">
-            Сигнал недоступен: {signal.error.message}
-          </p>
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-900" role="alert">
+            <p className="font-bold">Сигнал временно недоступен.</p>
+            <p className="mt-1">Обновите страницу позже или вернитесь к ленте сигналов.</p>
+          </div>
         )}
         {signal.data && <SignalCard detail={signal.data} />}
       </AuthGate>
@@ -102,6 +104,17 @@ function SignalCard({ detail }: { detail: SignalDetail }) {
       <SignalEvidence detail={detail} />
       <Card>
         <CardHeader>
+          <CardTitle>AI-пояснение</CardTitle>
+          <CardDescription>
+            Дополнительное пояснение формируется только по запросу и не заменяет алгоритмическое основание сигнала.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CopilotEntry signal={{ id: detail.id, version: detail.version, title: detail.title }} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
           <CardTitle>Расчётный сценарий</CardTitle>
           <CardDescription>
             Проверьте гипотетическое изменение потока отдельно от evidence сигнала.
@@ -129,7 +142,7 @@ function ExplanationCard({ detail }: { detail: SignalDetail }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Объяснение</CardTitle>
+        <CardTitle>Алгоритмическое объяснение</CardTitle>
         <CardDescription>
           Показывает, что повлияло на расчёт, а не установленную причину.
         </CardDescription>
@@ -257,7 +270,7 @@ function TransitionCard({ detail }: { detail: SignalDetail }) {
           </p>
         )}
         {mutation.isError && !conflict && (
-          <p className="text-sm text-destructive">{mutation.error.message}</p>
+          <p className="text-sm text-destructive">Не удалось сохранить действие. Повторите позже.</p>
         )}
       </CardContent>
     </Card>
@@ -319,7 +332,7 @@ function IncidentCard({ detail }: { detail: SignalDetail }) {
           </p>
         )}
         {mutation.isError && (
-          <p className="text-sm text-destructive">{mutation.error.message}</p>
+          <p className="text-sm text-destructive">Не удалось создать инцидент. Повторите позже.</p>
         )}
       </CardContent>
     </Card>

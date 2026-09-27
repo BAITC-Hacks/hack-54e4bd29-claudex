@@ -19,6 +19,8 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 
+from sqlalchemy.orm import Session
+
 from app.core.config import AppEnv, get_settings
 from app.database.postgres import session_scope
 from app.models.access import User, UserDataScope
@@ -37,6 +39,17 @@ from app.models.signal import Signal, SignalExplanation
 # Пометка проставляется каждому созданному объекту: происхождение данных
 # должно быть очевидно любому, кто откроет базу.
 SYNTHETIC_MARK = "[синтетические данные]"
+
+
+def _ensure_user(session: Session, subject: str, display_name: str) -> User:
+    """Reuse the identity projected by Keycloak if login preceded seeding."""
+    user = session.query(User).filter_by(external_subject=subject).one_or_none()
+    if user is not None:
+        return user
+    user = User(id=uuid.uuid4(), external_subject=subject, display_name=display_name)
+    session.add(user)
+    session.flush()
+    return user
 
 
 def _now() -> datetime:
@@ -204,24 +217,21 @@ def seed() -> None:
         session.flush()
 
         for subject, display_name, scope_type, target in USERS:
-            user = User(
-                id=uuid.uuid4(), external_subject=subject, display_name=display_name
-            )
-            session.add(user)
-            session.flush()
-            session.add(
-                UserDataScope(
-                    id=uuid.uuid4(),
-                    user_id=user.id,
-                    scope_type=scope_type,
-                    region_id=regions[target].id
-                    if scope_type is DataScopeType.REGION
-                    else None,
-                    hospital_id=hospitals[target].id
-                    if scope_type is DataScopeType.HOSPITAL
-                    else None,
+            user = _ensure_user(session, subject, display_name)
+            if session.query(UserDataScope).filter_by(user_id=user.id).first() is None:
+                session.add(
+                    UserDataScope(
+                        id=uuid.uuid4(),
+                        user_id=user.id,
+                        scope_type=scope_type,
+                        region_id=regions[target].id
+                        if scope_type is DataScopeType.REGION
+                        else None,
+                        hospital_id=hospitals[target].id
+                        if scope_type is DataScopeType.HOSPITAL
+                        else None,
+                    )
                 )
-            )
 
         for hospital_code, signal_type, severity, status, days_ago in SIGNALS:
             signal = Signal(

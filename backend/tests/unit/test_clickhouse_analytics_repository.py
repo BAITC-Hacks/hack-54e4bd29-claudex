@@ -111,7 +111,10 @@ def test_bounded_scope_is_passed_as_uuid_array_and_never_interpolated() -> None:
 def test_waiting_summary_uses_latest_snapshot_and_reports_all_age_quantiles() -> None:
     snapshot = datetime(2026, 5, 13, tzinfo=UTC)
     client = RecordingClient(
-        {"analytics:waiting-summary": [(snapshot, 100, 2, 10.5, 20.5, 30.5, 90.0)]}
+        {
+            "analytics:latest-waiting-snapshot": [(snapshot,)],
+            "analytics:waiting-summary": [(100, 2, 10.5, 20.5, 30.5, 90.0)],
+        }
     )
     repository = ClickHouseAnalyticsRepository(client)
 
@@ -126,22 +129,21 @@ def test_waiting_summary_uses_latest_snapshot_and_reports_all_age_quantiles() ->
     assert result.p75_days == 20.5
     assert result.p90_days == 30.5
     assert result.oldest_days == 90.0
+    assert all(
+        "f.import_id IN {waiting_import_ids:Array(UUID)}" in query
+        for query, _ in client.calls
+    )
+    assert "snapshot_dt = {selected_snapshot:DateTime64(3)}" in client.calls[1][0]
+    assert client.calls[1][1]["selected_snapshot"] == snapshot
 
 
 def test_empty_waiting_summary_converts_nan_and_epoch_sentinel_to_none() -> None:
     client = RecordingClient(
         {
+            "analytics:latest-waiting-snapshot": [(None,)],
             "analytics:waiting-summary": [
-                (
-                    datetime(1970, 1, 1, tzinfo=UTC),
-                    0,
-                    0,
-                    float("nan"),
-                    float("nan"),
-                    float("nan"),
-                    0.0,
-                )
-            ]
+                (0, 0, float("nan"), float("nan"), float("nan"), 0.0)
+            ],
         }
     )
     repository = ClickHouseAnalyticsRepository(client)
@@ -156,6 +158,67 @@ def test_empty_waiting_summary_converts_nan_and_epoch_sentinel_to_none() -> None
     assert result.p75_days is None
     assert result.p90_days is None
     assert result.oldest_days is None
+    assert len(client.calls) == 1
+
+
+def test_selected_snapshot_date_survives_empty_registration_cohort() -> None:
+    snapshot = datetime(2025, 3, 1, tzinfo=UTC)
+    client = RecordingClient(
+        {
+            "analytics:latest-waiting-snapshot": [(snapshot,)],
+            "analytics:waiting-summary": [
+                (0, 0, float("nan"), float("nan"), float("nan"), 0.0)
+            ],
+        }
+    )
+    repository = ClickHouseAnalyticsRepository(client)
+
+    result = repository.waiting_summary(
+        filters(profile="a-profile-absent-in-current-snapshot"),
+        QueryScope((), all_canonical=True, include_unmapped=True),
+    )
+
+    assert result.snapshot_dt == snapshot
+    assert result.waiting_records == 0
+    assert result.median_days is None
+    selection_query, _ = client.calls[0]
+    assert "registration_dt >= " not in selection_query
+    assert "profile_source = " not in selection_query
+
+
+def test_waiting_snapshot_selection_is_shared_by_overview_and_organizations() -> None:
+    snapshot = datetime(2026, 5, 13, tzinfo=UTC)
+    reviewed = uuid.uuid4()
+    client = RecordingClient(
+        {
+            "analytics:latest-waiting-snapshot": [(snapshot,)],
+            "analytics:overview-referrals": [(7, 0, 0, 1)],
+            "analytics:overview-waiting": [(3, 1, 1)],
+            "analytics:overview-refusals": [(2, 1, 1)],
+            "analytics:organizations": [],
+        }
+    )
+    repository = ClickHouseAnalyticsRepository(client)
+    scope = QueryScope(
+        (), True, True, "mapping-1", (reviewed,), waiting_import_ids=(reviewed,)
+    )
+
+    overview = repository.overview(filters(), scope)
+    repository.organizations(filters(), scope, limit=20, offset=0)
+
+    assert overview.waiting_records == 3
+    waiting_queries = [
+        (query, params)
+        for query, params in client.calls
+        if "analytics:overview-waiting" in query or "analytics:organizations" in query
+    ]
+    assert len(waiting_queries) == 2
+    assert all(
+        "snapshot_dt = {selected_snapshot:DateTime64(3)}" in query
+        and params["selected_snapshot"] == snapshot
+        and params["waiting_import_ids"] == [str(reviewed)]
+        for query, params in waiting_queries
+    )
 
 
 def test_observed_waiting_reports_mean_and_excluded_chronology() -> None:
@@ -279,8 +342,8 @@ def test_source_organization_detail_filters_digest_in_clickhouse() -> None:
 
     assert result is not None
     assert result[0].source_value == source_value
-    assert len(client.calls) == 1
-    query, parameters = client.calls[0]
+    assert len(client.calls) == 2
+    query, parameters = client.calls[1]
     assert "SHA256" in query
     assert source_value not in query
     assert parameters["waiting_filter_source_digests"] == [digest]
@@ -308,12 +371,13 @@ def test_organizations_aggregate_by_source_before_mapping_and_filter_publication
         offset=0,
     )
 
-    query, parameters = client.calls[0]
+    query, parameters = client.calls[1]
     assert "FROM fact_referral_events AS f" in query
     assert "FROM fact_waiting_events AS f" in query
     assert "FROM fact_refusal_events AS f" in query
     assert "GROUP BY source_system, receiving_org_key" in query
     assert "LEFT JOIN" in query
     assert "f.import_id IN {published_import_ids:Array(UUID)}" in query
+    assert "f.import_id IN {waiting_import_ids:Array(UUID)}" in query
     assert parameters["published_import_ids"] == [str(published_id)]
     assert parameters["mapping_version"] == "mapping-42"

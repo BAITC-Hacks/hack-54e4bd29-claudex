@@ -4,9 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   fetchFreshness,
+  fetchAllOrganizations,
   fetchObservedWaiting,
   fetchOrganization,
-  fetchOrganizations,
   fetchOverview,
   fetchQuality,
   fetchReferralSeries,
@@ -27,7 +27,7 @@ export function useSituationCenter(enabled: boolean, query: AnalyticsQuery) {
     refusals: useQuery({ queryKey: analyticsKeys.query("refusals", query), queryFn: ({ signal }) => fetchRefusalSeries(query, signal), enabled }),
     waiting: useQuery({ queryKey: analyticsKeys.query("waiting", query), queryFn: ({ signal }) => fetchWaitingSummary(query, signal), enabled }),
     observed: useQuery({ queryKey: analyticsKeys.query("observed", query), queryFn: ({ signal }) => fetchObservedWaiting(query, signal), enabled }),
-    organizations: useQuery({ queryKey: analyticsKeys.query("organizations", query), queryFn: ({ signal }) => fetchOrganizations({ ...query, page: 1 }, signal), enabled }),
+    organizations: useQuery({ queryKey: analyticsKeys.query("organizations", query), queryFn: ({ signal }) => fetchAllOrganizations(query, signal), enabled }),
     freshness: useQuery({ queryKey: analyticsKeys.query("freshness"), queryFn: ({ signal }) => fetchFreshness(signal), enabled }),
     quality: useQuery({ queryKey: analyticsKeys.query("quality"), queryFn: ({ signal }) => fetchQuality(signal), enabled }),
   };

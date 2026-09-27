@@ -12,7 +12,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -236,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
         images = [_scan_image(image, args.output.parent) for image in args.image]
         report = evaluate_scan(images, acceptance)
         report["scanner"] = f"{TRIVY_IMAGE} ({version})"
-        report["generated_at"] = datetime.now(UTC).isoformat()
+        report["generated_at"] = datetime.now(timezone.utc).isoformat()
         args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         args.output.with_suffix(".md").write_text(
             _render_markdown(report), encoding="utf-8"

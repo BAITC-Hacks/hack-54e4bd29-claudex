@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
 import { AuthProvider } from "@/features/auth/auth-context";
-import { ApiError } from "@/services/api-client";
+import { shouldRetryQuery } from "@/services/query-retry";
 
 /**
  * Клиент запросов создаётся в состоянии компонента, а не в области модуля:
@@ -19,14 +19,7 @@ export function Providers({ children }: { children: ReactNode }) {
           queries: {
             staleTime: 15_000,
             refetchOnWindowFocus: false,
-            retry: (failureCount, error) => {
-              // Повторять запрос при отказе аутентификации бессмысленно
-              // и вредно: это выглядит как перебор.
-              if (error instanceof ApiError && error.isUnauthenticated) {
-                return false;
-              }
-              return failureCount < 2;
-            },
+            retry: shouldRetryQuery,
           },
         },
       }),

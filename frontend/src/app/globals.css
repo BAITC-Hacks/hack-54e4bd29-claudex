@@ -43,7 +43,7 @@
     --input: 202 24% 87%;
     --ring: 190 91% 28%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
   }
 
   .dark {
@@ -87,11 +87,13 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    background-image:
-      radial-gradient(circle at 8% 0%, rgb(12 150 160 / 7%), transparent 30rem),
-      radial-gradient(circle at 94% 14%, rgb(36 88 163 / 6%), transparent 28rem);
     font-feature-settings: "ss01" 1, "ss02" 1, "cv11" 1;
     letter-spacing: -0.012em;
+  }
+
+  :focus-visible {
+    outline: 2px solid #087b83;
+    outline-offset: 3px;
   }
 
   ::selection {
@@ -102,7 +104,7 @@
 
 @layer components {
   .surface-card {
-    @apply border border-white/80 bg-white/90 shadow-[0_14px_40px_-28px_rgba(15,46,68,0.45)] backdrop-blur-sm;
+    @apply border border-slate-200 bg-white shadow-[0_14px_40px_-30px_rgba(15,46,68,0.38)];
   }
 
   .eyebrow {
@@ -145,9 +147,9 @@
   background: currentColor;
 }
 
-.region-marker.normal { background: #0b9b7d; }
-.region-marker.warning { background: #e3a42d; }
-.region-marker.critical { background: #df4b55; }
+.region-marker.volume-low { background: #548aa5; }
+.region-marker.volume-medium { background: #24718c; }
+.region-marker.volume-high { background: #123b56; }
 .region-marker.empty { background: #64748b; }
 
 .region-map-tooltip {
@@ -176,3 +178,8 @@
 
 .region-map-tooltip::before { border-top-color: white !important; }
 .leaflet-control-attribution { font-size: 8px !important; }
+
+.leaflet-container img.leaflet-tile {
+  max-width: none !important;
+  max-height: none !important;
+}

@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 from pydantic import (
     Field,
+    SecretStr,
     ValidationError,
     computed_field,
     field_validator,
@@ -171,6 +172,15 @@ class Settings(BaseSettings):
     # Секрет псевдонимизации. Обычный SHA-256 от кода случая подбирается
     # перебором, поэтому применяется HMAC с этим ключом.
     data_pseudonymization_key: str = ""
+
+    # --- Optional Copilot: synthetic demonstration only ---
+    copilot_enabled: bool = False
+    llm_provider: str = "openai"
+    llm_model: str = "gpt-4.1-mini-2025-04-14"
+    llm_api_key: SecretStr | None = None
+    llm_timeout_seconds: float = Field(default=30.0, ge=1, le=60)
+    llm_max_output_tokens: int = Field(default=1200, ge=100, le=2000)
+    copilot_max_requests_per_minute: int = Field(default=6, ge=1, le=60)
 
     # --- Celery ---
     celery_task_soft_time_limit_s: int = 600

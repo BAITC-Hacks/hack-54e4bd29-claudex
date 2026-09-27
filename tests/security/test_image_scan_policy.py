@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+import ast
 from datetime import date
 from pathlib import Path
 
 import pytest
 
 from scripts.security.image_scan import evaluate_scan, main
+
+
+def test_image_scan_does_not_import_python311_only_datetime_utc() -> None:
+    source = Path("scripts/security/image_scan.py").read_text(encoding="utf-8")
+    module = ast.parse(source)
+    datetime_imports = [
+        alias.name
+        for node in ast.walk(module)
+        if isinstance(node, ast.ImportFrom) and node.module == "datetime"
+        for alias in node.names
+    ]
+    assert "UTC" not in datetime_imports
 
 
 def _image(*findings: tuple[str, str]) -> dict[str, object]:
