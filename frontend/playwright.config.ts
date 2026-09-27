@@ -10,7 +10,10 @@ if (!process.env.MEDSIGNAL_E2E_REALM) {
 
 export default defineConfig({
   testDir: "./e2e",
-  testIgnore: process.env.MEDSIGNAL_E2E_DEGRADED === "1" ? [] : ["**/degraded.spec.ts"],
+  testIgnore: [
+    ...(process.env.MEDSIGNAL_E2E_DEGRADED === "1" ? [] : ["**/degraded.spec.ts"]),
+    ...(process.env.MEDSIGNAL_COPILOT_FRONTEND_URL ? [] : ["**/copilot.spec.ts"]),
+  ],
   outputDir: "../tmp/playwright-results",
   preserveOutput: "never",
   reporter: process.env.CI
