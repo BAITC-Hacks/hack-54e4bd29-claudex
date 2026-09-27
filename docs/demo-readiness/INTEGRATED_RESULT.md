@@ -1,8 +1,101 @@
 # Integrated demo result
 
-Дата статической проверки: **2026-09-27**.
+Дата статической проверки: **2026-09-28**.
 
 `ENGINE = AVAILABLE`.
+
+## Повторная browser-проверка и cold start на согласованном UI-контракте
+
+Финальный локальный test/report HEAD: `224fb4f3e65dc571da99bb2043c744a78d6845e7`.
+Свежий runtime был собран из `af38340a9c3f4ac8ed8f2ad60b771398adec8fab`;
+последующий commit `224fb4f3e65dc571da99bb2043c744a78d6845e7` меняет только
+Playwright-синхронизацию admin journey, поэтому application source между этими
+точками не менялся. Ветка не сбрасывалась, push/main merge/deployment не
+выполнялись.
+
+Локальные commits этого прохода:
+
+- `4d4d81a1a1c38bd901a0a631f1d7ece6e1d28a0f` — согласованные текущие UI labels;
+- `694107d60d76029cc1f2cb5cbecafee92049f5ba` — web-first navigation и реальный
+  OIDC reload/deep-link scope test;
+- `911a569d43c3bcc003f4ba6f9c91f13a85da518d`,
+  `dc4842fe3db202a202887e5e58a43f4704d14cec`,
+  `f22f2b93de1296011b2ba52cafa80d03ede6d9ad` — минимальный подтверждённый
+  frontend fix: dashboard filters сохраняются в URL/history без гонки двух
+  `router.replace`; обязательная Next.js Suspense boundary сохранена;
+- `af38340a9c3f4ac8ed8f2ad60b771398adec8fab` и
+  `224fb4f3e65dc571da99bb2043c744a78d6845e7` — завершённые signal/Copilot,
+  forecast, provenance-safe map и responsive admin journey assertions.
+
+### Фактические статусы
+
+- `TEST_CONTRACT_ALIGNMENT = PASS`. Проверены `Сигналы`, доменный статус
+  `NEW` с подписью `новый`, `Область: вся система (GLOBAL)`,
+  `MedSignal — ситуационный центр` и текущая формулировка исторической
+  валидации. Assertions не подгонялись под forecast values.
+- `AUTH_RELOAD_AND_DEEP_LINK = PASS` как отдельный targeted run: protected
+  `/signals` возвращается после настоящего Keycloak OIDC; hospital-manager после
+  полного reload повторно входит через существующую OIDC-сессию на безопасный
+  internal route; foreign organization API возвращает `404`, UI показывает
+  понятное unavailable-состояние и не раскрывает B1.
+- `SIGNAL_ACTION = PASS`: выбран fresh synthetic `NEW`, acknowledge дал `200`,
+  `IN_PROGRESS`, `version + 1` и сохранил причину; duplicate action исчез,
+  reload + OIDC сохранили состояние; stale card получил `409`.
+- `COPILOT_DISABLED = PASS`: реальный backend вернул `503/COPILOT_DISABLED`;
+  алгоритмическое объяснение осталось неизменным, повторное открытие не создало
+  второй POST, переход к другой карточке не перенёс private state. API key и
+  платные LLM-вызовы не использовались.
+- `FORECAST_UI = PASS`: отдельный browser test фактически выполнен `1/1` на
+  сохранённом forecast `37f6b0d4-0052-4845-9e9b-2705276b3e2a`. Проверены тот же
+  API ID, `DAILY_REFERRAL_COUNT`, `GLOBAL`, input/forecast/validation dates,
+  MAE модели и baseline в `направлений/день`, семь строк горизонта, historical
+  и synthetic limitations. Fixture и pipeline не перезапускались. Прежний
+  read-only DB/ClickHouse verifier на неизменённых backend/data остаётся отдельным
+  PASS evidence, но в этом проходе повторно не запускался.
+- `COLD_START_REPEATABILITY = PASS`: project
+  `phase8-demo-integration-repeat-20260928a`, loopback origin
+  `http://127.0.0.1:64208`, новые project-prefixed volumes, один первый `start`
+  без retry — `READY`; `clickhouse-ready`, PostgreSQL/ClickHouse migrations,
+  MinIO identities и runtime verifier прошли. Bootstrap: `30/22/24`, scope:
+  admin `[30,22,24]`, hospital/region `[15,11,12]`, disjoint `[0,0,0]`, foreign
+  hospital `404`. Project остановлен без `down`; containers/volumes/evidence
+  сохранены. Исходный forecast project `...27b` не уничтожался и снова `READY`.
+- `BROWSER_SUITE = FAIL`. Единый fresh-project invocation без retries/skip:
+  `planned=6`, `passed=4`, `failed=2`, `skipped=0`; exact failures — оба поздних
+  restricted-identity OIDC flows. В окне этой серии прогонов Nginx auth zone
+  фактически вернул `21` ответ `429`, включая `2` login-action, `2` token и
+  Keycloak static font requests.
+  Gate не ослаблялся. В разрешённом split все семь сценариев имеют clean
+  targeted PASS: четыре QA, admin journey, restricted journey и forecast; это
+  не переименовывает combined run в PASS. Для общего PASS требуется отдельное
+  infrastructure/security решение по auth-rate orchestration или static
+  resources, а не sleep, retry или suppression в тестах.
+- `IMAGE_SECURITY = FAIL`. Fresh MinIO scans: server `50 HIGH / 0 CRITICAL`,
+  client `44 HIGH / 0 CRITICAL`; signed source, reviewed backport, advisory gate
+  и network-isolated CVE probe прошли только для synthetic startup. Известные
+  CI findings backend/worker/MLflow остаются по `44 HIGH / 0 CRITICAL`, без
+  reported fixed versions. Suppression/allowlist/gate reduction не применялись.
+- `SECURITY_ADMISSION = FAIL`. Успешные functional checks и cold start не
+  означают production readiness.
+
+Fresh application image IDs: backend
+`sha256:acce3e67ec600b159d7d73586dc37a4a3f081fbb9c5280aa3ec0cb87fe398893`,
+worker `sha256:3856aaae885d7f3b007cb4d5ab8ba72f4596ba3be96b478fc51dbd7361a124ff`,
+MLflow `sha256:a7bd282d480bd1d986c631e98f29254417f1b62c55b27dffdee2717ecb07fbc9`,
+frontend `sha256:e4e1ffd9aac6fb01dccf012914c83f439b8d880b4e553e7bc16ed2dbefac285f`,
+nginx `sha256:62b51fd2e71a8de9233da70dfe9e2b2d3035867c736e7c64cf87ea2621f7397f`,
+pipeline `sha256:ed57dc9fc6fb04a27f5bd720bfd5804a1e21c7494e603cf806460a1463a2564a`.
+Source-built MinIO server/client IDs:
+`sha256:49ec3981c57e5d8d59931b0c9e988897fbe9a182b78ac071973516d658618dfe`
+и `sha256:e61c809e1073c9fc85a41d6fa7b05a4e6cd5e4152322f6aad503c47639ec2bca`.
+Frontend собран с `NEXT_PUBLIC_APP_ENV=test`,
+`NEXT_PUBLIC_SYNTHETIC_DEMO=true` и project loopback OIDC issuer.
+
+Финальные frontend checks после изменений: Vitest `23 files / 130 tests` PASS,
+ESLint PASS, TypeScript PASS, production build PASS (`12/12` pages). Bundled
+Playwright Chromium использован вместо system Chrome: системный Chrome загружал
+TumarCSP и зависал уже после test PASS на cleanup временного профиля; это
+runner/environment limitation, не было скрыто как успешный command exit.
 
 ## Актуальная локальная runtime-проверка после переустановки Docker
 
