@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts.operations import prepare_acceptance
 from scripts.operations.prepare_acceptance import (
@@ -92,7 +93,7 @@ def test_prepared_files_use_fresh_secrets_scoped_ports_and_pinned_images(
     assert "sha256:" + "a" * 64 in overlay
     assert "!reset []" in overlay
     assert realm["users"][0]["credentials"][0]["value"] != "old-demo"
-    assert realm["clients"][1]["secret"] != "old-demo"  # noqa: S105 — test fixture
+    assert realm["clients"][1]["secret"] != "old-demo"
     assert realm["clients"][0]["redirectUris"] == ["http://127.0.0.1:55123/*"]
     assert realm["clients"][0]["attributes"]["post.logout.redirect.uris"] == (
         "http://127.0.0.1:55123/*"
@@ -425,7 +426,7 @@ def test_preflight_missing_image_halts_before_compose_up_without_leaking_stderr(
             "phase8-accept-abcd1234", output, config, report
         )
 
-    assert caught.value.category == "IMAGE_ID_NOT_PRESENT"
+    assert caught.value.category == "IMAGE_NOT_FOUND"
     assert caught.value.stage == "preflight_images"
     assert next(
         item for item in report["image_presence"] if item["image_family"] == "backend"
@@ -547,7 +548,7 @@ def test_start_persists_only_safe_preflight_failure_and_never_calls_up(
             {"image_family": "backend", "present": False, "image_id_matches": False}
         ]
         raise prepare_acceptance.AcceptancePreflightError(
-            "IMAGE_ID_NOT_PRESENT", "preflight_images"
+            "IMAGE_NOT_FOUND", "preflight_images"
         )
 
     monkeypatch.setattr(prepare_acceptance, "_run_preflight", fail_preflight)
@@ -560,7 +561,7 @@ def test_start_persists_only_safe_preflight_failure_and_never_calls_up(
         (output / "sanitized-diagnostics.json").read_text(encoding="utf-8")
     )
     assert diagnostic["failure_stage"] == "preflight_images"
-    assert diagnostic["failure_category"] == "IMAGE_ID_NOT_PRESENT"
+    assert diagnostic["failure_category"] == "IMAGE_NOT_FOUND"
     assert diagnostic["command_category"] == "preflight"
     assert diagnostic["preflight"]["image_presence"][0]["present"] is False
     assert calls == []
@@ -730,7 +731,7 @@ def test_named_pull_failure_artifact_contains_only_sanitized_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     output, config = _preflight_fixture(tmp_path)
-    raw_secret = "MINIO_ROOT_PASSWORD=synthetic-private-value"  # noqa: S105 — test canary
+    raw_secret = "MINIO_ROOT_PASSWORD=synthetic-private-value"
     monkeypatch.setattr(prepare_acceptance, "ARTIFACTS", tmp_path)
     monkeypatch.setattr(prepare_acceptance, "_validated_config", lambda *_: config)
     monkeypatch.setattr(prepare_acceptance, "_safe_probe", lambda *_: None)
@@ -766,3 +767,172 @@ def test_named_pull_failure_artifact_contains_only_sanitized_state(
     assert result["failure_category"] == "IMAGE_PULL_RATE_LIMIT"
     assert result["preflight"]["named_images"][0]["service"] == "minio"
     assert raw_secret not in artifact + "".join(capsys.readouterr())
+
+
+def test_generated_overlay_gates_migration_on_network_select_readiness(
+    tmp_path: Path,
+) -> None:
+    realm_template = tmp_path / "realm-template.json"
+    realm_template.write_text(
+        json.dumps(
+            {
+                "realm": "medsignal",
+                "users": [],
+                "clients": [
+                    {
+                        "clientId": "medsignal-frontend",
+                        "redirectUris": [],
+                        "webOrigins": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "phase8-accept-ready01"
+
+    prepare_files(
+        project=output.name,
+        port=55123,
+        images=IMAGES,
+        output=output,
+        realm_template=realm_template,
+    )
+
+    rendered = (output / "compose.override.yml").read_text(encoding="utf-8")
+    overlay = yaml.safe_load(rendered.replace("!reset ", "").replace("!override", ""))
+    ready = overlay["services"]["clickhouse-ready"]
+    migration = overlay["services"]["clickhouse-migrate"]
+
+    assert ready["image"] == IMAGES["pipeline"]
+    assert ready["entrypoint"] == [
+        "python",
+        "/opt/medsignal/acceptance/wait_for_clickhouse.py",
+    ]
+    assert ready["depends_on"] == {"clickhouse": {"condition": "service_healthy"}}
+    assert ready["networks"] == ["data"]
+    assert ready["restart"] == "no"
+    assert ready["environment"] == {
+        "CLICKHOUSE_HOST": "clickhouse",
+        "CLICKHOUSE_PORT": "8123",
+        "CLICKHOUSE_USER": "${CLICKHOUSE_USER}",
+        "CLICKHOUSE_PASSWORD": "${CLICKHOUSE_PASSWORD}",
+    }
+    assert len(ready["volumes"]) == 1
+    assert ready["volumes"][0].endswith(
+        ":/opt/medsignal/acceptance/wait_for_clickhouse.py:ro"
+    )
+    assert migration["depends_on"]["clickhouse-ready"] == {
+        "condition": "service_completed_successfully"
+    }
+    assert "entrypoint" not in migration
+
+
+def _acceptance_ps(*, readiness_exit: int | None = 0) -> str:
+    running = {
+        "nginx",
+        "frontend",
+        "backend",
+        "worker",
+        "postgres",
+        "clickhouse",
+        "redis",
+        "minio",
+        "mlflow",
+        "keycloak",
+    }
+    one_shot = {"migrate", "clickhouse-migrate", "minio-init"}
+    rows = [
+        {"Service": name, "State": "running", "ExitCode": 0} for name in sorted(running)
+    ]
+    rows.extend(
+        {"Service": name, "State": "exited", "ExitCode": 0} for name in sorted(one_shot)
+    )
+    if readiness_exit is not None:
+        rows.append(
+            {
+                "Service": "clickhouse-ready",
+                "State": "exited",
+                "ExitCode": readiness_exit,
+            }
+        )
+    return "\n".join(json.dumps(row) for row in rows)
+
+
+def test_verifier_accepts_only_successful_expected_readiness_one_shot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(prepare_acceptance, "ARTIFACTS", tmp_path)
+    monkeypatch.setattr(
+        prepare_acceptance,
+        "_run",
+        lambda *_command: _acceptance_ps(readiness_exit=0),
+    )
+
+    states = prepare_acceptance._verify_services(
+        "phase8-accept-ready01", tmp_path / "phase8-accept-ready01"
+    )
+
+    assert states["clickhouse-ready"] == "exited"
+
+
+@pytest.mark.parametrize("readiness_exit", [1, None])
+def test_verifier_rejects_failed_or_missing_readiness_one_shot(
+    readiness_exit: int | None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(prepare_acceptance, "ARTIFACTS", tmp_path)
+    monkeypatch.setattr(
+        prepare_acceptance,
+        "_run",
+        lambda *_command: _acceptance_ps(readiness_exit=readiness_exit),
+    )
+
+    with pytest.raises(RuntimeError, match="migration"):
+        prepare_acceptance._verify_services(
+            "phase8-accept-ready01", tmp_path / "phase8-accept-ready01"
+        )
+
+
+@pytest.mark.parametrize(
+    ("outcome", "expected"),
+    [
+        ("timeout", "INSPECT_TIMEOUT"),
+        ("daemon", "DAEMON_UNAVAILABLE"),
+        ("missing", "IMAGE_NOT_FOUND"),
+        ("mismatch", "IMAGE_ID_MISMATCH"),
+    ],
+)
+def test_local_image_inspect_classifies_failure_without_leaking_stderr(
+    outcome: str,
+    expected: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    expected_id = "sha256:" + "a" * 64
+    secret = "POSTGRES_PASSWORD=synthetic-private-value"
+
+    def fake_run(
+        command: list[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        if outcome == "timeout":
+            raise subprocess.TimeoutExpired(command, 8)
+        if outcome == "daemon":
+            return subprocess.CompletedProcess(
+                command, 1, "", f"Cannot connect to the Docker daemon {secret}"
+            )
+        if outcome == "missing":
+            return subprocess.CompletedProcess(
+                command, 1, "", f"Error response from daemon: No such image {secret}"
+            )
+        return subprocess.CompletedProcess(command, 0, "sha256:" + "b" * 64, "")
+
+    monkeypatch.setattr(prepare_acceptance.subprocess, "run", fake_run)
+
+    present, matches, category = prepare_acceptance._inspect_local_image(expected_id)
+
+    assert category == expected
+    assert not matches
+    assert present is (outcome == "mismatch")
+    assert secret not in str((present, matches, category)) + "".join(capsys.readouterr())
