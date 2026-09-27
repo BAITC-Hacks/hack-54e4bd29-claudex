@@ -51,8 +51,22 @@ test("admin journey through analytics, signal, scenario and logout", async ({ pa
   });
 
   await test.step("human acknowledges a synthetic signal", async () => {
+    const newSignals = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/v1/signals"
+        && url.searchParams.get("status") === "NEW"
+        && response.request().method() === "GET";
+    });
     await page.getByLabel("Статус").selectOption("NEW");
-    await page.getByRole("table").getByRole("link").first().click();
+    expect((await newSignals).status()).toBe(200);
+    const signalLink = page.getByLabel("Список сигналов").getByRole("link").first();
+    await expect(signalLink).toBeVisible();
+    const signalPath = await signalLink.getAttribute("href");
+    expect(signalPath).toMatch(/^\/signals\/[0-9a-f-]+$/);
+    await Promise.all([
+      page.waitForURL((url) => url.pathname === signalPath),
+      signalLink.click(),
+    ]);
     await page.getByLabel("Причина").fill("Синтетический acceptance test");
     await page.getByRole("button", { name: "Принять в работу" }).click();
     await expect(page.getByRole("button", { name: "Закрыть как обработанный" })).toBeVisible();
