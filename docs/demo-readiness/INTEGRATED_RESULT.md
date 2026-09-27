@@ -120,11 +120,67 @@
 5. Выполнить bootstrap/scope, публикацию forecast fixture, существующий pipeline, DB/API verifier, validation fields, четыре QA Playwright tests и один forecast browser test без ослабления assertions/security gates.
 6. Обновить этот отчёт фактическими manifests, image IDs, counts и test outcomes без credentials, cookies, storage state, realm contents или реальных данных.
 
+## VPS runtime preflight, 2026-09-27
+
+`VPS_ENGINE = MISSING`.
+
+Закрытый synthetic runtime проверялся на VPS `82.115.43.223` в новой SSH-сессии
+пользователя `claudex`, без `sudo` и без системных изменений. Проверенный release
+`/home/claudex/medflow-demo/releases/1038995` остаётся на ветке
+`demo/integration`, HEAD
+`1038995ce9a1a57a85303b31090c71d3108a95eb`, Git status clean.
+
+| Проверка | Фактический результат |
+| --- | --- |
+| ОС / архитектура | Ubuntu 22.04.5 LTS / x86_64 |
+| CPU | 4 logical CPU |
+| RAM | 3 911 MiB total / 3 053 MiB available |
+| Диск в filesystem домашнего каталога | 67 814 MiB available |
+| Порт 8003 | 0 TCP listeners; порт свободен на момент проверки |
+| Docker CLI | MISSING: команда отсутствует в новой SSH-сессии; стандартные `/usr/bin`, `/usr/local/bin` и `/snap/bin` не содержат бинарник |
+| Docker Engine | MISSING: `/var/run/docker.sock` отсутствует, system service `docker` inactive |
+| containerd | system service inactive |
+| Compose plugin | MISSING вместе с Docker CLI |
+| Доступ `claudex` | группа `docker` отсутствует; пользователь состоит только в ранее существующих группах, права socket не менялись |
+| Пакеты Docker | `docker-ce`, `docker-ce-cli`, `docker.io`, `docker-compose-plugin` и `docker-compose-v2` не обнаружены через `dpkg-query` |
+
+Это подтверждённый environment blocker, а не ошибка Compose или приложения:
+CLI, daemon socket, daemon service и Compose отсутствуют одновременно. Установка,
+изменение групп и прав `docker.sock` не предпринимались. Владелец VPS должен
+проверить, что установка выполнялась именно на `82.115.43.223`, завершить установку
+Docker Engine и Compose plugin штатным административным способом и предоставить
+`claudex` доступ к daemon; после изменения группы требуется новая SSH-сессия.
+
+Независимая локальная проверка текущего acceptance-кода на том же source SHA:
+`51 passed` для `test_acceptance_environment.py`, MLflow allowlist, forecast fixture
+и forecast-pair verifier. Первый запуск runner дал `31 passed / 20 setup errors`
+только из-за запрета записи в стандартный pytest temp; повтор с отдельным
+`--basetemp` и отключённым cacheprovider прошёл полностью. Это статическая
+проверка launcher/verifier, не VPS runtime evidence.
+
+| Runtime-область | Статус |
+| --- | --- |
+| Image build и image IDs/build flags | NOT RUN — Docker отсутствует |
+| Cold start 1 / cold start 2 | NOT RUN |
+| Bootstrap / signed-token scope | NOT RUN |
+| Forecast fixture / pipeline / DB / API | NOT RUN |
+| QA Playwright / forecast Playwright | 0 реально выполненных tests |
+| Design | INCLUDED в source SHA; VPS browser runtime NOT TESTED |
+| Copilot | Планируемый режим `COPILOT_ENABLED=false`; VPS disabled-state NOT TESTED, платных вызовов не было |
+| `PRIVATE_RUNTIME` | BLOCKED_BY_VPS_DOCKER_MISSING |
+| `PUBLIC_ACCESS` | NOT ATTEMPTED; порт 8003, domain proxy, firewall и общий ingress не менялись |
+| `SECURITY_ADMISSION` | FAIL; прежние security findings и отсутствие runtime evidence сохраняются |
+
+Локальная ветка отчёта: `feature/vps-demo-runtime`, созданная непосредственно от
+проверенного integration HEAD. Удалённый release не менялся, push, registry
+publication, main merge и deployment не выполнялись.
+
 ## Оставшиеся блокеры и владельцы
 
 | Блокер | Владелец | Критерий снятия |
 | --- | --- | --- |
 | `P0-ENV`: после Windows reboot server API пять раз не ответил за трёхминутное окно | Владелец проекта / другой исправный Docker-хост или отдельное recovery-решение | Engine дважды отвечает на bounded `docker version`, затем проходит безопасный inspect существующего image; локальные recovery-попытки не повторяются автоматически. |
+| `P0-VPS-ENV`: на VPS отсутствуют Docker CLI, daemon socket/service, Compose plugin и группа `docker` | Владелец VPS | На `82.115.43.223` в новой SSH-сессии `claudex` Docker client/server и Compose возвращают версии, context подтверждён, user access проходит без изменения socket permissions. |
 | Integrated runtime evidence отсутствует | Интегратор после environment-ready signal | Два последовательных clean cold start, manifests/image IDs, bootstrap/scope, forecast DB/API verification и 5 реально выполненных browser tests. |
 
-`SECURITY_ADMISSION` остаётся не-PASS до runtime evidence. После расширения истории старые PASS не переносятся автоматически. Runtime будет выполняться только в новых собственных `phase8-demo-integration-*` projects; ожидаемые counts, forecast UUID, MAE и даты должны быть сверены с фактически опубликованными manifests и сохранённым pipeline result без изменения модели, provenance или assertions.
+`SECURITY_ADMISSION` остаётся не-PASS до runtime evidence. После расширения истории старые PASS не переносятся автоматически. Следующий VPS runtime будет выполняться только в новых собственных `phase8-claudex-vps-*` projects; прежнее имя `phase8-demo-integration-*` относится только к локальному плану до переноса. Ожидаемые counts, forecast UUID, MAE и даты должны быть сверены с фактически опубликованными manifests и сохранённым pipeline result без изменения модели, provenance или assertions.
