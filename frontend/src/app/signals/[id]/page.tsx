@@ -56,6 +56,7 @@ function SignalCard({ detail }: { detail: SignalDetail }) {
   return (
     <div className="space-y-5">
       <section className="space-y-2">
+        <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-cyan-700">Операционный сигнал, не прогноз</p>
         <div className="flex flex-wrap items-center gap-3">
           <Badge variant={SEVERITY_VARIANTS[detail.severity]}>
             {SEVERITY_LABELS[detail.severity]}
@@ -71,6 +72,7 @@ function SignalCard({ detail }: { detail: SignalDetail }) {
         <p className="max-w-3xl text-sm text-muted-foreground">
           {detail.summary}
         </p>
+        <p className="max-w-3xl text-xs leading-5 text-slate-500">Прогноз показывается только как отдельное основание, если связь сохранена сервером. Сам сигнал остаётся результатом указанного правила и evidence.</p>
       </section>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -102,6 +104,7 @@ function SignalCard({ detail }: { detail: SignalDetail }) {
       </div>
 
       <SignalEvidence detail={detail} />
+      <TransitionCard detail={detail} />
       <Card>
         <CardHeader>
           <CardTitle>AI-пояснение</CardTitle>
@@ -129,7 +132,6 @@ function SignalCard({ detail }: { detail: SignalDetail }) {
           </Link>
         </CardContent>
       </Card>
-      <TransitionCard detail={detail} />
       <IncidentCard detail={detail} />
       <HistoryCard detail={detail} />
     </div>
@@ -205,7 +207,7 @@ function TransitionCard({ detail }: { detail: SignalDetail }) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Действия</CardTitle>
+          <CardTitle>Решение сотрудника</CardTitle>
           <CardDescription>
             У вашей роли нет права изменять статус этого сигнала. Перечень
             доступных переходов определяет сервер.
@@ -218,7 +220,7 @@ function TransitionCard({ detail }: { detail: SignalDetail }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Действия</CardTitle>
+        <CardTitle>Решение сотрудника</CardTitle>
         <CardDescription>
           Решение принимает уполномоченный сотрудник. Каждое изменение
           попадает в журнал аудита.
@@ -359,7 +361,10 @@ function HistoryCard({ detail }: { detail: SignalDetail }) {
             <ul className="mt-2 space-y-1.5 text-sm">
               {detail.actions.map((action) => (
                 <li key={action.id} className="flex justify-between gap-4">
-                  <span>{action.description}</span>
+                  <span>
+                    <span className="block">{action.description}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">Сотрудник: {action.created_by}</span>
+                  </span>
                   <span className="text-xs text-muted-foreground">
                     {formatDateTime(action.created_at)}
                   </span>
