@@ -81,13 +81,13 @@ test("fresh synthetic signal persists one action, rejects stale card and keeps e
   const disabledResponse = await disabled;
   expect(disabledResponse.status()).toBe(503);
   expect((await disabledResponse.json()).error.code).toBe("COPILOT_DISABLED");
-  await expect(page.getByRole("dialog").getByText(/Функция отключена/)).toBeVisible();
+  await expect(page.getByRole("dialog").getByText(/AI-пояснение временно недоступно/)).toBeVisible();
   expect(await algorithmicCard.innerText()).toBe(originalExplanation);
   expect(copilotRequests).toBe(1);
 
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Объяснить сигнал" }).click();
-  await expect(page.getByRole("dialog").getByText(/Функция отключена/)).toBeVisible();
+  await expect(page.getByRole("dialog").getByText(/AI-пояснение временно недоступно/)).toBeVisible();
   expect(copilotRequests).toBe(1);
 
   await page.keyboard.press("Escape");
@@ -116,6 +116,6 @@ test("fresh synthetic signal persists one action, rejects stale card and keeps e
     new URL(response.url()).pathname === "/api/v1/copilot/explain-signal");
   await page.getByRole("button", { name: "Объяснить сигнал" }).click();
   expect((await secondDisabled).status()).toBe(503);
-  await expect(page.getByRole("dialog").getByText(/Функция отключена/)).toBeVisible();
+  await expect(page.getByRole("dialog").getByText(/AI-пояснение временно недоступно/)).toBeVisible();
   expect(copilotRequests).toBe(2);
 });

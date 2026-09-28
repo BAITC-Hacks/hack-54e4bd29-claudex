@@ -2,7 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import { login } from "../auth";
 
-test("analytics requests preserve period context, scope organizations and label forecast state honestly", async ({ page }) => {
+test("analytics requests preserve period context, scope organizations and label forecast state honestly", async ({ baseURL, page }) => {
+  expect(baseURL).toBeTruthy();
   const ready = await page.request.get("/api/v1/ready");
   expect(ready.status(), "requires a READY isolated synthetic acceptance project").toBe(200);
   await login(page, "admin", "/dashboard");
@@ -30,15 +31,21 @@ test("analytics requests preserve period context, scope organizations and label 
   const organizationLinks = organizationTable.locator("tbody a");
   expect(await organizationLinks.count(), "synthetic fixture must expose at least two organizations").toBeGreaterThan(1);
   const firstOrganizationName = (await organizationLinks.nth(0).innerText()).split(/\r?\n/, 1)[0]?.trim();
-  const firstPath = await organizationLinks.nth(0).getAttribute("href");
-  const secondPath = await organizationLinks.nth(1).getAttribute("href");
+  const firstHref = await organizationLinks.nth(0).getAttribute("href");
+  const secondHref = await organizationLinks.nth(1).getAttribute("href");
   expect(firstOrganizationName).toBeTruthy();
-  expect(firstPath).toMatch(/^\/hospitals\/[0-9a-f-]+$/);
-  expect(secondPath).toMatch(/^\/hospitals\/[0-9a-f-]+$/);
-  expect(firstPath).not.toBe(secondPath);
+  expect(firstHref).toBeTruthy();
+  expect(secondHref).toBeTruthy();
+  const firstUrl = new URL(firstHref!, baseURL);
+  const secondUrl = new URL(secondHref!, baseURL);
+  expect(firstUrl.pathname).toMatch(/^\/hospitals\/[0-9a-f-]+$/);
+  expect(secondUrl.pathname).toMatch(/^\/hospitals\/[0-9a-f-]+$/);
+  expect(firstUrl.searchParams.get("date_to")).toBe("2025-03-30");
+  expect(firstUrl.searchParams.get("granularity")).toBe("WEEK");
+  expect(firstUrl.href).not.toBe(secondUrl.href);
 
   await Promise.all([
-    page.waitForURL((url) => url.pathname === firstPath),
+    page.waitForURL((url) => url.pathname === firstUrl.pathname && url.searchParams.get("granularity") === "WEEK"),
     organizationLinks.nth(0).click(),
   ]);
   const firstHeading = page.getByRole("heading", { level: 1 });
@@ -47,19 +54,18 @@ test("analytics requests preserve period context, scope organizations and label 
   await expect(page.getByText("Направления", { exact: true })).toBeVisible();
   const firstOrganization = await firstHeading.innerText();
 
-  await Promise.all([
-    page.waitForURL((url) => url.pathname === "/dashboard"),
-    page.goBack(),
-  ]);
+  const backLink = page.getByRole("link", { name: "Вернуться к аналитике" });
+  await expect(backLink).toHaveAttribute("href", /date_to=2025-03-30/);
+  await Promise.all([page.waitForURL((url) => url.pathname === "/dashboard" && url.searchParams.get("granularity") === "WEEK"), backLink.click()]);
   await expect(page.getByRole("heading", { name: "Ситуационный центр" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Выйти" })).toBeVisible();
   await expect(page.getByLabel("Конец")).toHaveValue("2025-03-30");
   await expect(page.getByLabel("Группировка")).toHaveValue("WEEK");
 
-  const secondLink = page.locator(`a[href="${secondPath}"]`).first();
+  const secondLink = page.locator(`a[href="${secondHref}"]`).first();
   await expect(secondLink).toBeVisible();
   await Promise.all([
-    page.waitForURL((url) => url.pathname === secondPath),
+    page.waitForURL((url) => url.pathname === secondUrl.pathname && url.searchParams.get("granularity") === "WEEK"),
     secondLink.click(),
   ]);
   const secondHeading = page.getByRole("heading", { level: 1 });
