@@ -19,6 +19,7 @@ test("landing leads to real login and the situation center remains usable at pre
   await login(page, "admin", "/command-center");
   await expect(page.getByRole("heading", { name: "Ситуационный центр" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Как читать прогноз" })).toBeVisible();
+  await expect(page.getByLabel("Синтетические демонстрационные данные")).toBeVisible();
 
   for (const width of presentationWidths) {
     await test.step(`${width}px layout has no page-level horizontal overflow`, async () => {
