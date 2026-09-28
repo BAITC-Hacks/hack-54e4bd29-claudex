@@ -70,7 +70,7 @@ function HeroPreview() {
         </div>
         <div className="relative mt-5 min-h-[330px]">
           <KazakhstanMap />
-          <div className="absolute left-[20%] top-[34%] w-[175px] rounded-xl border border-white/90 bg-white/95 p-3 shadow-[0_18px_38px_-20px_rgba(15,46,68,.45)]"><p className="flex items-center gap-2 text-xs font-extrabold text-[#17364d]"><Building2 className="h-3.5 w-3.5" aria-hidden="true" /> Выбранный регион</p><p className="mt-2 text-[10px] text-slate-500">Показатели доступны после входа</p></div>
+          <div className="absolute left-[2%] top-[55%] w-[175px] rounded-xl border border-white/90 bg-white/95 p-3 shadow-[0_18px_38px_-20px_rgba(15,46,68,.45)]"><p className="flex items-center gap-2 text-xs font-extrabold text-[#17364d]"><Building2 className="h-3.5 w-3.5" aria-hidden="true" /> Выбранный регион</p><p className="mt-2 text-[10px] text-slate-500">Показатели доступны после входа</p></div>
           <div className="absolute bottom-1 right-0 w-[48%] min-w-[210px] rounded-2xl border border-white/90 bg-white/95 p-4 shadow-[0_22px_50px_-28px_rgba(15,46,68,.5)]">
             <p className="text-[10px] font-extrabold text-[#17364d]">Динамика направлений</p>
             <svg className="mt-3 h-20 w-full" viewBox="0 0 260 82" role="img" aria-label="Схема графика без открытых значений"><path d="M0 67H260M0 41H260M0 15H260" stroke="#e2e8f0" /><path d="M3 64C28 51 42 56 62 42S102 58 125 40s35 1 55-12 34 2 76-23" fill="none" stroke="#07949d" strokeLinecap="round" strokeWidth="3.5" /></svg>
@@ -95,9 +95,10 @@ function KazakhstanMap() {
   return (
     <div className="absolute -left-2 top-5 h-[270px] w-[66%]" role="img" aria-label="Силуэт карты Казахстана">
       <Image
-        src="/brand/kazakhstan-silhouette.png"
+        src="/brand/kazakhstan-map-teal.png"
         alt=""
         fill
+        unoptimized
         sizes="(min-width: 1024px) 34vw, 60vw"
         className="object-contain object-left-center"
       />
