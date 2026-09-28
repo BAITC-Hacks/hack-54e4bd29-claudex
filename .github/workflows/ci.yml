@@ -1,0 +1,613 @@
+name: CI
+
+# Проверки качества и архитектурных границ.
+# Развёртывание отсюда не выполняется: выкатка появится вместе
+# с целевыми средами (DEPLOYMENT.md).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Новый запуск отменяет предыдущий для той же ветки.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+
+jobs:
+  backend-lint:
+    name: Backend — линтер и типы
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements-dev.txt
+            ml/requirements.txt
+
+      - name: Установка зависимостей
+        working-directory: backend
+        run: |
+          pip install --requirement requirements-dev.txt
+          pip install --requirement ../ml/requirements.txt
+
+      - name: Ruff — проверка
+        working-directory: backend
+        run: python -m ruff check --output-format=github .
+
+      - name: Ruff — форматирование
+        working-directory: backend
+        run: python -m ruff format --check .
+
+      - name: Mypy — типы
+        working-directory: backend
+        run: python -m mypy app
+
+  backend-tests:
+    name: Backend — тесты
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Установка зависимостей
+        working-directory: backend
+        run: |
+          pip install --requirement requirements-dev.txt
+          pip install --requirement ../ml/requirements.txt
+
+      - name: Pytest
+        working-directory: backend
+        # Тесты не требуют работающих сервисов данных: внешние зависимости
+        # подменяются, аутентификация использует подставной адаптер.
+        run: python -m pytest --cov=app --cov-report=term-missing
+
+  schema-drift:
+    name: PostgreSQL — migrations and metadata drift (${{ matrix.migration_path }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        migration_path: [clean, upgrade]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: phase8_ci
+          POSTGRES_USER: medsignal
+          POSTGRES_PASSWORD: phase8-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medsignal -d phase8_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Установка зависимостей
+        working-directory: backend
+        run: pip install --requirement requirements-dev.txt
+
+      - name: Чистая схема, upgrade принятой версии и проверка drift
+        working-directory: backend
+        env:
+          APP_ENV: local
+          APP_SECRET: phase8-ci-secret
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: phase8_ci
+          POSTGRES_USER: medsignal
+          POSTGRES_PASSWORD: phase8-ci-password
+        run: |
+          if [ "${{ matrix.migration_path }}" = "upgrade" ]; then
+            alembic upgrade 0006_scenario_analysis
+          fi
+          alembic upgrade head
+          alembic check
+
+  data-publication-integration:
+    name: Synthetic publication and worker transactions — PostgreSQL/ClickHouse
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: phase8-data-ci
+          POSTGRES_USER: medsignal
+          POSTGRES_PASSWORD: phase8-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medsignal -d phase8-data-ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8-alpine
+        env:
+          CLICKHOUSE_USER: medsignal
+          CLICKHOUSE_PASSWORD: phase8-ci-password
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+        ports:
+          - 8123:8123
+        options: >-
+          --health-cmd "wget -qO- http://127.0.0.1:8123/ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install integration test dependencies
+        run: |
+          pip install -r backend/requirements-dev.txt
+          pip install -r data_pipeline/requirements.txt -r ml/requirements.txt
+      - name: Isolated synthetic database tests
+        working-directory: backend
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+          D_TEST_ALLOW_ISOLATED: "1"
+          D_TEST_POSTGRES_DSN: postgresql+psycopg://medsignal:phase8-ci-password@127.0.0.1:5432/phase8-data-ci
+          R1_TEST_POSTGRES_DSN: postgresql+psycopg://medsignal:phase8-ci-password@127.0.0.1:5432/phase8-data-ci
+          D_TEST_CLICKHOUSE_HOST: 127.0.0.1
+          D_TEST_CLICKHOUSE_PORT: "8123"
+          D_TEST_CLICKHOUSE_USER: medsignal
+          D_TEST_CLICKHOUSE_PASSWORD: phase8-ci-password
+        run: >-
+          python -m pytest
+          tests/integration/test_delivery_postgres.py
+          tests/integration/test_clickhouse_publication.py
+          tests/integration/test_organization_forecast_atomicity.py
+          -q
+
+  architecture:
+    name: Архитектурные границы
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements-dev.txt
+            data_pipeline/requirements.txt
+            ml/requirements.txt
+
+      - name: Установка зависимостей
+        # Зависимости конвейера данных нужны здесь потому, что проверка
+        # границ импортирует модули по-настоящему. Без polars и openpyxl
+        # data_pipeline.audit не загрузится, и контракты не проверятся.
+        run: |
+          pip install --requirement backend/requirements-dev.txt
+          pip install --requirement data_pipeline/requirements.txt
+          pip install --requirement ml/requirements.txt
+
+      - name: Проверка правил зависимостей
+        # Границы, зафиксированные в PHASE 0. Нарушение ломает сборку:
+        # граница, которую не проверяет машина, разрушается за недели.
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/backend
+        run: lint-imports --config .importlinter
+
+  ml:
+    name: ML — линтер, типы и тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements-dev.txt
+            ml/requirements.txt
+
+      - name: Установка зависимостей
+        run: |
+          pip install --requirement backend/requirements-dev.txt
+          pip install --requirement ml/requirements.txt
+
+      - name: Ruff и mypy
+        run: |
+          ruff check ml --config backend/pyproject.toml
+          ruff format --check ml --config backend/pyproject.toml
+          mypy ml --config-file backend/pyproject.toml
+
+      - name: Pytest
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest ml/tests -q
+
+  monitoring:
+    name: Monitoring pilot — lint and synthetic tests
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            pilot/requirements.txt
+            pilot/requirements-dev.txt
+
+      - name: Install pilot dependencies
+        run: python -m pip install -r pilot/requirements-dev.txt
+
+      - name: Ruff
+        run: |
+          ruff check pilot ml/monitoring.py tests/monitoring --config backend/pyproject.toml
+          ruff format --check pilot ml/monitoring.py tests/monitoring --config backend/pyproject.toml
+
+      - name: Synthetic monitoring tests
+        run: python -m pytest tests/monitoring -q --junitxml=junit-monitoring.xml
+
+      - name: Pilot Compose configuration
+        run: docker compose -f docker-compose.pilot.yml config --quiet
+
+      - name: Monitoring test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-monitoring
+          path: junit-monitoring.xml
+          if-no-files-found: warn
+
+  data-audit:
+    name: Конвейер данных — аудит и загрузка
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            data_pipeline/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Установка зависимостей
+        run: |
+          pip install --requirement data_pipeline/requirements.txt
+          pip install ruff==0.8.* mypy==1.13.*
+
+      - name: Линтер и формат
+        run: |
+          ruff check data_pipeline tests/audit tests/pipeline
+          ruff format --check data_pipeline tests/audit tests/pipeline
+
+      - name: Типы
+        run: mypy data_pipeline
+
+      - name: Тесты
+        # Фикстуры синтетические: реальные медицинские выгрузки в CI
+        # не попадают ни при каких условиях.
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest tests/audit tests/pipeline -q
+
+  frontend:
+    name: Frontend — линтер, типы, тесты
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Проверка типов
+        run: npm run typecheck
+
+      - name: Vitest
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
+
+  keycloak-realm-access:
+    name: Keycloak realm mount — isolated preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ACCEPTANCE_PROJECT: phase8-keycloak-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Ensure targeted POSIX ACL tooling
+        run: command -v setfacl >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq acl)
+      - name: Check real image user, read-only realm mount and OIDC import
+        run: >-
+          python -m scripts.operations.keycloak_realm_probe
+          --project "$ACCEPTANCE_PROJECT"
+      - name: Preserve sanitized Keycloak read/import evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keycloak-realm-probe
+          path: tmp/keycloak-probe/${{ env.ACCEPTANCE_PROJECT }}/summary.json
+          if-no-files-found: ignore
+
+  browser-acceptance:
+    name: Synthetic browser acceptance — real OIDC/API
+    runs-on: ubuntu-latest
+    needs: keycloak-realm-access
+    timeout-minutes: 120
+    env:
+      ACCEPTANCE_PROJECT: phase8-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build patched signed-source MinIO for isolated acceptance
+        run: >-
+          python -m scripts.operations.minio_source_build build
+          --project "$ACCEPTANCE_PROJECT" --patched-acceptance
+
+      - name: Review current official MinIO advisories before runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python -m scripts.operations.minio_advisory_gate
+          --project "$ACCEPTANCE_PROJECT"
+
+      - name: Scan both project-built images before startup
+        run: >-
+          python -m scripts.operations.minio_source_scan
+          --project "$ACCEPTANCE_PROJECT"
+
+      - name: Deny unauthorized IAM import on disposable MinIO before Compose
+        run: >-
+          python -m scripts.operations.minio_cve_probe
+          --project "$ACCEPTANCE_PROJECT"
+
+      - name: Preserve MinIO provenance, SBOM and security evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minio-source-build-evidence
+          path: |
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/source-images.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/advisory-gate.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/iam-probe-summary.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/security/*-trivy.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/security/*-sbom.cdx.json
+            tmp/acceptance-build/${{ env.ACCEPTANCE_PROJECT }}/security/scan-summary.json
+          if-no-files-found: ignore
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install browser dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Ensure targeted POSIX ACL tooling
+        run: command -v setfacl >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq acl)
+
+      - name: Prepare fresh namespaced containers and volumes
+        run: |
+          python -m scripts.operations.prepare_acceptance prepare --project "$ACCEPTANCE_PROJECT" --minio-source-build
+          python -m scripts.operations.prepare_acceptance start --project "$ACCEPTANCE_PROJECT"
+
+      - name: Verify MinIO/mc bootstrap and scoped S3 operations
+        run: >-
+          python -m scripts.operations.verify_minio_source
+          --project "$ACCEPTANCE_PROJECT"
+
+      - name: Preserve numeric-only MinIO runtime result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minio-source-runtime
+          path: tmp/acceptance/${{ env.ACCEPTANCE_PROJECT }}/minio-runtime-summary.json
+          if-no-files-found: ignore
+
+      - name: Load invented fixtures through the normal publication path
+        run: python -m scripts.acceptance.bootstrap_synthetic --project "$ACCEPTANCE_PROJECT"
+
+      - name: Verify real test-token scopes
+        run: |
+          python -m pip install httpx
+          python -m scripts.acceptance.verify_scope --project-dir "tmp/acceptance/$ACCEPTANCE_PROJECT"
+
+      - name: Browser journey with production Next and test Keycloak
+        run: |
+          export MEDSIGNAL_E2E_BASE_URL="$(python -c 'import json,os,pathlib; p=pathlib.Path("tmp/acceptance")/os.environ["ACCEPTANCE_PROJECT"]/"manifest.json"; print(json.loads(p.read_text())["origin"])')"
+          export MEDSIGNAL_E2E_REALM="${{ github.workspace }}/tmp/acceptance/$ACCEPTANCE_PROJECT/realm.json"
+          npm --prefix frontend run test:e2e -- --timeout 45000
+
+      - name: Real HTTP 503 browser test with guaranteed ClickHouse restore
+        run: python -m scripts.acceptance.run_degraded_browser --project "$ACCEPTANCE_PROJECT"
+
+      - name: Verify dependency recovery
+        run: python -m scripts.operations.prepare_acceptance verify --project "$ACCEPTANCE_PROJECT"
+
+      - name: Preserve numeric-only browser counts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-browser-counts
+          path: |
+            tmp/playwright-summary.json
+            tmp/playwright-degraded-summary.json
+          if-no-files-found: warn
+
+      - name: Preserve sanitized acceptance startup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-start-diagnostics
+          path: tmp/acceptance/${{ env.ACCEPTANCE_PROJECT }}/sanitized-diagnostics.json
+          if-no-files-found: ignore
+
+      - name: Tear down only the namespaced disposable project
+        if: always()
+        run: |
+          [[ "$ACCEPTANCE_PROJECT" == phase8-* ]] || exit 1
+          project_dir="tmp/acceptance/$ACCEPTANCE_PROJECT"
+          if [ -f "$project_dir/.env" ] && [ -f "$project_dir/compose.override.yml" ]; then
+            docker compose --project-name "$ACCEPTANCE_PROJECT" \
+              --env-file "$project_dir/.env" \
+              -f docker-compose.yml -f "$project_dir/compose.override.yml" \
+              down --volumes --remove-orphans
+          fi
+
+  phase8-contracts:
+    name: Phase 8 — security and operations contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install contract-test dependencies
+        run: pip install --requirement backend/requirements.txt pytest pyyaml httpx
+
+      - name: Security, recovery, performance and safe-reset contracts
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/backend
+        run: >-
+          python -m pytest
+          tests/security
+          tests/operations
+          tests/performance
+          tests/e2e
+          -q
+
+      - name: Secret scan without emitting matched values
+        run: python -m scripts.security.scan_secrets --root . --history
+
+  image-scan:
+    name: Current image scan — ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            image_ref: medsignal-backend:ci
+          - image: frontend
+            image_ref: medsignal-frontend:ci
+          - image: worker
+            image_ref: medsignal-worker:ci
+          - image: mlflow
+            image_ref: medsignal-mlflow:ci
+          - image: nginx
+            image_ref: medsignal-nginx:ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build or pull current image
+        run: |
+          case "${{ matrix.image }}" in
+            backend)  docker build --pull --target production -f backend/Dockerfile -t "${{ matrix.image_ref }}" backend ;;
+            frontend) docker build --pull --target production -f frontend/Dockerfile -t "${{ matrix.image_ref }}" frontend ;;
+            worker)   docker build --pull --target production -f infrastructure/ml/Dockerfile -t "${{ matrix.image_ref }}" . ;;
+            mlflow)   docker build --pull -f infrastructure/docker/mlflow.Dockerfile -t "${{ matrix.image_ref }}" infrastructure/docker ;;
+            nginx)    docker build --pull -f infrastructure/nginx/Dockerfile -t "${{ matrix.image_ref }}" infrastructure/nginx ;;
+          esac
+
+      - name: Trivy scan and policy gate
+        run: >-
+          python -m scripts.security.image_scan
+          --image "${{ matrix.image_ref }}"
+          --output "image-scan/${{ matrix.image }}/report.json"
+
+      - name: Preserve machine and human evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-scan-${{ matrix.image }}
+          path: image-scan/${{ matrix.image }}/
+          if-no-files-found: warn
+
+  compose:
+    name: Конфигурация Docker Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверка синтаксиса compose
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.production.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml config --quiet
+
+      - name: Хранилища не публикуются в базовой конфигурации
+        # Проверка требования SECURITY.md, раздел 2: наружу выходит
+        # только обратный прокси. Логика вынесена в скрипт, чтобы её
+        # можно было запустить локально тем же способом, что и в CI.
+        run: |
+          docker compose config --format json \
+            | python scripts/check-published-ports.py
+
+      - name: Диагностическое наложение слушает только петлевой адрес
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml \
+            config --format json \
+            | python scripts/check-published-ports.py --allow-loopback

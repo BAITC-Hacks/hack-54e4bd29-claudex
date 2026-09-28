@@ -1,0 +1,415 @@
+{
+  "reviewed_at": "2026-09-26",
+  "repository": "https://github.com/minio/minio",
+  "base_tag": "RELEASE.2024-11-07T00-52-20Z",
+  "base_commit": "cefc43e4daa4cbb490ef6726ea374e26a93eb85e",
+  "backport_commit": "f246c9053f9603e610d98439799bdd2a6b293427",
+  "scope": "official published minio/minio security advisories (27 as of review); synthetic acceptance only",
+  "advisories": [
+    {
+      "advisory": "GHSA-xh8f-g2qw-gcm7",
+      "cve": "CVE-2026-42600",
+      "severity": "MEDIUM",
+      "affected_ranges": [
+        {
+          "affected_range": ">= RELEASE.2022-07-24T01-54-52Z",
+          "fixed_version": ">= RELEASE.2026-04-14T21-32-45Z"
+        }
+      ],
+      "base_applicability": true,
+      "status": "AFFECTED",
+      "description_sha256": "7fd82737db5e390301b691c5059fffd1c867f8a8f442cf6e8e98ed5bda687d97",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-xh8f-g2qw-gcm7"
+    },
+    {
+      "advisory": "GHSA-hv4r-mvr4-25vw",
+      "cve": "CVE-2026-41145",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": ">= RELEASE.2023-05-18T00-05-36Z",
+          "fixed_version": ">= RELEASE.2026-04-11T03-20-12Z"
+        }
+      ],
+      "base_applicability": true,
+      "status": "AFFECTED",
+      "description_sha256": "bdabb1d528e9ea8bec06f33c26aed457cedffc4fcfb31c5862924754419dde40",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-hv4r-mvr4-25vw"
+    },
+    {
+      "advisory": "GHSA-9c4q-hq6p-c237",
+      "cve": "CVE-2026-40344",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": ">= RELEASE.2023-05-18T00-05-36Z",
+          "fixed_version": ">= RELEASE.2026-04-11T03-20-12Z"
+        }
+      ],
+      "base_applicability": true,
+      "status": "AFFECTED",
+      "description_sha256": "f80adfa7d93799c772a1953968bba9946d8c25ec95c3f323d691249ccc934a80",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-9c4q-hq6p-c237"
+    },
+    {
+      "advisory": "GHSA-h749-fxx7-pwpg",
+      "cve": "CVE-2026-39414",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": ">= RELEASE.2018-08-18T03-49-57Z",
+          "fixed_version": "MinIO AIStor RELEASE.2025-12-20T04-58-37Z"
+        }
+      ],
+      "base_applicability": true,
+      "status": "AFFECTED",
+      "description_sha256": "8e61cb7b3e358cab55563fb5f8fc2359c6e4555ab136a5ee9e8f948fddb4c45d",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-h749-fxx7-pwpg"
+    },
+    {
+      "advisory": "GHSA-3rh2-v3gr-35p9",
+      "cve": "CVE-2026-34204",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": "> RELEASE.2024-03-30T09-41-56Z",
+          "fixed_version": ">= RELEASE.2026-03-26T21-24-40Z"
+        }
+      ],
+      "base_applicability": true,
+      "status": "AFFECTED",
+      "description_sha256": "02000c2e26e0f2c46aadecb07d23e3819035a0c854fdf197fa12c7825bdb9501",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-3rh2-v3gr-35p9"
+    },
+    {
+      "advisory": "GHSA-jv87-32hw-hh99",
+      "cve": "CVE-2026-33419",
+      "severity": "MEDIUM",
+      "affected_ranges": [
+        {
+          "affected_range": "< RELEASE.2026-03-17T21-25-16Z",
+          "fixed_version": "RELEASE.2026-03-17T21-25-16Z"
+        }
+      ],
+      "base_applicability": true,
+      "status": "AFFECTED",
+      "description_sha256": "858737875c3a650823953bc69241c9de9cc0f9e7b6b74c5b3ce62be3997e9406",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-jv87-32hw-hh99"
+    },
+    {
+      "advisory": "GHSA-5cx5-wh4m-82fh",
+      "cve": "CVE-2026-33322",
+      "severity": "MEDIUM",
+      "affected_ranges": [
+        {
+          "affected_range": ">= RELEASE.2022-11-08T05-27-07Z",
+          "fixed_version": "RELEASE.2026-03-17T21-25-16Z"
+        }
+      ],
+      "base_applicability": true,
+      "status": "AFFECTED",
+      "description_sha256": "27b995c544b97f3ca8dedf2545d3d0520431903eba9631c221cd2e4f0d08f1cb",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-5cx5-wh4m-82fh"
+    },
+    {
+      "advisory": "GHSA-jjjj-jwhf-8rgr",
+      "cve": "CVE-2025-62506",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": "all",
+          "fixed_version": "RELEASE.2025-10-15T17-29-55Z"
+        }
+      ],
+      "base_applicability": true,
+      "status": "AFFECTED",
+      "description_sha256": "016e78a4a303e32058f16a9d7ba87f2dd313cbbb8a258bc4acd5807047f77944",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-jjjj-jwhf-8rgr"
+    },
+    {
+      "advisory": "GHSA-wg47-6jq2-q2hh",
+      "cve": "CVE-2025-31489",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": "RELEASE.2023-05-18T00-05-36Z",
+          "fixed_version": "RELEASE.2025-04-03T14-56-28Z"
+        }
+      ],
+      "base_applicability": true,
+      "status": "AFFECTED",
+      "description_sha256": "4fd836bc7443db61cbe81ac548fa5c981a84a883d9f62b708e399e3fb4988753",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-wg47-6jq2-q2hh"
+    },
+    {
+      "advisory": "GHSA-wc79-7x8x-2p58",
+      "cve": "CVE-2025-27414",
+      "severity": "MEDIUM",
+      "affected_ranges": [
+        {
+          "affected_range": "RELEASE.2024-06-06T09-36-42Z and newer",
+          "fixed_version": "RELEASE.2025-02-28T09-55-16Z"
+        }
+      ],
+      "base_applicability": true,
+      "status": "AFFECTED",
+      "description_sha256": "489372e930eecacce40f0c9d866b19fcc5f98738ea759c5aefe874eef82b3add",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-wc79-7x8x-2p58"
+    },
+    {
+      "advisory": "GHSA-cwq8-g58r-32hg",
+      "cve": "CVE-2024-55949",
+      "severity": "CRITICAL",
+      "affected_ranges": [
+        {
+          "affected_range": "RELEASE.2022-06-25T15-50-16Z",
+          "fixed_version": "RELEASE.2024-12-13T22-19-12Z"
+        }
+      ],
+      "base_applicability": true,
+      "status": "FIXED BY BACKPORT",
+      "description_sha256": "cf927d7881470ab57b8823106380c771e9981505703d7a6088fd9c85d5ff55ad",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-cwq8-g58r-32hg"
+    },
+    {
+      "advisory": "GHSA-95fr-cm4m-q5p9",
+      "cve": "CVE-2024-36107",
+      "severity": "MEDIUM",
+      "affected_ranges": [
+        {
+          "affected_range": "RELEASE.2022-10-02T19-29-29Z",
+          "fixed_version": "RELEASE.2024-05-27T19-17-46Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "d6035feea47743d9e074a6d3a9fe97b15a44f60b3afd9ef0a64144723f1c2f5c",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-95fr-cm4m-q5p9"
+    },
+    {
+      "advisory": "GHSA-xx8w-mq23-29g4",
+      "cve": "CVE-2024-24747",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": "all",
+          "fixed_version": "RELEASE.2024-01-31T20-20-33Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "f3c00086f72aad2695b26f07dbfa91e83793685bfbecd3d512004f1006254b04",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-xx8w-mq23-29g4"
+    },
+    {
+      "advisory": "GHSA-6xvq-wj2x-3h3q",
+      "cve": "CVE-2023-28432",
+      "severity": "CRITICAL",
+      "affected_ranges": [
+        {
+          "affected_range": "RELEASE.2021-08-31T05-46-54Z",
+          "fixed_version": "RELEASE.2023-03-20T20-16-18Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "70338bcbdcb08bc78f69e8c2063599e9fad7efa0c16802e7185a5725b87f3422",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-6xvq-wj2x-3h3q"
+    },
+    {
+      "advisory": "GHSA-2pxw-r47w-4p8c",
+      "cve": "CVE-2023-28434",
+      "severity": "CRITICAL",
+      "affected_ranges": [
+        {
+          "affected_range": "all",
+          "fixed_version": "RELEASE.2023-03-20T20-16-18Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "420c2dbdcdaefa8bb29d35fd47325b605d11c6befebc28f220980ef3de1edd0d",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-2pxw-r47w-4p8c"
+    },
+    {
+      "advisory": "GHSA-w23q-4hw3-2pp6",
+      "cve": "CVE-2023-28433",
+      "severity": "CRITICAL",
+      "affected_ranges": [
+        {
+          "affected_range": "all",
+          "fixed_version": "RELEASE.2023-03-20T20-16-18Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "06f3b2917a42e3a1e213e7c695a3337701334ebab499b53f59d63fe5ea002b15",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-w23q-4hw3-2pp6"
+    },
+    {
+      "advisory": "GHSA-9wfv-wmf7-6753",
+      "cve": "CVE-2023-27589",
+      "severity": "MEDIUM",
+      "affected_ranges": [
+        {
+          "affected_range": ">= RELEASE.2020-12-23T02-24-12Z",
+          "fixed_version": "RELEASE.2023-03-13T19-46-17Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "7e9f36215e6a2d1cbdc43a7c5432aa10a61dcb369c5a8d26a1617d9ea3ee89c6",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-9wfv-wmf7-6753"
+    },
+    {
+      "advisory": "GHSA-c8fc-mjj8-fc63",
+      "cve": "CVE-2023-25812",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": ">= RELEASE.2020-04-10T03-34-42Z",
+          "fixed_version": "RELEASE.2023-02-17T17-52-43Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "636d6a681c0dcd5ff711d23d8c2140441e687fa93b3ff8d5e05a51a4d1742bd7",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-c8fc-mjj8-fc63"
+    },
+    {
+      "advisory": "GHSA-gr9v-6pcm-rqvg",
+      "cve": "CVE-2022-35919",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": ">= RELEASE.2020-07-24T22-43-05Z",
+          "fixed_version": "RELEASE.2022-07-29T19-40-48Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "c7725b021459e373463ced93233a717c8c72c7b4cf9f90f91efbdd983ecdbeaa",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-gr9v-6pcm-rqvg"
+    },
+    {
+      "advisory": "GHSA-qrpr-r3pw-f636",
+      "cve": "CVE-2022-31028",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": ">= RELEASE.2019-09-25T18-25-51Z",
+          "fixed_version": "RELEASE.2022-06-02T02-11-04Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "dcb68095921935808ca7df2d2db47b62de6cbb4630d0c902b217474b8249c122",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-qrpr-r3pw-f636"
+    },
+    {
+      "advisory": "GHSA-2j69-jjmg-534q",
+      "cve": "CVE-2022-24842",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": ">= RELEASE.2021-12-09T06-19-41Z",
+          "fixed_version": "RELEASE.2022-04-12T06-55-35Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "9c0909fbda3bf56ee29eed7162ad35b599fbaa60d28389c906391e7415a5c178",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-2j69-jjmg-534q"
+    },
+    {
+      "advisory": "GHSA-j6jc-jqqc-p6cx",
+      "cve": "CVE-2021-43858",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": "RELEASE.2019-07-31T18-57-56Z",
+          "fixed_version": "RELEASE.2021-12-27T07-23-18Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "db934afbd352bd031f7e2da2acad21cdb85918173b49290683183066ee8fc484",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-j6jc-jqqc-p6cx"
+    },
+    {
+      "advisory": "GHSA-v64v-g97p-577c",
+      "cve": "CVE-2021-41137",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": "RELEASE.2021-10-10T16-53-30Z",
+          "fixed_version": "RELEASE.2021-10-13T00-23-17Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "2170ad74b848e94a0da19e48f5a7ce875696c5f122a5e214db68823bb24418f4",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-v64v-g97p-577c"
+    },
+    {
+      "advisory": "GHSA-xr7r-7gpj-5pgp",
+      "cve": "CVE-2021-21390",
+      "severity": "MEDIUM",
+      "affected_ranges": [
+        {
+          "affected_range": "< RELEASE.2021-03-17T02-33-02Z",
+          "fixed_version": "RELEASE.2021-03-17T02-33-02Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "5f0af6490ec18aef6dc5dd582c88ea612e8df6c22c595372dc3512b81d9fb2f5",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-xr7r-7gpj-5pgp"
+    },
+    {
+      "advisory": "GHSA-hq5j-6r98-9m8v",
+      "cve": "CVE-2021-21362",
+      "severity": "MEDIUM",
+      "affected_ranges": [
+        {
+          "affected_range": "< RELEASE.2021-03-04T00-53-13Z",
+          "fixed_version": "RELEASE.2021-03-04T00-53-13Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "8be35d1a3e1e2410a98027f9b45618cc77532edc77a75da8c51385d766cdb6b4",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-hq5j-6r98-9m8v"
+    },
+    {
+      "advisory": "GHSA-m4qq-5f7c-693q",
+      "cve": "CVE-2021-21287",
+      "severity": "MEDIUM",
+      "affected_ranges": [
+        {
+          "affected_range": ">= RELEASE.2019-12-17T23-16-33Z",
+          "fixed_version": "RELEASE.2021-01-30T00-20-58Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "da3f71e1240629fc71b9470727a14edb39323cd4c5ab79b2e563525c71197d0e",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-m4qq-5f7c-693q"
+    },
+    {
+      "advisory": "GHSA-xv4r-vccv-mg4w",
+      "cve": "CVE-2020-11012",
+      "severity": "HIGH",
+      "affected_ranges": [
+        {
+          "affected_range": "RELEASE.2019-12-17T23-16-33Z",
+          "fixed_version": "RELEASE.2020-04-23T00-58-49Z"
+        }
+      ],
+      "base_applicability": false,
+      "status": "NOT AFFECTED",
+      "description_sha256": "b5c7b6d15d2421ef46ca21881e1b099445984e3a958333f8e579fc4ccaddfeb1",
+      "source_url": "https://github.com/minio/minio/security/advisories/GHSA-xv4r-vccv-mg4w"
+    }
+  ]
+}

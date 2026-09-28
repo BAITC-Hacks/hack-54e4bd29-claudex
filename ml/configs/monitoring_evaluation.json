@@ -1,0 +1,92 @@
+{
+  "schema_version": "monitoring-evaluation-config-v1",
+  "execution_status": "DEFERRED",
+  "legacy_path_version": "legacy-q1-v1",
+  "aggregate_path_version": "approved-aggregate-v2",
+  "target": "recorded referral counts at approved organization level; not patients or beds",
+  "missing_gates": [
+    "NEW_UNSEEN_DATA_REQUIRED",
+    "OWNER_ACCEPTANCE_REQUIRED",
+    "APPROVED_DELIVERY_AND_MAPPING_REQUIRED",
+    "TRUSTED_MODEL_ARTIFACT_REQUIRED"
+  ],
+  "existing_signal_policy": {
+    "version": "legacy-growth-20-35-50-v1",
+    "warning_growth_percent": 20,
+    "high_growth_percent": 35,
+    "critical_growth_percent": 50,
+    "min_reference_total": 20,
+    "min_extra_referrals": 10
+  },
+  "freshness_policy": {
+    "version": "existing-72h-168h-v1",
+    "fresh_hours": 72,
+    "expired_hours": 168
+  },
+  "policy": {
+    "approved": false,
+    "version": "draft-v1"
+  },
+  "report": {
+    "independent_test": false,
+    "coverage_complete": false
+  },
+  "protocol_template": {
+    "schema_version": "monitoring-evaluation-v2",
+    "aggregate_manifest_sha256": null,
+    "dataset_sha256": null,
+    "source_manifest_hashes": [],
+    "split": {
+      "train_end": null,
+      "validation_end": null,
+      "test_end": null,
+      "horizon_days": 7
+    },
+    "timezone": null,
+    "feature_schema": "hospital-referrals-direct7-v1",
+    "mapping_version": null,
+    "code_commit": null,
+    "implementation_sha256": null,
+    "estimator": {
+      "name": "HistGradientBoostingRegressor",
+      "parameters": null
+    },
+    "random_seed": 42,
+    "dependency_versions": {
+      "python": null,
+      "numpy": null,
+      "scikit-learn": null,
+      "joblib": null,
+      "threadpoolctl": null
+    },
+    "eligibility": {
+      "minimum_training_days": 28,
+      "minimum_training_total": 100
+    },
+    "episode_policy": {
+      "version": "referral-growth-v1",
+      "window_days": 7,
+      "reference_days": 28,
+      "min_reference_total": 20,
+      "min_extra_referrals": 10,
+      "growth_threshold_percent": 20
+    },
+    "baseline_selection": {
+      "selected": null,
+      "selected_on": "validation"
+    },
+    "policy_version": "draft-v1",
+    "uncertainty": {
+      "seed": 42,
+      "resamples": 2000,
+      "min_organizations": 2,
+      "min_time_blocks": 4
+    },
+    "known_development_periods": [
+      {
+        "start": "2025-01-01",
+        "end": "2025-03-31"
+      }
+    ]
+  }
+}

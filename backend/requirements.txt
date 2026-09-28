@@ -1,0 +1,37 @@
+# MedSignal backend — runtime dependencies.
+# Версии закреплены до минорной, чтобы сборка была воспроизводимой.
+
+# --- Web ---
+fastapi==0.141.*
+starlette==1.3.1
+uvicorn[standard]==0.32.*
+python-multipart==0.0.*
+
+# --- Валидация и конфигурация ---
+pydantic==2.9.*
+pydantic-settings==2.6.*
+
+# --- PostgreSQL ---
+SQLAlchemy==2.0.*
+psycopg[binary]==3.2.*
+alembic==1.14.*
+
+# --- ClickHouse ---
+clickhouse-connect==0.8.*
+
+# --- Redis ---
+redis==5.2.*
+
+# --- Объектное хранилище ---
+minio==7.2.*
+
+# --- Фоновые задачи ---
+celery==5.4.*
+
+# --- Аутентификация (проверка токенов Keycloak) ---
+PyJWT[crypto]==2.13.0
+cryptography==50.0.0
+httpx==0.27.*
+
+# --- Наблюдаемость ---
+prometheus-client==0.21.*

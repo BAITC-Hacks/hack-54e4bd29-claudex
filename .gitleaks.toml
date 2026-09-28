@@ -1,0 +1,11 @@
+title = "MedSignal secret scanning policy"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Known synthetic test-only pseudonymization fixtures"
+regexes = [
+  '''2f8c6a41d05b39e7c4a81f6d2b7e0935''',
+  '''test-pseudonymization-key-0123456789abcdef''',
+]

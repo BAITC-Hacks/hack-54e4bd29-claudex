@@ -1,0 +1,85 @@
+{
+  "notice": "SYNTHETIC ONLY. Never persist as real approval/evidence.",
+  "policy": {
+    "approved": true,
+    "version": "synthetic-policy-v1",
+    "min_precision": 0.5,
+    "min_recall": 0.5,
+    "max_false_alerts_per_org_week": 0.25,
+    "min_positive_episodes": 4,
+    "min_organizations": 2,
+    "min_evaluation_windows": 4,
+    "max_forecast_error_vs_baseline": 1.0,
+    "sign_off": {
+      "review_status": "VERIFIED_EXTERNAL",
+      "reviewer_id": "synthetic-reviewer",
+      "evidence_ref": "fixture-only:not-real-approval",
+      "evidence_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "policy_sha256": "3efdc34b3785519e0fbf05df60bac5a5218bcc73cb4f4544a85af281af0ededf"
+    }
+  },
+  "report": {
+    "schema_version": "approved-monitoring-report-v1",
+    "independent_test": true,
+    "coverage_complete": true,
+    "protocol_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "model_artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "dataset_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "mapping_version": "synthetic-mapping-v1",
+    "counts": {
+      "tp": 4,
+      "fp": 1,
+      "fn": 1,
+      "tn": 2
+    },
+    "forecast_metrics": {
+      "mae": 1.0,
+      "wape": 10.0,
+      "points": 56
+    },
+    "baseline_metrics": {
+      "mae": 2.0,
+      "wape": 20.0,
+      "points": 56
+    },
+    "alerts_per_org_week": 0.625,
+    "false_alerts_per_org_week": 0.125,
+    "sample_support": {
+      "organizations": 2,
+      "evaluation_windows": 4,
+      "org_weeks": 8,
+      "positive_episodes": 5
+    },
+    "coverage_evidence": {
+      "review_status": "VERIFIED_EXTERNAL",
+      "reviewer_id": "synthetic-reviewer",
+      "evidence_ref": "fixture-only:not-real-approval",
+      "evidence_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "dataset_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "mapping_version": "synthetic-mapping-v1",
+      "expected_org_days": 56,
+      "complete_org_days": 56,
+      "period_start": "2026-07-01",
+      "period_end": "2026-07-28"
+    },
+    "sealed_period_evidence": {
+      "review_status": "VERIFIED_EXTERNAL",
+      "reviewer_id": "synthetic-reviewer",
+      "evidence_ref": "fixture-only:not-real-approval",
+      "evidence_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "dataset_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "protocol_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "model_artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "policy_sha256": "3efdc34b3785519e0fbf05df60bac5a5218bcc73cb4f4544a85af281af0ededf",
+      "train_end": "2026-05-31",
+      "validation_end": "2026-06-30",
+      "test_start": "2026-07-01",
+      "test_end": "2026-07-28",
+      "frozen_at": "2026-06-29T00:00:00+00:00",
+      "sealed_at": "2026-06-28T00:00:00+00:00",
+      "opened_at": "2026-08-01T00:00:00+00:00",
+      "unseen_before_open": true,
+      "no_test_tuning": true
+    }
+  }
+}

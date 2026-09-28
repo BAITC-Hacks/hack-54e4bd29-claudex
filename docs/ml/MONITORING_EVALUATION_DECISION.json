@@ -1,0 +1,33 @@
+{
+  "schema_version": "deferred-monitoring-decision-v1",
+  "experiment_status": "INSUFFICIENT_DATA",
+  "experiment_executed": false,
+  "baseline_commit": "d965aff1665eeeff7e62d26be59beeef88324228",
+  "implementation_file_hashes": {
+    "ml/monitoring.py": "f51e6f6bd8b038676eb3039dc0375c2f30402094c8cee61582d1cf6a52cf99e7",
+    "ml/monitoring_contracts.py": "8825f59a7f278d71d0ca7f40748916d4b1441d538bab741ae4112dc32c7ec981",
+    "ml/evaluation/monitoring.py": "39d0911a4510f5fb273f10ca837148b1e5e48005923fe971fc1b5505ad1b46de",
+    "ml/evaluation/admission.py": "cbeddf180f25fa71d41659ef6b1254bd361c0529bb017c066e4018065b7525c1"
+  },
+  "implementation_sha256": "d2c566068f806bb34935ffb8b0ddfe850b4b14e9102854da681b9106ceaa2ad0",
+  "decision": {
+    "status": "POLICY_NOT_APPROVED",
+    "reason_codes": [
+      "OWNER_ACCEPTANCE_REQUIRED"
+    ],
+    "policy_snapshot": {
+      "approved": false,
+      "version": "draft-v1"
+    }
+  },
+  "decision_sha256": "47ea352caeec54ddee3e23d1da9c20021b89549232adb1125eb62bd25185b913",
+  "real_protocol_sha256": null,
+  "model_artifact_sha256": null,
+  "dataset_sha256": null,
+  "missing_gates": [
+    "NEW_UNSEEN_DATA_REQUIRED",
+    "OWNER_ACCEPTANCE_REQUIRED",
+    "APPROVED_DELIVERY_AND_MAPPING_REQUIRED",
+    "TRUSTED_MODEL_ARTIFACT_REQUIRED"
+  ]
+}

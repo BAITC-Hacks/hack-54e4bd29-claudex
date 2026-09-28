@@ -1,0 +1,85 @@
+[project]
+name = "medsignal-backend"
+version = "0.1.0"
+description = "MedSignal backend — система раннего предупреждения о риске перегрузки стационаров"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 90
+target-version = "py312"
+src = ["."]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "N",         # pep8-naming
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "A",         # встроенные имена
+    "C4",        # comprehensions
+    "SIM",       # упрощения
+    "TID",       # запрет относительных импортов между пакетами
+    "ARG",       # неиспользуемые аргументы
+    "RUF",
+    "S",         # bandit: проверки безопасности
+]
+ignore = [
+    "S101",   # assert допустим в тестах и в сужении типов
+    "B008",   # Depends(...) в значении по умолчанию — идиома FastAPI
+    # RUF001-003 ищут латиницу, замаскированную под кириллицу. Документация
+    # и комментарии в проекте написаны по-русски, поэтому правило даёт
+    # только ложные срабатывания.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# S105/S106 — «жёстко заданный пароль». В тестах это подставные значения.
+# ARG001 — фикстура, подключённая ради побочного эффекта (наполнение
+# хранилища, подмена зависимости), в теле теста не используется.
+# Это идиома pytest, а не забытый аргумент.
+"tests/**" = ["S105", "S106", "S311", "ARG001"]
+# Миграции создаются автогенерацией: переносить в них строки вручную
+# значит расходиться с тем, что выдаст следующая генерация.
+"alembic/versions/*" = ["E501", "I001"]
+"alembic/**" = ["I001"]
+  # Запросы собираются из закрытых таблиц/колонок и явных allowlist;
+  # пользовательские значения передаются только параметрами ClickHouse.
+  "app/repositories/clickhouse_analytics.py" = ["S608"]
+  "app/repositories/signal_inputs.py" = ["S608"]
+
+[tool.ruff.lint.isort]
+# Monorepo packages stay first-party regardless of the runner working directory.
+known-first-party = ["app", "data_pipeline", "ml", "pilot"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+strict_equality = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "alembic.*"]
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers"
+markers = [
+    "integration: требует работающих сервисов данных",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
