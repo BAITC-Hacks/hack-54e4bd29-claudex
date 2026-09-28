@@ -18,12 +18,14 @@ it("explains the product, its limits, and the protected entry point without inve
   render(<LandingPage />);
 
   expect(screen.getByRole("heading", { level: 1, name: "Ситуационный центр здравоохранения" })).toBeInTheDocument();
-  expect(screen.getByText(/мониторинг потоков направлений/i)).toBeInTheDocument();
+  expect(screen.getByText(/для представителей государственных органов и системы здравоохранения/i)).toBeInTheDocument();
+  expect(screen.getByText(/прогнозирует входящий поток направлений на 7 дней/i)).toBeInTheDocument();
   expect(screen.getByText(/система поддержки решений/i)).toBeInTheDocument();
-  expect(screen.getByText(/не принимает медицинские решения автономно/i)).toBeInTheDocument();
+  expect(screen.getByText(/решение остаётся за уполномоченным сотрудником/i)).toBeInTheDocument();
+  expect(screen.getByText(/демонстрационный исследовательский контур/i)).toBeInTheDocument();
   expect(screen.getByText("Данные доступны после входа")).toBeInTheDocument();
   expect(screen.queryByText(/\b\d{3,}\b/)).not.toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole("button", { name: "Войти в систему" }));
+  fireEvent.click(screen.getByRole("button", { name: "Войти в ситуационный центр" }));
   expect(login).toHaveBeenCalledTimes(1);
 });

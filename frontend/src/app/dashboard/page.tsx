@@ -18,6 +18,7 @@ import { TimeSeriesChart } from "@/features/analytics/components/time-series-cha
 import { WaitingAgeSummary } from "@/features/analytics/components/waiting-age-summary";
 import { formatPeriod } from "@/features/analytics/format";
 import { useSituationCenter } from "@/features/analytics/hooks";
+import { analyticsQueryFromSearch, DEFAULT_ANALYTICS_QUERY } from "@/features/analytics/navigation-context";
 import type { AnalyticsQuery } from "@/features/analytics/types";
 import { ReferralForecastCard } from "@/features/forecasting/components/referral-forecast-card";
 import { syntheticDemoLabelEnabled } from "@/features/forecasting/demo-context";
@@ -25,49 +26,16 @@ import { useLatestReferralForecast } from "@/features/forecasting/hooks";
 import { SignalTable } from "@/features/signals/signal-table";
 import { useSignals } from "@/hooks/use-domain";
 
-const INITIAL_QUERY: AnalyticsQuery = {
-  dateFrom: "2025-01-01T00:00:00Z",
-  dateTo: "2025-03-31T23:59:59.999Z",
-  granularity: "DAY",
-};
-
-const DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/;
-
-function queryBoundary(value: string | null, endOfDay = false): string | undefined {
-  if (!value) return undefined;
-  if (DATE_PARAM.test(value)) {
-    return `${value}${endOfDay ? "T23:59:59.999Z" : "T00:00:00Z"}`;
-  }
-  return Number.isFinite(Date.parse(value)) ? value : undefined;
-}
-
-function dashboardQuery(search: Pick<URLSearchParams, "get">): AnalyticsQuery {
-  const dateFrom = queryBoundary(search.get("date_from") ?? search.get("from"));
-  const dateTo = queryBoundary(search.get("date_to") ?? search.get("to"), true);
-  const granularity = search.get("granularity");
-  const region = search.get("region");
-  const validPeriod = Boolean(
-    dateFrom
-      && dateTo
-      && Date.parse(dateFrom) <= Date.parse(dateTo),
-  );
-  return {
-    ...(validPeriod ? { dateFrom, dateTo } : INITIAL_QUERY),
-    granularity: granularity === "WEEK" ? "WEEK" : "DAY",
-    ...(region ? { region } : {}),
-  };
-}
-
 function DashboardContent() {
   const { isAuthenticated } = useAuth();
   const search = useSearchParams();
-  const [query, setQueryState] = useState<AnalyticsQuery>(() => dashboardQuery(search));
+  const [query, setQueryState] = useState<AnalyticsQuery>(() => analyticsQueryFromSearch(search));
   const setQuery = useCallback((next: AnalyticsQuery) => {
     const params = new URLSearchParams(window.location.search);
     params.delete("from");
     params.delete("to");
-    params.set("date_from", (next.dateFrom ?? INITIAL_QUERY.dateFrom!).slice(0, 10));
-    params.set("date_to", (next.dateTo ?? INITIAL_QUERY.dateTo!).slice(0, 10));
+    params.set("date_from", (next.dateFrom ?? DEFAULT_ANALYTICS_QUERY.dateFrom!).slice(0, 10));
+    params.set("date_to", (next.dateTo ?? DEFAULT_ANALYTICS_QUERY.dateTo!).slice(0, 10));
     params.set("granularity", next.granularity === "WEEK" ? "WEEK" : "DAY");
     if (next.region) params.set("region", next.region);
     else params.delete("region");
@@ -214,7 +182,7 @@ function DashboardContent() {
                 </p>
               </div>
               {organizations.data.items.length ? (
-                <><OrganizationTable items={organizations.data.items} /><p className="mt-3 text-sm">Показано {organizations.data.items.length} из {organizations.data.total}. <Link href="/command-center" className="text-primary underline">Полный список и поиск на карте</Link></p></>
+                <><OrganizationTable items={organizations.data.items} context={query} /><p className="mt-3 text-sm">Показано {organizations.data.items.length} из {organizations.data.total}. <Link href="/command-center" className="text-primary underline">Полный список и поиск на карте</Link></p></>
               ) : (
                 <EmptyState />
               )}

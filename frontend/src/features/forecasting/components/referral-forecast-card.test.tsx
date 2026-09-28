@@ -53,6 +53,9 @@ describe("ReferralForecastCard", () => {
     expect(screen.getByText(/Период оценки:/)).toBeInTheDocument();
     expect(screen.getByText(/Целевой показатель: ежедневное число направлений/i)).toBeInTheDocument();
     expect(screen.getByText(/Область: вся система \(GLOBAL\)/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Как читать прогноз" })).toBeInTheDocument();
+    expect(screen.getByText(/MAE показывает среднюю абсолютную ошибку на исторической временной проверке/i)).toBeInTheDocument();
+    expect(screen.getByText(/не является прогнозом свободных коек, даты выписки или медицинской рекомендацией/i)).toBeInTheDocument();
     expect(screen.queryByText(/перегрузк/i)).not.toBeInTheDocument();
   });
 

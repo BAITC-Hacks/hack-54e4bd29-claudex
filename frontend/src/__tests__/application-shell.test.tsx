@@ -21,6 +21,7 @@ vi.mock("@/config/env", () => ({
 }));
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   state.isAuthenticated = true;
   state.pathname = "/signals";
   state.disclaimerEnabled = true;
@@ -37,6 +38,15 @@ describe("ApplicationShell", () => {
     expect(within(sidebar).getByRole("link", { name: "Сигналы" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("Рабочая область")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /отч[её]ты/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps synthetic demo provenance visible in the authenticated shell", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_ENV", "test");
+    vi.stubEnv("NEXT_PUBLIC_SYNTHETIC_DEMO", "true");
+    render(<ApplicationShell><p>Рабочая область</p></ApplicationShell>);
+
+    expect(screen.getAllByText("Синтетические данные").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Синтетические демонстрационные данные")).toBeInTheDocument();
   });
 
   it("uses an accessible mobile drawer that closes on Escape and returns focus", () => {

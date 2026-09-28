@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/auth-context";
 
 const capabilities = [
-  { icon: BarChart3, title: "Актуальная аналитика", text: "Направления, ожидание и отказы в одной картине." },
+  { icon: BarChart3, title: "Историческая аналитика", text: "Направления, ожидание и отказы в одной проверяемой картине." },
   { icon: Target, title: "Раннее выявление", text: "Сигналы об измеримых отклонениях с проверяемыми фактами." },
-  { icon: Users, title: "Поддержка решений", text: "Общий контекст по регионам и организациям для специалиста." },
+  { icon: Users, title: "Поддержка решений", text: "Контекст для сотрудника без автоматического управленческого решения." },
 ];
 
 export function LandingPage() {
@@ -22,19 +22,20 @@ export function LandingPage() {
         <div className="grid min-h-[620px] lg:grid-cols-[minmax(370px,.78fr)_minmax(560px,1.22fr)]">
           <div className="flex flex-col justify-between px-6 py-10 sm:px-10 lg:px-12 lg:py-14">
             <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-cyan-700">Данные · аналитика · лидерство</p>
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-cyan-700">Демонстрационный исследовательский контур</p>
               <h1 className="mt-5 max-w-[620px] text-4xl font-extrabold leading-[1.04] tracking-[-0.055em] text-[#102f45] sm:text-5xl lg:text-[58px]">Ситуационный центр здравоохранения</h1>
-              <p className="mt-6 max-w-[570px] text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">Мониторинг потоков направлений, выявление отклонений и поддержка управленческих решений на основе доступных данных.</p>
+              <p className="mt-6 max-w-[570px] text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">MedSignal — для представителей государственных органов и системы здравоохранения: историческая картина направлений, измеримые отклонения и разбор сигналов на основе проверяемых данных.</p>
+              <p className="mt-4 max-w-[570px] text-sm font-semibold leading-6 text-[#23475d]">Система прогнозирует входящий поток направлений на 7 дней и показывает качество прогноза на исторической проверке.</p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 {isAuthenticated ? (
                   <Link href="/command-center" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#078b94] px-6 text-sm font-extrabold text-white shadow-[0_14px_30px_-18px_rgba(7,139,148,.9)] transition hover:bg-[#067780]">Открыть центр <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
                 ) : (
-                  <Button type="button" className="h-12 gap-2 px-6 text-sm font-extrabold" onClick={() => void login()}><ShieldCheck className="h-4 w-4" aria-hidden="true" /> Войти в систему <ArrowRight className="h-4 w-4" aria-hidden="true" /></Button>
+                  <Button type="button" className="h-12 gap-2 px-6 text-sm font-extrabold" onClick={() => void login()}><ShieldCheck className="h-4 w-4" aria-hidden="true" /> Войти в ситуационный центр <ArrowRight className="h-4 w-4" aria-hidden="true" /></Button>
                 )}
                 <a href="#capabilities" className="inline-flex h-12 items-center justify-center rounded-xl border-2 border-cyan-700/35 bg-white/70 px-6 text-sm font-extrabold text-cyan-900 transition hover:border-cyan-600 hover:bg-white">Узнать больше</a>
               </div>
             </div>
-            <p className="mt-10 flex max-w-[570px] items-start gap-3 border-t border-slate-200/80 pt-5 text-xs leading-5 text-slate-500"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" aria-hidden="true" />MedSignal — система поддержки решений. Она не принимает медицинские решения автономно; итоговое действие определяет уполномоченный специалист.</p>
+            <p className="mt-10 flex max-w-[570px] items-start gap-3 border-t border-slate-200/80 pt-5 text-xs leading-5 text-slate-500"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" aria-hidden="true" />MedSignal — система поддержки решений. Решение остаётся за уполномоченным сотрудником; система не ставит диагноз и не принимает медицинские решения автономно.</p>
           </div>
 
           <HeroPreview />

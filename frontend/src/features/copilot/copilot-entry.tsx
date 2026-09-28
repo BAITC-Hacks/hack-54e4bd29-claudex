@@ -19,7 +19,7 @@ type ResultState =
   | { kind: "error"; code: string; retryAfterSeconds: number | null };
 
 const ERROR_STATES: Record<string, string> = {
-  COPILOT_DISABLED: "Функция отключена. Обычное объяснение сигнала остаётся доступным.",
+  COPILOT_DISABLED: "AI-пояснение временно недоступно. Алгоритмическое объяснение сигнала остаётся доступным.",
   COPILOT_PROVIDER_UNAVAILABLE: "Сервис временно недоступен. Попробуйте позже вручную.",
   COPILOT_PROVIDER_TIMEOUT: "Время ожидания истекло. При необходимости повторите вручную.",
   COPILOT_INSUFFICIENT_DATA: "Недостаточно данных для пояснения этого сигнала.",
