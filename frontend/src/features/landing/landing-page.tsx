@@ -92,5 +92,16 @@ function SignalRow({ tone }: { tone: string }) {
 }
 
 function KazakhstanMap() {
-  return <div className="absolute left-0 top-8 h-[250px] w-[68%] overflow-hidden" role="img" aria-label="Силуэт карты Казахстана"><Image src="/brand/kazakhstan-silhouette.png" alt="" fill sizes="(min-width: 1024px) 36vw, 60vw" className="object-contain opacity-55 mix-blend-multiply [filter:sepia(1)_saturate(3)_hue-rotate(130deg)_brightness(1.13)]" /><span className="absolute left-[45%] top-[51%] h-3 w-3 rounded-full border-[3px] border-white bg-rose-500 shadow-[0_5px_14px_rgba(225,62,78,.42)]" /></div>;
+  return (
+    <div className="absolute -left-2 top-5 h-[270px] w-[66%]" role="img" aria-label="Силуэт карты Казахстана">
+      <Image
+        src="/brand/kazakhstan-silhouette.png"
+        alt=""
+        fill
+        sizes="(min-width: 1024px) 34vw, 60vw"
+        className="object-contain object-left-center"
+      />
+      <span className="absolute left-[48%] top-[49%] h-3 w-3 rounded-full border-[3px] border-white bg-rose-500 shadow-[0_5px_14px_rgba(225,62,78,.42)]" />
+    </div>
+  );
 }
