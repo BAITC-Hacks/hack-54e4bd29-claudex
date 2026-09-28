@@ -1,0 +1,15 @@
+-r requirements.txt
+
+# --- Тесты ---
+pytest==8.3.*
+pytest-cov==6.0.*
+
+# --- Качество кода ---
+ruff==0.8.*
+mypy==1.13.*
+
+# --- Проверка архитектурных границ (PHASE 0, раздел 5.3 ARCHITECTURE.md) ---
+import-linter==2.1.*
+
+# --- Заглушки типов ---
+celery-types==0.22.*

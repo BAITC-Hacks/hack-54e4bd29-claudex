@@ -1,0 +1,12 @@
+node_modules
+.next
+out
+coverage
+.env
+.env.*
+!.env.example
+npm-debug.log*
+.git
+*.md
+
+.npm-cache

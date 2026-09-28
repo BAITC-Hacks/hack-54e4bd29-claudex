@@ -1,0 +1,41 @@
+# Наложение для локальной диагностики.
+#
+# Открывает порты хранилищ и административных интерфейсов на хост.
+# Применяется ТОЛЬКО явно и ТОЛЬКО на машине разработчика:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d
+#   make up-devtools
+#
+# В базовой конфигурации этих публикаций нет намеренно: конфигурация
+# эксплуатации не должна наследовать удобства разработки
+# (SECURITY.md, раздел 2; DEPLOYMENT.md, раздел 1.3).
+#
+# Это наложение никогда не применяется вне локальной среды.
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:${DEV_POSTGRES_PORT:-5432}:5432"
+
+  clickhouse:
+    ports:
+      - "127.0.0.1:${DEV_CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "127.0.0.1:${DEV_CLICKHOUSE_NATIVE_PORT:-9000}:9000"
+
+  redis:
+    ports:
+      - "127.0.0.1:${DEV_REDIS_PORT:-6379}:6379"
+
+  minio:
+    ports:
+      - "127.0.0.1:${DEV_MINIO_API_PORT:-9002}:9000"
+      - "127.0.0.1:${DEV_MINIO_CONSOLE_PORT:-9001}:9001"
+
+  mlflow:
+    ports:
+      - "127.0.0.1:${DEV_MLFLOW_PORT:-5000}:5000"
+
+  backend:
+    ports:
+      # Прямой доступ к API в обход обратного прокси — для отладки.
+      - "127.0.0.1:${DEV_BACKEND_PORT:-8000}:8000"

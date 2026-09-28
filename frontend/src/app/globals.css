@@ -1,0 +1,185 @@
+@import "@fontsource-variable/manrope";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Токены оформления. Цвета задаются здесь и только здесь:
+ * компоненты обращаются к переменным, а не к конкретным значениям.
+ */
+@layer base {
+  :root {
+    --font-sans: "Manrope Variable";
+    --font-mono: ui-monospace;
+    --background: 202 38% 97%;
+    --foreground: 219 52% 13%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --primary: 190 91% 28%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 210 40% 94%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 142 62% 32%;
+    --success-foreground: 210 40% 98%;
+
+    --warning: 35 86% 42%;
+    --warning-foreground: 210 40% 98%;
+
+    --border: 202 24% 87%;
+    --input: 202 24% 87%;
+    --ring: 190 91% 28%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 96%;
+
+    --card: 222 44% 11%;
+    --card-foreground: 210 40% 96%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 33% 20%;
+    --accent-foreground: 210 40% 96%;
+
+    --destructive: 0 63% 50%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 142 55% 45%;
+    --success-foreground: 222 47% 11%;
+
+    --warning: 35 80% 55%;
+    --warning-foreground: 222 47% 11%;
+
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 217 91% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "ss01" 1, "ss02" 1, "cv11" 1;
+    letter-spacing: -0.012em;
+  }
+
+  :focus-visible {
+    outline: 2px solid #087b83;
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: rgb(11 143 151 / 22%);
+    color: #0b2639;
+  }
+}
+
+@layer components {
+  .surface-card {
+    @apply border border-slate-200 bg-white shadow-[0_14px_40px_-30px_rgba(15,46,68,0.38)];
+  }
+
+  .eyebrow {
+    @apply text-[10px] font-extrabold uppercase tracking-[0.18em] text-cyan-700;
+  }
+}
+
+/* Карта ситуационного центра. Маркеры показывают только значения backend. */
+.leaflet-container{overflow:hidden;background:#dbe9eb;outline-offset:1px}.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow,.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,.leaflet-zoom-box,.leaflet-image-layer,.leaflet-layer{position:absolute;left:0;top:0}.leaflet-container{font-family:inherit;font-size:12px;line-height:1.5}.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow{user-select:none;-webkit-user-drag:none}.leaflet-tile{filter:saturate(.68) contrast(.92) brightness(1.04);visibility:hidden}.leaflet-tile-loaded{visibility:inherit}.leaflet-zoom-animated{transform-origin:0 0}.leaflet-zoom-hide{visibility:hidden}.leaflet-overlay-pane svg{max-width:none!important;max-height:none!important}.leaflet-pane{z-index:400}.leaflet-tile-pane{z-index:200}.leaflet-overlay-pane{z-index:400}.leaflet-shadow-pane{z-index:500}.leaflet-marker-pane{z-index:600}.leaflet-tooltip-pane{z-index:650}.leaflet-popup-pane{z-index:700}.leaflet-map-pane canvas{z-index:100}.leaflet-map-pane svg{z-index:200}.leaflet-control{position:relative;z-index:800;pointer-events:auto;float:left;clear:both}.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none}.leaflet-top{top:0}.leaflet-right{right:0}.leaflet-bottom{bottom:0}.leaflet-left{left:0}.leaflet-control-zoom{margin:0 16px 16px 0;border:1px solid rgb(255 255 255 / 80%);border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgb(15 46 68 / 18%)}.leaflet-control-zoom a{display:block;width:34px;height:34px;background:rgb(255 255 255 / 94%);color:#17364d;text-align:center;text-decoration:none;font-size:18px;line-height:34px;border-bottom:1px solid #dce7eb}.leaflet-control-zoom a:last-child{border-bottom:0}.leaflet-control-attribution{margin:0!important;padding:2px 5px!important;background:rgb(255 255 255 / 75%);color:#64748b}.leaflet-control-attribution a{color:#087d85}.leaflet-tooltip{position:absolute;white-space:nowrap;pointer-events:none;background:white}.leaflet-tooltip-top:before{position:absolute;pointer-events:none;border:6px solid transparent;border-top-color:white;content:"";left:50%;margin-left:-6px;bottom:-12px}
+.region-marker-shell {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.region-marker {
+  display: flex;
+  width: 58px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 3px solid rgb(255 255 255 / 92%);
+  border-radius: 999px;
+  color: white;
+  box-shadow: 0 7px 22px rgb(15 46 68 / 30%);
+  font-size: 10px;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.region-marker:hover,
+.region-marker.selected {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 5px rgb(16 165 176 / 20%), 0 10px 26px rgb(15 46 68 / 28%);
+}
+
+.region-marker > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.region-marker.volume-low { background: #548aa5; }
+.region-marker.volume-medium { background: #24718c; }
+.region-marker.volume-high { background: #123b56; }
+.region-marker.empty { background: #64748b; }
+
+.region-map-tooltip {
+  border: 0 !important;
+  border-radius: 8px !important;
+  padding: 8px 10px !important;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 18%) !important;
+  font-family: inherit !important;
+}
+
+.region-map-tooltip strong,
+.region-map-tooltip span {
+  display: block;
+}
+
+.region-map-tooltip strong {
+  color: #1e293b;
+  font-size: 10px;
+}
+
+.region-map-tooltip span {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 9px;
+}
+
+.region-map-tooltip::before { border-top-color: white !important; }
+.leaflet-control-attribution { font-size: 8px !important; }
+
+.leaflet-container img.leaflet-tile {
+  max-width: none !important;
+  max-height: none !important;
+}

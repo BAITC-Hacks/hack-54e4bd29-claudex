@@ -1,0 +1,1018 @@
+{
+  "model_id": "hospital-growth-v2-b9f8021ae5",
+  "schema": "hospital-growth-v2",
+  "model": "absolute_error + hgb_15_True",
+  "trained_at": "2026-09-23T08:15:25.728674+00:00",
+  "features": [
+    "lag1",
+    "lag2",
+    "lag3",
+    "lag7",
+    "lag14",
+    "mean7",
+    "mean14",
+    "mean28",
+    "std7",
+    "same_weekday_last_week",
+    "target_weekday",
+    "horizon"
+  ],
+  "source": {
+    "rows": 767130,
+    "accepted": 767130,
+    "invalid": 0,
+    "files": [
+      {
+        "name": "referrals_part_001.csv",
+        "sha256": "cbf9b88940666a02d3c9b521e04d9a0bf3fc1f451064c6ba8010155502b76d47",
+        "rows": 255710
+      },
+      {
+        "name": "referrals_part_002.csv",
+        "sha256": "2ba7dfe0b616287d4584f6180c3e40329d7a3d514bde7759b2d542d906cfb6e0",
+        "rows": 255710
+      },
+      {
+        "name": "referrals_part_003.csv",
+        "sha256": "07a59ecfb4b9637dffe5ef3314b1bede27a05046c6a7184814dfc9729bba64ad",
+        "rows": 255710
+      }
+    ],
+    "source_url": "https://ashyq.data.gov.kz/dataset/magda-ds-4b553445-0570-4302-87e7-48e1edacfa41/details",
+    "zero_policy": "No row for an organisation on a source-covered day means zero recorded referrals; not proof of complete reporting."
+  },
+  "period_start": "2025-01-01",
+  "period_end": "2025-03-31",
+  "days": 90,
+  "train_end": "2025-03-03",
+  "validation_start": "2025-03-04",
+  "validation_end": "2025-03-17",
+  "test_start": "2025-03-18",
+  "test_end": "2025-03-31",
+  "training_examples": 181629,
+  "hospitals": 837,
+  "excluded_hospitals": 547,
+  "validation": {
+    "ml": {
+      "mae": 4.897,
+      "wape": 51.292,
+      "points": 11718
+    },
+    "weekly_naive": {
+      "mae": 5.856,
+      "wape": 61.335,
+      "points": 11718
+    },
+    "mean7": {
+      "mae": 7.794,
+      "wape": 81.634,
+      "points": 11718
+    },
+    "folds": [
+      {
+        "as_of": "2025-03-03",
+        "start": "2025-03-04",
+        "end": "2025-03-10",
+        "ml": {
+          "mae": 4.688,
+          "wape": 63.47,
+          "points": 5859
+        },
+        "weekly_naive": {
+          "mae": 5.574,
+          "wape": 75.469,
+          "points": 5859
+        },
+        "mean7": {
+          "mae": 6.947,
+          "wape": 94.058,
+          "points": 5859
+        }
+      },
+      {
+        "as_of": "2025-03-10",
+        "start": "2025-03-11",
+        "end": "2025-03-17",
+        "ml": {
+          "mae": 5.107,
+          "wape": 43.611,
+          "points": 5859
+        },
+        "weekly_naive": {
+          "mae": 6.138,
+          "wape": 52.421,
+          "points": 5859
+        },
+        "mean7": {
+          "mae": 8.642,
+          "wape": 73.798,
+          "points": 5859
+        }
+      }
+    ]
+  },
+  "test": {
+    "ml": {
+      "mae": 6.261,
+      "wape": 83.706,
+      "points": 11718
+    },
+    "weekly_naive": {
+      "mae": 7.906,
+      "wape": 105.69,
+      "points": 11718
+    },
+    "mean7": {
+      "mae": 8.432,
+      "wape": 112.732,
+      "points": 11718
+    },
+    "folds": [
+      {
+        "as_of": "2025-03-17",
+        "start": "2025-03-18",
+        "end": "2025-03-24",
+        "ml": {
+          "mae": 5.996,
+          "wape": 105.824,
+          "points": 5859
+        },
+        "weekly_naive": {
+          "mae": 7.468,
+          "wape": 131.79,
+          "points": 5859
+        },
+        "mean7": {
+          "mae": 8.671,
+          "wape": 153.033,
+          "points": 5859
+        }
+      },
+      {
+        "as_of": "2025-03-24",
+        "start": "2025-03-25",
+        "end": "2025-03-31",
+        "ml": {
+          "mae": 6.526,
+          "wape": 70.221,
+          "points": 5859
+        },
+        "weekly_naive": {
+          "mae": 8.343,
+          "wape": 89.776,
+          "points": 5859
+        },
+        "mean7": {
+          "mae": 8.193,
+          "wape": 88.161,
+          "points": 5859
+        }
+      }
+    ]
+  },
+  "baseline": "weekly_naive",
+  "dataset_sha256": "57ed63761ed833cd7cd3b1b8caf8a477a42b56679dac3e23f87c2370281850f6",
+  "training_code_sha256": "b9f8021ae56615e144a57d9c72940c131b46b819faf4fb28eb040401e0b8d48e",
+  "ml_better_on_test": true,
+  "limitations": [
+    "90 дней истории не подтверждают годовую сезонность.",
+    "Число записей о направлениях не равно числу уникальных пациентов.",
+    "Нет истории ежедневных очередей, вместимости и результатов вмешательств.",
+    "Нули означают отсутствие записей, полнота отчётности отдельно не подтверждена.",
+    "Результаты проверки прогноза не подтверждают точность предупреждений о перегрузке.",
+    "Последние две недели уже использовались ранее: это повторная оценка, не новый независимый тест.",
+    "Оценка риска не является откалиброванной вероятностью; порог выбран по F2 на валидации."
+  ],
+  "alert_test": {
+    "true_positive": 37,
+    "false_positive": 119,
+    "false_negative": 111,
+    "true_negative": 1407,
+    "precision_percent": 23.72,
+    "recall_percent": 25.0,
+    "f1": 0.2434,
+    "f2": 0.2473,
+    "alert_count": 156,
+    "alert_rate_percent": 9.32,
+    "cases": 1674,
+    "production_ready": false
+  },
+  "artifact_sha256": "8d4f3ed8152e28dd5470585c713fefc78e824b17bdbccc5a569e61eb4debe5a5",
+  "risk_features": [
+    "week1",
+    "week2",
+    "week3",
+    "week4",
+    "trend12",
+    "trend23",
+    "trend14",
+    "recent3_ratio",
+    "last_ratio",
+    "cv28",
+    "zero28",
+    "max_ratio",
+    "min_ratio",
+    "slope",
+    "weekday",
+    "log_volume",
+    "active28",
+    "weekend_share"
+  ],
+  "risk_training_examples": 23436,
+  "risk_positive_examples": 2712,
+  "selection": {
+    "risk_model": "hgb_15_True",
+    "threshold": 0.7500000000000002,
+    "segment_thresholds": {
+      "large": 0.07500000000000001,
+      "medium": 0.6750000000000003,
+      "small": 0.7500000000000002
+    },
+    "regressor": "absolute_error"
+  },
+  "experiments": [
+    {
+      "name": "logistic_False",
+      "threshold": 0.12500000000000003,
+      "validation": {
+        "true_positive": 23,
+        "false_positive": 241,
+        "false_negative": 284,
+        "true_negative": 1126,
+        "precision_percent": 8.71,
+        "recall_percent": 7.49,
+        "f1": 0.0806,
+        "f2": 0.0771,
+        "alert_count": 264,
+        "alert_rate_percent": 15.77,
+        "cases": 1674
+      },
+      "parameters": {
+        "memory": "None",
+        "steps": "[('standardscaler', StandardScaler()), ('logisticregression', LogisticRegression(C=0.3, max_iter=1000, random_state=42))]",
+        "verbose": "False",
+        "standardscaler": "StandardScaler()",
+        "logisticregression": "LogisticRegression(C=0.3, max_iter=1000, random_state=42)",
+        "standardscaler__copy": "True",
+        "standardscaler__with_mean": "True",
+        "standardscaler__with_std": "True",
+        "logisticregression__C": "0.3",
+        "logisticregression__class_weight": "None",
+        "logisticregression__dual": "False",
+        "logisticregression__fit_intercept": "True",
+        "logisticregression__intercept_scaling": "1",
+        "logisticregression__l1_ratio": "None",
+        "logisticregression__max_iter": "1000",
+        "logisticregression__multi_class": "'deprecated'",
+        "logisticregression__n_jobs": "None",
+        "logisticregression__penalty": "'l2'",
+        "logisticregression__random_state": "42",
+        "logisticregression__solver": "'lbfgs'",
+        "logisticregression__tol": "0.0001",
+        "logisticregression__verbose": "0",
+        "logisticregression__warm_start": "False"
+      }
+    },
+    {
+      "name": "hgb_7_False",
+      "threshold": 0.32500000000000007,
+      "validation": {
+        "true_positive": 13,
+        "false_positive": 16,
+        "false_negative": 294,
+        "true_negative": 1351,
+        "precision_percent": 44.83,
+        "recall_percent": 4.23,
+        "f1": 0.0774,
+        "f2": 0.0517,
+        "alert_count": 29,
+        "alert_rate_percent": 1.73,
+        "cases": 1674
+      },
+      "parameters": {
+        "categorical_features": "'warn'",
+        "class_weight": "None",
+        "early_stopping": "False",
+        "interaction_cst": "None",
+        "l2_regularization": "5",
+        "learning_rate": "0.05",
+        "loss": "'log_loss'",
+        "max_bins": "255",
+        "max_depth": "None",
+        "max_features": "1.0",
+        "max_iter": "120",
+        "max_leaf_nodes": "7",
+        "min_samples_leaf": "40",
+        "monotonic_cst": "None",
+        "n_iter_no_change": "10",
+        "random_state": "42",
+        "scoring": "'loss'",
+        "tol": "1e-07",
+        "validation_fraction": "0.1",
+        "verbose": "0",
+        "warm_start": "False"
+      }
+    },
+    {
+      "name": "hgb_15_False",
+      "threshold": 0.32500000000000007,
+      "validation": {
+        "true_positive": 19,
+        "false_positive": 27,
+        "false_negative": 288,
+        "true_negative": 1340,
+        "precision_percent": 41.3,
+        "recall_percent": 6.19,
+        "f1": 0.1076,
+        "f2": 0.0746,
+        "alert_count": 46,
+        "alert_rate_percent": 2.75,
+        "cases": 1674
+      },
+      "parameters": {
+        "categorical_features": "'warn'",
+        "class_weight": "None",
+        "early_stopping": "False",
+        "interaction_cst": "None",
+        "l2_regularization": "5",
+        "learning_rate": "0.05",
+        "loss": "'log_loss'",
+        "max_bins": "255",
+        "max_depth": "None",
+        "max_features": "1.0",
+        "max_iter": "120",
+        "max_leaf_nodes": "15",
+        "min_samples_leaf": "40",
+        "monotonic_cst": "None",
+        "n_iter_no_change": "10",
+        "random_state": "42",
+        "scoring": "'loss'",
+        "tol": "1e-07",
+        "validation_fraction": "0.1",
+        "verbose": "0",
+        "warm_start": "False"
+      }
+    },
+    {
+      "name": "logistic_True",
+      "threshold": 0.5000000000000001,
+      "validation": {
+        "true_positive": 29,
+        "false_positive": 277,
+        "false_negative": 278,
+        "true_negative": 1090,
+        "precision_percent": 9.48,
+        "recall_percent": 9.45,
+        "f1": 0.0946,
+        "f2": 0.0945,
+        "alert_count": 306,
+        "alert_rate_percent": 18.28,
+        "cases": 1674
+      },
+      "parameters": {
+        "memory": "None",
+        "steps": "[('standardscaler', StandardScaler()), ('logisticregression', LogisticRegression(C=0.3, class_weight='balanced', max_iter=1000,\n                   random_state=42))]",
+        "verbose": "False",
+        "standardscaler": "StandardScaler()",
+        "logisticregression": "LogisticRegression(C=0.3, class_weight='balanced', max_iter=1000,\n                   random_state=42)",
+        "standardscaler__copy": "True",
+        "standardscaler__with_mean": "True",
+        "standardscaler__with_std": "True",
+        "logisticregression__C": "0.3",
+        "logisticregression__class_weight": "'balanced'",
+        "logisticregression__dual": "False",
+        "logisticregression__fit_intercept": "True",
+        "logisticregression__intercept_scaling": "1",
+        "logisticregression__l1_ratio": "None",
+        "logisticregression__max_iter": "1000",
+        "logisticregression__multi_class": "'deprecated'",
+        "logisticregression__n_jobs": "None",
+        "logisticregression__penalty": "'l2'",
+        "logisticregression__random_state": "42",
+        "logisticregression__solver": "'lbfgs'",
+        "logisticregression__tol": "0.0001",
+        "logisticregression__verbose": "0",
+        "logisticregression__warm_start": "False"
+      }
+    },
+    {
+      "name": "hgb_7_True",
+      "threshold": 0.7500000000000002,
+      "validation": {
+        "true_positive": 18,
+        "false_positive": 22,
+        "false_negative": 289,
+        "true_negative": 1345,
+        "precision_percent": 45.0,
+        "recall_percent": 5.86,
+        "f1": 0.1037,
+        "f2": 0.071,
+        "alert_count": 40,
+        "alert_rate_percent": 2.39,
+        "cases": 1674
+      },
+      "parameters": {
+        "categorical_features": "'warn'",
+        "class_weight": "'balanced'",
+        "early_stopping": "False",
+        "interaction_cst": "None",
+        "l2_regularization": "5",
+        "learning_rate": "0.05",
+        "loss": "'log_loss'",
+        "max_bins": "255",
+        "max_depth": "None",
+        "max_features": "1.0",
+        "max_iter": "120",
+        "max_leaf_nodes": "7",
+        "min_samples_leaf": "40",
+        "monotonic_cst": "None",
+        "n_iter_no_change": "10",
+        "random_state": "42",
+        "scoring": "'loss'",
+        "tol": "1e-07",
+        "validation_fraction": "0.1",
+        "verbose": "0",
+        "warm_start": "False"
+      }
+    },
+    {
+      "name": "hgb_15_True",
+      "threshold": 0.7500000000000002,
+      "validation": {
+        "true_positive": 19,
+        "false_positive": 23,
+        "false_negative": 288,
+        "true_negative": 1344,
+        "precision_percent": 45.24,
+        "recall_percent": 6.19,
+        "f1": 0.1089,
+        "f2": 0.0748,
+        "alert_count": 42,
+        "alert_rate_percent": 2.51,
+        "cases": 1674
+      },
+      "parameters": {
+        "categorical_features": "'warn'",
+        "class_weight": "'balanced'",
+        "early_stopping": "False",
+        "interaction_cst": "None",
+        "l2_regularization": "5",
+        "learning_rate": "0.05",
+        "loss": "'log_loss'",
+        "max_bins": "255",
+        "max_depth": "None",
+        "max_features": "1.0",
+        "max_iter": "120",
+        "max_leaf_nodes": "15",
+        "min_samples_leaf": "40",
+        "monotonic_cst": "None",
+        "n_iter_no_change": "10",
+        "random_state": "42",
+        "scoring": "'loss'",
+        "tol": "1e-07",
+        "validation_fraction": "0.1",
+        "verbose": "0",
+        "warm_start": "False"
+      }
+    },
+    {
+      "name": "extra_trees",
+      "threshold": 0.6250000000000002,
+      "validation": {
+        "true_positive": 6,
+        "false_positive": 3,
+        "false_negative": 301,
+        "true_negative": 1364,
+        "precision_percent": 66.67,
+        "recall_percent": 1.95,
+        "f1": 0.038,
+        "f2": 0.0243,
+        "alert_count": 9,
+        "alert_rate_percent": 0.54,
+        "cases": 1674
+      },
+      "parameters": {
+        "bootstrap": "False",
+        "ccp_alpha": "0.0",
+        "class_weight": "'balanced'",
+        "criterion": "'gini'",
+        "max_depth": "10",
+        "max_features": "'sqrt'",
+        "max_leaf_nodes": "None",
+        "max_samples": "None",
+        "min_impurity_decrease": "0.0",
+        "min_samples_leaf": "20",
+        "min_samples_split": "2",
+        "min_weight_fraction_leaf": "0.0",
+        "monotonic_cst": "None",
+        "n_estimators": "180",
+        "n_jobs": "2",
+        "oob_score": "False",
+        "random_state": "42",
+        "verbose": "0",
+        "warm_start": "False"
+      }
+    },
+    {
+      "name": "ensemble",
+      "threshold": 0.7500000000000002,
+      "validation": {
+        "true_positive": 3,
+        "false_positive": 4,
+        "false_negative": 304,
+        "true_negative": 1363,
+        "precision_percent": 42.86,
+        "recall_percent": 0.98,
+        "f1": 0.0191,
+        "f2": 0.0121,
+        "alert_count": 7,
+        "alert_rate_percent": 0.42,
+        "cases": 1674
+      }
+    },
+    {
+      "name": "segmented_thresholds",
+      "thresholds": {
+        "large": 0.07500000000000001,
+        "medium": 0.6750000000000003,
+        "small": 0.7500000000000002
+      },
+      "validation": {
+        "true_positive": 22,
+        "false_positive": 30,
+        "false_negative": 285,
+        "true_negative": 1337,
+        "precision_percent": 42.31,
+        "recall_percent": 7.17,
+        "f1": 0.1226,
+        "f2": 0.0859,
+        "alert_count": 52,
+        "alert_rate_percent": 3.11,
+        "cases": 1674
+      }
+    }
+  ],
+  "numeric_experiments": [
+    {
+      "name": "v1_poisson",
+      "validation": {
+        "ml": {
+          "mae": 4.971,
+          "wape": 52.065,
+          "points": 11718
+        },
+        "weekly_naive": {
+          "mae": 5.856,
+          "wape": 61.335,
+          "points": 11718
+        },
+        "mean7": {
+          "mae": 7.794,
+          "wape": 81.634,
+          "points": 11718
+        },
+        "folds": [
+          {
+            "as_of": "2025-03-03",
+            "start": "2025-03-04",
+            "end": "2025-03-10",
+            "ml": {
+              "mae": 4.927,
+              "wape": 66.707,
+              "points": 5859
+            },
+            "weekly_naive": {
+              "mae": 5.574,
+              "wape": 75.469,
+              "points": 5859
+            },
+            "mean7": {
+              "mae": 6.947,
+              "wape": 94.058,
+              "points": 5859
+            }
+          },
+          {
+            "as_of": "2025-03-10",
+            "start": "2025-03-11",
+            "end": "2025-03-17",
+            "ml": {
+              "mae": 5.015,
+              "wape": 42.83,
+              "points": 5859
+            },
+            "weekly_naive": {
+              "mae": 6.138,
+              "wape": 52.421,
+              "points": 5859
+            },
+            "mean7": {
+              "mae": 8.642,
+              "wape": 73.798,
+              "points": 5859
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "absolute_error",
+      "validation": {
+        "ml": {
+          "mae": 4.897,
+          "wape": 51.292,
+          "points": 11718
+        },
+        "weekly_naive": {
+          "mae": 5.856,
+          "wape": 61.335,
+          "points": 11718
+        },
+        "mean7": {
+          "mae": 7.794,
+          "wape": 81.634,
+          "points": 11718
+        },
+        "folds": [
+          {
+            "as_of": "2025-03-03",
+            "start": "2025-03-04",
+            "end": "2025-03-10",
+            "ml": {
+              "mae": 4.688,
+              "wape": 63.47,
+              "points": 5859
+            },
+            "weekly_naive": {
+              "mae": 5.574,
+              "wape": 75.469,
+              "points": 5859
+            },
+            "mean7": {
+              "mae": 6.947,
+              "wape": 94.058,
+              "points": 5859
+            }
+          },
+          {
+            "as_of": "2025-03-10",
+            "start": "2025-03-11",
+            "end": "2025-03-17",
+            "ml": {
+              "mae": 5.107,
+              "wape": 43.611,
+              "points": 5859
+            },
+            "weekly_naive": {
+              "mae": 6.138,
+              "wape": 52.421,
+              "points": 5859
+            },
+            "mean7": {
+              "mae": 8.642,
+              "wape": 73.798,
+              "points": 5859
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "poisson_regularized",
+      "validation": {
+        "ml": {
+          "mae": 4.962,
+          "wape": 51.975,
+          "points": 11718
+        },
+        "weekly_naive": {
+          "mae": 5.856,
+          "wape": 61.335,
+          "points": 11718
+        },
+        "mean7": {
+          "mae": 7.794,
+          "wape": 81.634,
+          "points": 11718
+        },
+        "folds": [
+          {
+            "as_of": "2025-03-03",
+            "start": "2025-03-04",
+            "end": "2025-03-10",
+            "ml": {
+              "mae": 4.946,
+              "wape": 66.964,
+              "points": 5859
+            },
+            "weekly_naive": {
+              "mae": 5.574,
+              "wape": 75.469,
+              "points": 5859
+            },
+            "mean7": {
+              "mae": 6.947,
+              "wape": 94.058,
+              "points": 5859
+            }
+          },
+          {
+            "as_of": "2025-03-10",
+            "start": "2025-03-11",
+            "end": "2025-03-17",
+            "ml": {
+              "mae": 4.979,
+              "wape": 42.521,
+              "points": 5859
+            },
+            "weekly_naive": {
+              "mae": 6.138,
+              "wape": 52.421,
+              "points": 5859
+            },
+            "mean7": {
+              "mae": 8.642,
+              "wape": 73.798,
+              "points": 5859
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "alert_validation": {
+    "true_positive": 22,
+    "false_positive": 30,
+    "false_negative": 285,
+    "true_negative": 1337,
+    "precision_percent": 42.31,
+    "recall_percent": 7.17,
+    "f1": 0.1226,
+    "f2": 0.0859,
+    "alert_count": 52,
+    "alert_rate_percent": 3.11,
+    "cases": 1674
+  },
+  "alert_folds": [
+    {
+      "as_of": "2025-03-17",
+      "metrics": {
+        "true_positive": 2,
+        "false_positive": 40,
+        "false_negative": 3,
+        "true_negative": 792,
+        "precision_percent": 4.76,
+        "recall_percent": 40.0,
+        "f1": 0.0851,
+        "f2": 0.1613,
+        "alert_count": 42,
+        "alert_rate_percent": 5.02,
+        "cases": 837
+      }
+    },
+    {
+      "as_of": "2025-03-24",
+      "metrics": {
+        "true_positive": 35,
+        "false_positive": 79,
+        "false_negative": 108,
+        "true_negative": 615,
+        "precision_percent": 30.7,
+        "recall_percent": 24.48,
+        "f1": 0.2724,
+        "f2": 0.2551,
+        "alert_count": 114,
+        "alert_rate_percent": 13.62,
+        "cases": 837
+      }
+    }
+  ],
+  "validation_alert_folds": [
+    {
+      "as_of": "2025-03-03",
+      "metrics": {
+        "true_positive": 5,
+        "false_positive": 18,
+        "false_negative": 8,
+        "true_negative": 806,
+        "precision_percent": 21.74,
+        "recall_percent": 38.46,
+        "f1": 0.2778,
+        "f2": 0.3333,
+        "alert_count": 23,
+        "alert_rate_percent": 2.75,
+        "cases": 837
+      }
+    },
+    {
+      "as_of": "2025-03-10",
+      "metrics": {
+        "true_positive": 17,
+        "false_positive": 12,
+        "false_negative": 277,
+        "true_negative": 531,
+        "precision_percent": 58.62,
+        "recall_percent": 5.78,
+        "f1": 0.1053,
+        "f2": 0.0705,
+        "alert_count": 29,
+        "alert_rate_percent": 3.46,
+        "cases": 837
+      }
+    }
+  ],
+  "segment_metrics": {
+    "large": {
+      "true_positive": 0,
+      "false_positive": 21,
+      "false_negative": 0,
+      "true_negative": 7,
+      "precision_percent": 0.0,
+      "recall_percent": 0.0,
+      "f1": 0.0,
+      "f2": 0.0,
+      "alert_count": 21,
+      "alert_rate_percent": 75.0,
+      "cases": 28
+    },
+    "medium": {
+      "true_positive": 6,
+      "false_positive": 23,
+      "false_negative": 43,
+      "true_negative": 406,
+      "precision_percent": 20.69,
+      "recall_percent": 12.24,
+      "f1": 0.1538,
+      "f2": 0.1333,
+      "alert_count": 29,
+      "alert_rate_percent": 6.07,
+      "cases": 478
+    },
+    "small": {
+      "true_positive": 31,
+      "false_positive": 75,
+      "false_negative": 68,
+      "true_negative": 994,
+      "precision_percent": 29.25,
+      "recall_percent": 31.31,
+      "f1": 0.3024,
+      "f2": 0.3088,
+      "alert_count": 106,
+      "alert_rate_percent": 9.08,
+      "cases": 1168
+    }
+  },
+  "earlier_check": {
+    "train_end": "2025-02-17",
+    "hospitals": 739,
+    "metrics": {
+      "true_positive": 12,
+      "false_positive": 16,
+      "false_negative": 125,
+      "true_negative": 1325,
+      "precision_percent": 42.86,
+      "recall_percent": 8.76,
+      "f1": 0.1455,
+      "f2": 0.1042,
+      "alert_count": 28,
+      "alert_rate_percent": 1.89,
+      "cases": 1478
+    },
+    "note": "Selected architecture and global threshold applied earlier; diagnostic, not independent selection evidence."
+  },
+  "previous": {
+    "model_id": "hospital-referrals-direct7-v1-57ed6376-c741435a",
+    "alert_test": {
+      "true_positive": 6,
+      "false_positive": 8,
+      "false_negative": 142,
+      "true_negative": 1518,
+      "precision_percent": 42.86,
+      "recall_percent": 4.05,
+      "label": "Recorded weekly referral growth, not hospital overload",
+      "production_ready": false,
+      "f1": 0.0741,
+      "f2": 0.0495
+    },
+    "test": {
+      "ml": {
+        "mae": 6.305,
+        "wape": 84.286,
+        "points": 11718
+      },
+      "weekly_naive": {
+        "mae": 7.906,
+        "wape": 105.69,
+        "points": 11718
+      },
+      "mean7": {
+        "mae": 8.432,
+        "wape": 112.732,
+        "points": 11718
+      },
+      "folds": [
+        {
+          "as_of": "2025-03-17",
+          "start": "2025-03-18",
+          "end": "2025-03-24",
+          "ml": {
+            "mae": 6.21,
+            "wape": 109.6,
+            "points": 5859
+          },
+          "weekly_naive": {
+            "mae": 7.468,
+            "wape": 131.79,
+            "points": 5859
+          },
+          "mean7": {
+            "mae": 8.671,
+            "wape": 153.033,
+            "points": 5859
+          }
+        },
+        {
+          "as_of": "2025-03-24",
+          "start": "2025-03-25",
+          "end": "2025-03-31",
+          "ml": {
+            "mae": 6.399,
+            "wape": 68.852,
+            "points": 5859
+          },
+          "weekly_naive": {
+            "mae": 8.343,
+            "wape": 89.776,
+            "points": 5859
+          },
+          "mean7": {
+            "mae": 8.193,
+            "wape": 88.161,
+            "points": 5859
+          }
+        }
+      ]
+    }
+  },
+  "test_status": "REUSED_TEST",
+  "source_audit": {
+    "rows": 767130,
+    "exact_duplicate_rows": 0,
+    "repeated_case_codes": 1969,
+    "missing": {
+      "hospital_mo": 0,
+      "registration_dt": 0,
+      "planned_dt": 33704,
+      "bed_profile": 372316
+    },
+    "dates": 90,
+    "organizations": 1385,
+    "daily_min": 242,
+    "daily_max": 18870,
+    "largest_days": [
+      [
+        "2025-01-13",
+        18870
+      ],
+      [
+        "2025-01-20",
+        18745
+      ],
+      [
+        "2025-02-10",
+        18317
+      ],
+      [
+        "2025-02-03",
+        17608
+      ],
+      [
+        "2025-01-27",
+        17588
+      ]
+    ],
+    "smallest_days": [
+      [
+        "2025-01-03",
+        242
+      ],
+      [
+        "2025-03-23",
+        247
+      ],
+      [
+        "2025-01-02",
+        248
+      ],
+      [
+        "2025-03-22",
+        250
+      ],
+      [
+        "2025-03-08",
+        266
+      ]
+    ],
+    "interpretation": "Count source records consistently with v1. Repeated codes alone are not proof of duplicate events. No rows removed. Missing reporting cannot be distinguished from true zero without source confirmation."
+  }
+}

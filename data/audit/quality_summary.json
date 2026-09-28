@@ -1,0 +1,366 @@
+{
+  "audit_version": "3A.1",
+  "tables": [
+    {
+      "dataset": "Количество пролеченных случаев в разрезе МО",
+      "table": "Количество пролеченных случаев в разрезе МО",
+      "row_count": 2196,
+      "duplicate_rows": 0,
+      "duplicate_rows_status": "OK",
+      "findings": [
+        {
+          "dataset": "Количество пролеченных случаев в разрезе МО",
+          "table": "Количество пролеченных случаев в разрезе МО",
+          "column": "medicine_organization",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 35
+        },
+        {
+          "dataset": "Количество пролеченных случаев в разрезе МО",
+          "table": "Количество пролеченных случаев в разрезе МО",
+          "column": "sdu_load_date",
+          "check": "CONSTANT COLUMN",
+          "severity": "INFO",
+          "detail": "во всех строках одно и то же значение",
+          "affected_rows": null
+        }
+      ],
+      "skipped_checks": []
+    },
+    {
+      "dataset": "Направления на плановую госпитализацию в стационары",
+      "table": "Направления на плановую госпитализацию в стационары",
+      "row_count": 767130,
+      "duplicate_rows": 0,
+      "duplicate_rows_status": "OK",
+      "findings": [
+        {
+          "dataset": "Направления на плановую госпитализацию в стационары",
+          "table": "Направления на плановую госпитализацию в стационары",
+          "column": "referring_mo",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 2462
+        },
+        {
+          "dataset": "Направления на плановую госпитализацию в стационары",
+          "table": "Направления на плановую госпитализацию в стационары",
+          "column": "hospital_mo",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 6783
+        },
+        {
+          "dataset": "Направления на плановую госпитализацию в стационары",
+          "table": "Направления на плановую госпитализацию в стационары",
+          "column": "diagnosis_name",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 23437
+        },
+        {
+          "dataset": "Направления на плановую госпитализацию в стационары",
+          "table": "Направления на плановую госпитализацию в стационары",
+          "column": "bed_profile",
+          "check": "MISSING VALUES",
+          "severity": "WARNING",
+          "detail": "пусто в 48.5% строк",
+          "affected_rows": 372316
+        },
+        {
+          "dataset": "Направления на плановую госпитализацию в стационары",
+          "table": "Направления на плановую госпитализацию в стационары",
+          "column": "bed_profile",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 4598
+        },
+        {
+          "dataset": "Направления на плановую госпитализацию в стационары",
+          "table": "Направления на плановую госпитализацию в стационары",
+          "column": "polyclinic_dt",
+          "check": "MISSING VALUES",
+          "severity": "WARNING",
+          "detail": "пусто в 18.3% строк",
+          "affected_rows": 140405
+        },
+        {
+          "dataset": "Направления на плановую госпитализацию в стационары",
+          "table": "Направления на плановую госпитализацию в стационары",
+          "column": "hospitalization_dt",
+          "check": "MISSING VALUES",
+          "severity": "WARNING",
+          "detail": "пусто в 11.5% строк",
+          "affected_rows": 88042
+        },
+        {
+          "dataset": "Направления на плановую госпитализацию в стационары",
+          "table": "Направления на плановую госпитализацию в стационары",
+          "column": "refusal_dt",
+          "check": "MISSING VALUES",
+          "severity": "CRITICAL",
+          "detail": "пусто в 89.0% строк",
+          "affected_rows": 683049
+        },
+        {
+          "dataset": "Направления на плановую госпитализацию в стационары",
+          "table": "Направления на плановую госпитализацию в стационары",
+          "column": "sdu_load_date",
+          "check": "CONSTANT COLUMN",
+          "severity": "INFO",
+          "detail": "во всех строках одно и то же значение",
+          "affected_rows": null
+        },
+        {
+          "dataset": "Направления на плановую госпитализацию в стационары",
+          "table": "Направления на плановую госпитализацию в стационары",
+          "column": "hospitalization_code",
+          "check": "DUPLICATE KEYS",
+          "severity": "CRITICAL",
+          "detail": "значение ключа повторяется: уникальных 765161 при 767130 непустых строках",
+          "affected_rows": 1969
+        }
+      ],
+      "skipped_checks": []
+    },
+    {
+      "dataset": "Ожидающие плановую госпитализацию в стационары",
+      "table": "Ожидающие плановую госпитализацию в стационары",
+      "row_count": 765182,
+      "duplicate_rows": 0,
+      "duplicate_rows_status": "OK",
+      "findings": [
+        {
+          "dataset": "Ожидающие плановую госпитализацию в стационары",
+          "table": "Ожидающие плановую госпитализацию в стационары",
+          "column": "diagnosis_name",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 23437
+        },
+        {
+          "dataset": "Ожидающие плановую госпитализацию в стационары",
+          "table": "Ожидающие плановую госпитализацию в стационары",
+          "column": "operation_code",
+          "check": "MISSING VALUES",
+          "severity": "CRITICAL",
+          "detail": "пусто в 76.4% строк",
+          "affected_rows": 584408
+        },
+        {
+          "dataset": "Ожидающие плановую госпитализацию в стационары",
+          "table": "Ожидающие плановую госпитализацию в стационары",
+          "column": "operation_name",
+          "check": "MISSING VALUES",
+          "severity": "CRITICAL",
+          "detail": "пусто в 76.4% строк",
+          "affected_rows": 584408
+        },
+        {
+          "dataset": "Ожидающие плановую госпитализацию в стационары",
+          "table": "Ожидающие плановую госпитализацию в стационары",
+          "column": "operation_name",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 60
+        },
+        {
+          "dataset": "Ожидающие плановую госпитализацию в стационары",
+          "table": "Ожидающие плановую госпитализацию в стационары",
+          "column": "sdu_load_date",
+          "check": "CONSTANT COLUMN",
+          "severity": "INFO",
+          "detail": "во всех строках одно и то же значение",
+          "affected_rows": null
+        }
+      ],
+      "skipped_checks": []
+    },
+    {
+      "dataset": "Отказы в плановой госпитализации (приёмный покой)",
+      "table": "Отказы в плановой госпитализации",
+      "row_count": 1508732,
+      "duplicate_rows": 0,
+      "duplicate_rows_status": "OK",
+      "findings": [
+        {
+          "dataset": "Отказы в плановой госпитализации (приёмный покой)",
+          "table": "Отказы в плановой госпитализации",
+          "column": "org_in",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 2901
+        },
+        {
+          "dataset": "Отказы в плановой госпитализации (приёмный покой)",
+          "table": "Отказы в плановой госпитализации",
+          "column": "benefit_cat",
+          "check": "MISSING VALUES",
+          "severity": "WARNING",
+          "detail": "пусто в 23.9% строк",
+          "affected_rows": 360942
+        },
+        {
+          "dataset": "Отказы в плановой госпитализации (приёмный покой)",
+          "table": "Отказы в плановой госпитализации",
+          "column": "benefit_cat",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 249
+        },
+        {
+          "dataset": "Отказы в плановой госпитализации (приёмный покой)",
+          "table": "Отказы в плановой госпитализации",
+          "column": "attach_org",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 1728
+        },
+        {
+          "dataset": "Отказы в плановой госпитализации (приёмный покой)",
+          "table": "Отказы в плановой госпитализации",
+          "column": "icd_name",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 10471
+        },
+        {
+          "dataset": "Отказы в плановой госпитализации (приёмный покой)",
+          "table": "Отказы в плановой госпитализации",
+          "column": "amount",
+          "check": "MISSING VALUES",
+          "severity": "WARNING",
+          "detail": "пусто в 24.4% строк",
+          "affected_rows": 368272
+        },
+        {
+          "dataset": "Отказы в плановой госпитализации (приёмный покой)",
+          "table": "Отказы в плановой госпитализации",
+          "column": "sdu_load_date",
+          "check": "CONSTANT COLUMN",
+          "severity": "INFO",
+          "detail": "во всех строках одно и то же значение",
+          "affected_rows": null
+        }
+      ],
+      "skipped_checks": []
+    },
+    {
+      "dataset": "Отказы от вакцинации и противопоказания",
+      "table": "Отказы от вакцинации и противопоказания",
+      "row_count": 66709,
+      "duplicate_rows": 0,
+      "duplicate_rows_status": "OK",
+      "findings": [
+        {
+          "dataset": "Отказы от вакцинации и противопоказания",
+          "table": "Отказы от вакцинации и противопоказания",
+          "column": "contraindication",
+          "check": "MISSING VALUES",
+          "severity": "CRITICAL",
+          "detail": "пусто в 79.2% строк",
+          "affected_rows": 52842
+        },
+        {
+          "dataset": "Отказы от вакцинации и противопоказания",
+          "table": "Отказы от вакцинации и противопоказания",
+          "column": "vaccination_plan_code",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 1639
+        },
+        {
+          "dataset": "Отказы от вакцинации и противопоказания",
+          "table": "Отказы от вакцинации и противопоказания",
+          "column": "sdu_load_date",
+          "check": "CONSTANT COLUMN",
+          "severity": "INFO",
+          "detail": "во всех строках одно и то же значение",
+          "affected_rows": null
+        }
+      ],
+      "skipped_checks": []
+    },
+    {
+      "dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+      "table": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+      "row_count": 104441465,
+      "duplicate_rows": null,
+      "duplicate_rows_status": "SKIPPED_DUE_TO_RESOURCE_LIMIT",
+      "findings": [
+        {
+          "dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+          "table": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+          "column": "vaccination_date",
+          "check": "TYPE INCONSISTENCIES",
+          "severity": "WARNING",
+          "detail": "неразобранных дат: 155",
+          "affected_rows": null
+        },
+        {
+          "dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+          "table": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+          "column": "age",
+          "check": "IMPOSSIBLE VALUES",
+          "severity": "CRITICAL",
+          "detail": "минимум -999 при семантике, не допускающей отрицательных",
+          "affected_rows": null
+        },
+        {
+          "dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+          "table": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+          "column": "vaccination_plan",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 5638191
+        },
+        {
+          "dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+          "table": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+          "column": "medicine_organization_code",
+          "check": "MISSING VALUES",
+          "severity": "WARNING",
+          "detail": "пусто в 20.3% строк",
+          "affected_rows": 21207670
+        },
+        {
+          "dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+          "table": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+          "column": "medicine_organization_code",
+          "check": "WHITESPACE ISSUES",
+          "severity": "WARNING",
+          "detail": "значения содержат ведущие или завершающие пробелы",
+          "affected_rows": 174
+        },
+        {
+          "dataset": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+          "table": "Факты проведённых вакцинаций с возможностью представления в разрезе возрастов",
+          "column": "sdu_load_date",
+          "check": "CONSTANT COLUMN",
+          "severity": "INFO",
+          "detail": "во всех строках одно и то же значение",
+          "affected_rows": null
+        }
+      ],
+      "skipped_checks": [
+        "DUPLICATES: SKIPPED_DUE_TO_RESOURCE_LIMIT (объём 15.0 ГБ превышает бюджет памяти для поиска полных дубликатов)",
+        "DUPLICATE KEYS / id: SKIPPED_DUE_TO_RESOURCE_LIMIT (сравнение опирается на приблизительный подсчёт уникальных)",
+        "INCONSISTENT CATEGORY SPELLING: SKIPPED_DUE_TO_RESOURCE_LIMIT (объём выгрузки превышает бюджет проверки)"
+      ]
+    }
+  ]
+}
