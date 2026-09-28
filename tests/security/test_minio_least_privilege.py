@@ -73,6 +73,14 @@ def test_application_services_never_receive_minio_root_credentials() -> None:
     assert "APP_ENV: production" in production[production.index("  minio-init:\n") :]
 
 
+def test_bootstrap_treats_generated_secrets_as_positional_values() -> None:
+    bootstrap = (ROOT / "infrastructure" / "minio" / "bootstrap.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "mc alias set -- local" in bootstrap
+    assert 'mc admin user add -- local "$key" "$secret"' in bootstrap
+
+
 def test_bucket_policies_do_not_grant_raw_or_cross_role_access() -> None:
     for policy in ("app", "worker", "pipeline", "mlflow"):
         resources = _resources(policy)

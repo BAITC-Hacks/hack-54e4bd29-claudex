@@ -14,6 +14,9 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from urllib.request import urlopen
@@ -216,7 +219,21 @@ def _run(
     return result.stdout.strip()
 
 
-def _trusted_key(project_dir: Path, manifest: dict[str, Any]) -> Path:
+def _gpg_path(path: Path) -> str:
+    """Use POSIX paths accepted by Linux and Git-for-Windows GPG."""
+    value = str(path).replace("\\", "/")
+    drive = re.fullmatch(r"([A-Za-z]):/(.*)", value)
+    return f"/{drive.group(1).lower()}/{drive.group(2)}" if drive else value
+
+
+@contextmanager
+def _temporary_gpg_home() -> Iterator[Path]:
+    """Keep the agent socket short and remove the verification keyring."""
+    with tempfile.TemporaryDirectory(prefix="medsignal-gpg-") as directory:
+        yield Path(directory)
+
+
+def _trusted_key(project_dir: Path, manifest: dict[str, Any], home: Path) -> Path:
     try:
         with urlopen(manifest["signer_key_url"], timeout=30) as response:  # noqa: S310
             key = response.read(32_768)
@@ -224,13 +241,27 @@ def _trusted_key(project_dir: Path, manifest: dict[str, Any]) -> Path:
         raise RuntimeError("Upstream signing key unavailable") from exc
     if hashlib.sha256(key).hexdigest() != manifest["signer_key_sha256"]:
         raise ValueError("Upstream signing key hash mismatch")
-    home = project_dir / "gnupg"
-    home.mkdir(mode=0o700)
     key_file = project_dir / "upstream-key.gpg"
     key_file.write_bytes(key)
-    _run(["gpg", "--homedir", str(home), "--batch", "--import", str(key_file)])
+    _run(
+        [
+            "gpg",
+            "--homedir",
+            _gpg_path(home),
+            "--batch",
+            "--import",
+            _gpg_path(key_file),
+        ]
+    )
     listing = _run(
-        ["gpg", "--homedir", str(home), "--batch", "--with-colons", "--fingerprint"]
+        [
+            "gpg",
+            "--homedir",
+            _gpg_path(home),
+            "--batch",
+            "--with-colons",
+            "--fingerprint",
+        ]
     )
     if f"fpr:::::::::{manifest['signer_fingerprint']}:" not in listing:
         raise ValueError("Upstream signing key fingerprint mismatch")
@@ -273,7 +304,7 @@ def _source(
     _run(
         ["git", "tag", "-v", item["tag"]],
         cwd=source,
-        env={**clone_env, "GNUPGHOME": str(gpg_home)},
+        env={**clone_env, "GNUPGHOME": _gpg_path(gpg_home)},
     )
     if _run(["git", "status", "--porcelain"], cwd=source):
         raise ValueError("Upstream source checkout is modified")
@@ -386,23 +417,28 @@ def build(project: str, *, patched: bool = False) -> dict[str, Any]:
     require_no_known_application_critical(manifest, patched=patched)
     project_dir = BUILD_ROOT / project
     project_dir.mkdir(parents=True, exist_ok=False)
-    gpg_home = _trusted_key(project_dir, manifest)
     images: dict[str, dict[str, Any]] = {}
-    for name in ("server", "client"):
-        source = _source(name, manifest, project_dir, gpg_home)
-        patch_sha = _apply_acceptance_patch(name, source, manifest) if patched else None
-        backport = (
-            _apply_security_backport(source, manifest)
-            if patched and name == "server"
-            else {}
-        )
-        images[name] = _build_one(name, project, manifest[name], source, patched=patched)
-        images[name]["patch_sha256"] = patch_sha
-        images[name].update(backport)
-        if backport:
-            images[name]["fix_commit_sha"] = FIX_COMMIT
-            images[name]["security_changed_files"] = [APP_FILE]
-        print(f"Project-built MinIO {name}: verified source, binary, local image ID")
+    with _temporary_gpg_home() as gpg_home:
+        _trusted_key(project_dir, manifest, gpg_home)
+        for name in ("server", "client"):
+            source = _source(name, manifest, project_dir, gpg_home)
+            patch_sha = (
+                _apply_acceptance_patch(name, source, manifest) if patched else None
+            )
+            backport = (
+                _apply_security_backport(source, manifest)
+                if patched and name == "server"
+                else {}
+            )
+            images[name] = _build_one(
+                name, project, manifest[name], source, patched=patched
+            )
+            images[name]["patch_sha256"] = patch_sha
+            images[name].update(backport)
+            if backport:
+                images[name]["fix_commit_sha"] = FIX_COMMIT
+                images[name]["security_changed_files"] = [APP_FILE]
+            print(f"Project-built MinIO {name}: verified source, binary, local image ID")
     evidence = {
         "project": project,
         "build_contract_sha256": hashlib.sha256(CONTRACT_PATH.read_bytes()).hexdigest(),

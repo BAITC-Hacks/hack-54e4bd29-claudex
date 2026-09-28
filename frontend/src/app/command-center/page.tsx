@@ -127,7 +127,13 @@ export default function CommandCenterPage() {
         <div className="flex flex-wrap gap-2 text-[10px] font-bold text-slate-600">
           <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2"><MapPinned className="h-3.5 w-3.5 text-cyan-700" aria-hidden="true" />{selectedRegion?.name ?? "Все доступные регионы"}</span>
           <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2"><CalendarDays className="h-3.5 w-3.5 text-cyan-700" aria-hidden="true" />Январь — март 2025</span>
-          <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2"><Database className="h-3.5 w-3.5 text-cyan-700" aria-hidden="true" />{hasError ? "Источник недоступен" : overview ? "Агрегаты получены" : "Ожидание данных"}</span>
+          <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2">
+            <Database className="h-3.5 w-3.5 text-cyan-700" aria-hidden="true" />
+            <span>
+              <span className="block">{hasError ? "Источник недоступен" : overview ? "Исторические данные" : "Ожидание данных"}</span>
+              {overview?.meta.latest_import_completed_at && <span className="mt-0.5 block font-medium text-slate-400">Обновлено: {formatDate(overview.meta.latest_import_completed_at)}</span>}
+            </span>
+          </span>
         </div>
       </section>
 
@@ -146,20 +152,23 @@ export default function CommandCenterPage() {
         {overview && waiting && referrals && (
           <div className="space-y-6 lg:space-y-8">
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ключевые показатели">
-              <Kpi icon={Activity} label="Направления" value={formatNumber(overview.data.referrals_total.value)} note="За выбранный период" tone="teal" />
-              <Kpi icon={Users} label="Ожидающие" value={formatNumber(overview.data.waiting_records.value)} note={`Снимок: ${formatDate(waiting.data.snapshot_at)}`} tone="amber" />
-              <Kpi icon={Ban} label="Отказы" value={formatNumber(overview.data.refusals_total.value)} note="За выбранный период" tone="red" />
-              <Kpi icon={RadioTower} label="Активные сигналы" value={formatNumber(activeSignals)} note="Новые и в работе" tone="blue" />
+              <Kpi icon={Activity} label="Направления" value={formatNumber(overview.data.referrals_total.value)} unit="направлений" note="За выбранный период" tone="teal" />
+              <Kpi icon={Users} label="Ожидающие" value={formatNumber(overview.data.waiting_records.value)} unit="записей ожидания" note={`Снимок: ${formatDate(waiting.data.snapshot_at)}`} tone="amber" />
+              <Kpi icon={Ban} label="Отказы" value={formatNumber(overview.data.refusals_total.value)} unit="отказов" note="За выбранный период" tone="red" />
+              <Kpi icon={RadioTower} label="Активные сигналы" value={formatNumber(activeSignals)} unit="сигналов" note="Новые и в работе" tone="blue" />
             </section>
 
-            <section className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(330px,.55fr)]">
+            <section>
               {referrals.data.points.length > 0 ? (
                 <TimeSeriesChart title="Динамика направлений" description="Зарегистрированные направления по выбранному периоду" series={referrals} color="#087b83" />
               ) : (
                 <EmptyPanel title="Динамика направлений" message="За выбранный период данных нет." />
               )}
-              <LatestSignals query={recentSignals} />
             </section>
+
+            <OrganizationsPanel items={visibleOrganizations} search={search} onSearch={setSearch} />
+            <LatestSignals query={recentSignals} />
+            <ForecastSummary forecast={forecast} />
 
             <section className="surface-card overflow-hidden rounded-2xl">
               <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
@@ -215,9 +224,6 @@ export default function CommandCenterPage() {
               </div>
             </section>
 
-            <OrganizationsPanel items={visibleOrganizations} search={search} onSearch={setSearch} />
-            <ForecastSummary forecast={forecast} />
-
             <div className="rounded-2xl border border-cyan-100 bg-cyan-50/60 p-5 text-xs leading-6 text-slate-600">
               <p className="flex items-center gap-2 font-bold text-[#12334a]"><CheckCircle2 className="h-4 w-4 text-cyan-700" aria-hidden="true" />Контроль интерпретации</p>
               <p className="mt-1">Интерфейс не создаёт значения мощностей или географии, которых нет в источнике. Несопоставленные идентификаторы остаются видимыми.</p>
@@ -229,7 +235,7 @@ export default function CommandCenterPage() {
   );
 }
 
-function Kpi({ icon: Icon, label, value, note, tone }: { icon: LucideIcon; label: string; value: string; note: string; tone: "teal" | "amber" | "red" | "blue" }) {
+function Kpi({ icon: Icon, label, value, unit, note, tone }: { icon: LucideIcon; label: string; value: string; unit: string; note: string; tone: "teal" | "amber" | "red" | "blue" }) {
   const tones = {
     teal: "border-cyan-100 bg-cyan-50 text-cyan-800",
     amber: "border-amber-100 bg-amber-50 text-amber-800",
@@ -241,6 +247,7 @@ function Kpi({ icon: Icon, label, value, note, tone }: { icon: LucideIcon; label
       <div className={cn("grid h-10 w-10 place-items-center rounded-xl border", tones[tone])}><Icon className="h-[18px] w-[18px]" aria-hidden="true" /></div>
       <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.09em] text-slate-500">{label}</p>
       <strong className="mt-1 block text-[28px] font-extrabold tracking-[-0.05em] text-[#102f45]">{value}</strong>
+      <p className="text-[10px] font-semibold text-slate-600">{unit}</p>
       <p className="mt-1 text-[10px] font-medium text-slate-500">{note}</p>
     </article>
   );
@@ -405,6 +412,11 @@ function ForecastSummary({ forecast }: { forecast: ReturnType<typeof useLatestRe
             <p className="mt-1"><b className="text-slate-800">MAE baseline:</b> {formatNumber(data.baseline_metrics.mae)} направления в день</p>
             {syntheticDemoLabelEnabled(process.env.NEXT_PUBLIC_APP_ENV, process.env.NEXT_PUBLIC_SYNTHETIC_DEMO) && <p className="mt-2 font-bold text-amber-800">Синтетические демонстрационные данные</p>}
             <p className="mt-2">{data.disclaimer}</p>
+          </div>
+          <div className="md:col-span-2 xl:col-span-4 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4 text-xs leading-5 text-slate-700">
+            <h3 className="font-extrabold text-[#12334a]">Как читать прогноз</h3>
+            <p className="mt-1">MAE показывает среднюю абсолютную ошибку на исторической временной проверке. Чем меньше значение в направлениях за день, тем ближе расчёт к наблюдаемым данным.</p>
+            <p className="mt-2 font-semibold text-slate-800">Прогноз отражает входящий поток направлений и не является прогнозом свободных коек, даты выписки или медицинской рекомендацией.</p>
           </div>
         </div>
       )}

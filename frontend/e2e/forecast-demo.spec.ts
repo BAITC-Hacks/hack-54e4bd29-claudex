@@ -27,23 +27,22 @@ test("ADMIN sees the same persisted historical forecast in API and dashboard", a
   expect(forecast.forecast).toHaveLength(forecast.horizon_days);
 
   const card = page.getByRole("heading", { name: "Краткосрочный прогноз потока направлений" })
-    .locator("..").locator("..");
+    .locator("..").locator("..").locator("..");
   await expect(card.getByText(`Идентификатор прогноза: ${forecast.id}`)).toBeVisible();
-  await expect(card.getByText(/область: глобальная/)).toBeVisible();
+  await expect(card.getByText("Область: вся система (GLOBAL)")).toBeVisible();
   await expect(card.getByText(/Источник: ИС БГ/)).toBeVisible();
-  await expect(card.getByText(/Историческая проверка прогноза/)).toBeVisible();
+  await expect(card.getByText(/Историческая валидация прогноза/)).toBeVisible();
   await expect(card.getByText(/Прогноз на синтетических демонстрационных данных/)).toBeVisible();
   await expect(card.getByText(`MAE модели: ${uiNumber(forecast.metrics.mae)} направлений/день`)).toBeVisible();
   await expect(card.getByText(`MAE baseline: ${uiNumber(forecast.baseline_metrics.mae)} направлений/день`)).toBeVisible();
   await expect(card.getByText(/Период оценки:/)).toContainText(
     uiDate(forecast.validation_period_start!),
   );
-  await expect(card.getByText(/Исходные данные:/)).toContainText(
-    uiDate(forecast.forecast_start),
-  );
-  await expect(card.getByText(/Исходные данные:/)).toContainText(
-    uiDate(forecast.forecast_end),
-  );
+  const dates = card.getByText(/Исходные данные:/);
+  await expect(dates).toContainText(uiDate(forecast.input_period_start));
+  await expect(dates).toContainText(uiDate(forecast.input_period_end));
+  await expect(dates).toContainText(uiDate(forecast.forecast_start));
+  await expect(dates).toContainText(uiDate(forecast.forecast_end));
   await card.getByText("Табличное представление прогноза").click();
   const rows = card.getByRole("table").locator("tbody tr");
   await expect(rows).toHaveCount(forecast.horizon_days);

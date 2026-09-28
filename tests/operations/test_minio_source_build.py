@@ -121,6 +121,20 @@ def test_source_checkout_forces_lf_before_reading_signed_tag(
     assert calls[config_lf + 1] == ["git", "config", "core.eol", "lf"]
 
 
+def test_gpg_arguments_use_forward_slashes_for_windows_paths() -> None:
+    path = Path(r"C:\workspace\acceptance\gnupg")
+
+    assert minio_source_build._gpg_path(path) == "/c/workspace/acceptance/gnupg"
+
+
+def test_temporary_gpg_home_fits_agent_socket_and_is_removed() -> None:
+    with minio_source_build._temporary_gpg_home() as home:
+        assert home.is_dir()
+        assert len(f"{minio_source_build._gpg_path(home)}/S.gpg-agent") < 108
+
+    assert not home.exists()
+
+
 @pytest.mark.parametrize("name", ["server", "client"])
 def test_acceptance_dockerfiles_build_readonly_modules_and_preserve_runtime(
     name: str,

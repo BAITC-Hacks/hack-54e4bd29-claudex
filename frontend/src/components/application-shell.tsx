@@ -22,6 +22,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { DECISION_SUPPORT_NOTICE, env } from "@/config/env";
 import { useAuth } from "@/features/auth/auth-context";
+import { syntheticDemoLabelEnabled } from "@/features/forecasting/demo-context";
 import { cn } from "@/utils/cn";
 import { SiteHeader } from "@/components/site-header";
 
@@ -71,10 +72,18 @@ function activeRoute(pathname: string): string | undefined {
     .sort((first, second) => second.href.length - first.href.length)[0]?.href;
 }
 
-function AppNavigation({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+function AppNavigation({
+  pathname,
+  onNavigate,
+  ariaLabel = "Основная навигация",
+}: {
+  pathname: string;
+  onNavigate?: () => void;
+  ariaLabel?: string;
+}) {
   const active = activeRoute(pathname);
   return (
-    <nav aria-label="Основная навигация" className="space-y-6">
+    <nav aria-label={ariaLabel} className="space-y-6">
       {navigationGroups.map((group) => (
         <div key={group.label}>
           <p className="mb-2 px-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
@@ -144,6 +153,7 @@ export function ApplicationShell({ children }: { children: ReactNode }) {
 
 function ApplicationShellContent({ children, pathname }: { children: ReactNode; pathname: string }) {
   const { isAuthenticated, logout } = useAuth();
+  const syntheticDemo = syntheticDemoLabelEnabled(process.env.NEXT_PUBLIC_APP_ENV, process.env.NEXT_PUBLIC_SYNTHETIC_DEMO);
   const [mobileOpen, setMobileOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -181,8 +191,8 @@ function ApplicationShellContent({ children, pathname }: { children: ReactNode; 
         <div className="mt-8 flex-1 overflow-y-auto pr-1"><AppNavigation pathname={pathname} /></div>
         <div className="mt-5 border-t border-slate-200 pt-4">
           <div className="mb-3 rounded-xl border border-cyan-100 bg-cyan-50/70 px-3 py-3">
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-cyan-800">Демо-среда</p>
-            <p className="mt-1 text-[11px] leading-4 text-slate-600">Исследовательский контур поддержки решений</p>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-cyan-800">{syntheticDemo ? "Синтетические данные" : "Демо-среда"}</p>
+            <p className="mt-1 text-[11px] leading-4 text-slate-600">{syntheticDemo ? "Демонстрационный исследовательский контур" : "Исследовательский контур поддержки решений"}</p>
           </div>
           <Button type="button" variant="ghost" className="w-full justify-start text-slate-600" onClick={logout}>
             <LogOut className="h-4 w-4" aria-hidden="true" /> Выйти
@@ -207,7 +217,13 @@ function ApplicationShellContent({ children, pathname }: { children: ReactNode; 
               <p className="truncate text-sm font-extrabold tracking-[-0.02em] text-[#102f45]">{title}</p>
               <p className="hidden text-[11px] text-slate-500 sm:block">Защищённый аналитический контур</p>
             </div>
-            <span className="hidden rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-cyan-900 sm:inline-flex">Исследовательский пилот</span>
+            <span
+              aria-label={syntheticDemo ? "Синтетические демонстрационные данные" : undefined}
+              className="inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-2 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.08em] text-cyan-900 sm:px-3 sm:text-[10px] sm:tracking-[0.1em]"
+            >
+              <span className="sm:hidden">{syntheticDemo ? "Демо" : "Пилот"}</span>
+              <span className="hidden sm:inline">{syntheticDemo ? "Синтетические данные" : "Исследовательский пилот"}</span>
+            </span>
             <span className="grid h-9 w-9 place-items-center rounded-full bg-[#12334a] text-xs font-extrabold text-white" aria-label="Профиль пользователя">МС</span>
           </div>
         </header>
@@ -240,7 +256,13 @@ function ApplicationShellContent({ children, pathname }: { children: ReactNode; 
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto py-3"><AppNavigation pathname={pathname} onNavigate={closeMobileNavigation} /></div>
+            <div className="flex-1 overflow-y-auto py-3">
+              <AppNavigation
+                pathname={pathname}
+                onNavigate={closeMobileNavigation}
+                ariaLabel="Мобильная навигация"
+              />
+            </div>
             <Button type="button" variant="ghost" className="mt-4 justify-start border-t border-slate-200 text-slate-600" onClick={logout}>
               <PanelLeftClose className="h-4 w-4" aria-hidden="true" /> Выйти
             </Button>

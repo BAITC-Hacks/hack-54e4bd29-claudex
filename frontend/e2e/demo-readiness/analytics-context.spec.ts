@@ -2,7 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import { login } from "../auth";
 
-test("analytics requests preserve period context, scope organizations and label forecast state honestly", async ({ page }) => {
+test("analytics requests preserve period context, scope organizations and label forecast state honestly", async ({ baseURL, page }) => {
+  expect(baseURL).toBeTruthy();
   const ready = await page.request.get("/api/v1/ready");
   expect(ready.status(), "requires a READY isolated synthetic acceptance project").toBe(200);
   await login(page, "admin", "/dashboard");
@@ -29,36 +30,65 @@ test("analytics requests preserve period context, scope organizations and label 
   }).last();
   const organizationLinks = organizationTable.locator("tbody a");
   expect(await organizationLinks.count(), "synthetic fixture must expose at least two organizations").toBeGreaterThan(1);
-  const firstPath = await organizationLinks.nth(0).getAttribute("href");
-  const secondPath = await organizationLinks.nth(1).getAttribute("href");
-  expect(firstPath).not.toBe(secondPath);
+  const firstOrganizationName = (await organizationLinks.nth(0).innerText()).split(/\r?\n/, 1)[0]?.trim();
+  const firstHref = await organizationLinks.nth(0).getAttribute("href");
+  const secondHref = await organizationLinks.nth(1).getAttribute("href");
+  expect(firstOrganizationName).toBeTruthy();
+  expect(firstHref).toBeTruthy();
+  expect(secondHref).toBeTruthy();
+  const firstUrl = new URL(firstHref!, baseURL);
+  const secondUrl = new URL(secondHref!, baseURL);
+  expect(firstUrl.pathname).toMatch(/^\/hospitals\/[0-9a-f-]+$/);
+  expect(secondUrl.pathname).toMatch(/^\/hospitals\/[0-9a-f-]+$/);
+  expect(firstUrl.searchParams.get("date_to")).toBe("2025-03-30");
+  expect(firstUrl.searchParams.get("granularity")).toBe("WEEK");
+  expect(firstUrl.href).not.toBe(secondUrl.href);
 
-  await organizationLinks.nth(0).click();
-  const firstOrganization = await page.getByRole("heading", { level: 1 }).innerText();
-  await expect(page.getByText(/2025/).first()).toBeVisible();
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === firstUrl.pathname && url.searchParams.get("granularity") === "WEEK"),
+    organizationLinks.nth(0).click(),
+  ]);
+  const firstHeading = page.getByRole("heading", { level: 1 });
+  await expect(firstHeading).toHaveText(firstOrganizationName!);
+  await expect(page.getByText("Каноническая организация")).toBeVisible();
+  await expect(page.getByText("Направления", { exact: true })).toBeVisible();
+  const firstOrganization = await firstHeading.innerText();
 
-  await page.goBack();
+  const backLink = page.getByRole("link", { name: "Вернуться к аналитике" });
+  await expect(backLink).toHaveAttribute("href", /date_to=2025-03-30/);
+  await Promise.all([page.waitForURL((url) => url.pathname === "/dashboard" && url.searchParams.get("granularity") === "WEEK"), backLink.click()]);
+  await expect(page.getByRole("heading", { name: "Ситуационный центр" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Выйти" })).toBeVisible();
   await expect(page.getByLabel("Конец")).toHaveValue("2025-03-30");
   await expect(page.getByLabel("Группировка")).toHaveValue("WEEK");
 
-  await page.goto(secondPath!);
+  const secondLink = page.locator(`a[href="${secondHref}"]`).first();
+  await expect(secondLink).toBeVisible();
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === secondUrl.pathname && url.searchParams.get("granularity") === "WEEK"),
+    secondLink.click(),
+  ]);
   const secondHeading = page.getByRole("heading", { level: 1 });
   await expect(secondHeading).toBeVisible();
   await expect(secondHeading).not.toHaveText(firstOrganization);
 
-  await page.getByRole("navigation", { name: "Основная навигация" })
-    .getByRole("link", { name: "Карта" }).click();
-  await expect(page.getByText("Историческая сводка записей о направлениях, ожидании и отказах.")).toBeVisible();
+  const mapLink = page.getByRole("navigation", { name: "Основная навигация" })
+    .getByRole("link", { name: "Обзор" });
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === "/command-center"),
+    mapLink.click(),
+  ]);
+  await expect(page.getByText(/Исторические агрегаты направлений, ожидания и отказов/)).toBeVisible();
   await expect(page.getByText("Показатели не измеряют загрузку коек.")).toBeVisible();
-  const marker = page.locator(".leaflet-marker-icon[title]").first();
-  await expect(marker).toBeVisible();
-  const regionResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return url.pathname === "/api/v1/analytics/overview"
-      && url.searchParams.has("region")
-      && response.status() === 200;
-  });
-  await marker.click();
-  await regionResponse;
-  await expect(page.getByText("Выбран регион")).toBeVisible();
+  await expect(page.getByLabel("Карта региональных показателей Казахстана")).toBeVisible();
+  await expect(page.locator(".leaflet-marker-icon[title]")).toHaveCount(0);
+  await expect(page.getByText("Выберите регион на карте, чтобы сузить аналитику.")).toBeVisible();
+
+  const signalsLink = page.getByRole("navigation", { name: "Основная навигация" })
+    .getByRole("link", { name: "Сигналы" });
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === "/signals"),
+    signalsLink.click(),
+  ]);
+  await expect(page.getByRole("heading", { name: "Сигналы" })).toBeVisible();
 });

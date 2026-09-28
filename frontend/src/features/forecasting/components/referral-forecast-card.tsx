@@ -133,6 +133,11 @@ export function ReferralForecastCard({ forecast, isLoading, error, isSyntheticDe
             {forecast.limitations.map((item) => <li key={item}>— {item}</li>)}
           </ul>
         </div>
+        <section className="mt-4 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4 text-sm leading-6 text-slate-700">
+          <h3 className="font-extrabold text-[#12334a]">Как читать прогноз</h3>
+          <p className="mt-1">MAE показывает среднюю абсолютную ошибку на исторической временной проверке. Значение приводится в направлениях за день и не является процентом точности.</p>
+          <p className="mt-2 font-semibold text-slate-800">Прогноз отражает входящий поток направлений и не является прогнозом свободных коек, даты выписки или медицинской рекомендацией.</p>
+        </section>
         <div className="mt-3 space-y-1 text-xs text-muted-foreground">
           <p>Источник: ИС БГ · Целевой показатель: ежедневное число направлений · Область: {forecast.scope_type === "GLOBAL" ? "вся система (GLOBAL)" : forecast.scope_type === "REGION" ? "регион (REGION)" : "организация (HOSPITAL)"}</p>
           <p>Исходные данные: {formatDate(forecast.input_period_start)} — {formatDate(forecast.input_period_end)} · горизонт: {formatDate(forecast.forecast_start)} — {formatDate(forecast.forecast_end)}</p>

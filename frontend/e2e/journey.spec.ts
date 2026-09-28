@@ -2,18 +2,12 @@ import { expect, test } from "@playwright/test";
 
 import { login } from "./auth";
 
-// The browser tests share one loopback edge IP and its real OIDC rate limit.
-// One admin session covers the end-to-end journey without repeated logins.
-test.beforeEach(async () => {
-  await new Promise((resolve) => setTimeout(resolve, 2_000));
-});
-
 test("admin journey through analytics, signal, scenario and logout", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
 
   await test.step("OIDC callback and historical waiting snapshot", async () => {
     await login(page, "admin");
-    await expect(page.getByRole("link", { name: "MedSignal — главная" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "MedSignal — ситуационный центр" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Ситуационный центр" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Возраст очереди в снимке" })).toBeVisible();
     await expect(page.getByText("2025-01-03T03:00:00", { exact: true })).toBeVisible();
@@ -53,12 +47,26 @@ test("admin journey through analytics, signal, scenario and logout", async ({ pa
     await page.getByRole("button", { name: "Открыть меню" }).click();
     await page.getByRole("navigation", { name: "Мобильная навигация" })
       .getByRole("link", { name: "Сигналы" }).click();
-    await expect(page.getByRole("heading", { name: "Лента предупреждений" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Сигналы" })).toBeVisible();
   });
 
   await test.step("human acknowledges a synthetic signal", async () => {
+    const newSignals = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/v1/signals"
+        && url.searchParams.get("status") === "NEW"
+        && response.request().method() === "GET";
+    });
     await page.getByLabel("Статус").selectOption("NEW");
-    await page.getByRole("table").getByRole("link").first().click();
+    expect((await newSignals).status()).toBe(200);
+    const signalLink = page.getByLabel("Список сигналов").getByRole("link").first();
+    await expect(signalLink).toBeVisible();
+    const signalPath = await signalLink.getAttribute("href");
+    expect(signalPath).toMatch(/^\/signals\/[0-9a-f-]+$/);
+    await Promise.all([
+      page.waitForURL((url) => url.pathname === signalPath),
+      signalLink.click(),
+    ]);
     await page.getByLabel("Причина").fill("Синтетический acceptance test");
     await page.getByRole("button", { name: "Принять в работу" }).click();
     await expect(page.getByRole("button", { name: "Закрыть как обработанный" })).toBeVisible();

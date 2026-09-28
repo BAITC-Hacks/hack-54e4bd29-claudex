@@ -47,14 +47,20 @@ const detail = {
   source: "SYNTHETIC_DEV_SEED",
   data_watermark: { synthetic: true },
   data_current: false,
-  available_transitions: [],
+  available_transitions: ["IN_PROGRESS"],
   explanation: {
     summary: "Алгоритмическое объяснение остаётся в карточке.",
     factors: [], caveats: [], generator: "RULE", generator_version: "seed-0.1",
     model_version: null, input_period_start: null, input_period_end: null,
     generated_at: "2025-01-29T00:00:00Z",
   },
-  actions: [],
+  actions: [{
+    id: "action-1",
+    action_type: "ACKNOWLEDGE",
+    description: "Принят в работу после проверки evidence.",
+    created_by: "demo-admin",
+    created_at: "2025-01-29T01:00:00Z",
+  }],
   audit_history: [],
 } satisfies SignalDetail;
 
@@ -82,6 +88,22 @@ it("keeps the algorithmic explanation visible if optional Copilot fails", async 
   expect(screen.getByRole("heading", { name: "Алгоритмическое объяснение" })).toBeInTheDocument();
   expect(screen.getByText(detail.explanation.summary)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Объяснить сигнал" }));
-  expect(await screen.findByText(/Функция отключена/)).toBeInTheDocument();
+  expect(await screen.findByText("AI-пояснение временно недоступно. Алгоритмическое объяснение сигнала остаётся доступным.")).toBeInTheDocument();
   expect(screen.getByText(detail.explanation.summary)).toBeInTheDocument();
+});
+
+it("separates a signal from forecast evidence and makes the human decision step explicit", () => {
+  render(<SignalDetailPage />);
+
+  expect(screen.getByText("Операционный сигнал, не прогноз")).toBeInTheDocument();
+  expect(screen.getByText(/Прогноз показывается только как отдельное основание, если связь сохранена сервером/i)).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Основание сигнала" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Алгоритмическое объяснение" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Решение сотрудника" })).toBeInTheDocument();
+  expect(screen.getByText(/Решение принимает уполномоченный сотрудник/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Принять в работу" })).toBeDisabled();
+  expect(screen.getByText("Сотрудник: demo-admin")).toBeInTheDocument();
+  const actionHeading = screen.getByRole("heading", { name: "Решение сотрудника" });
+  const copilotHeading = screen.getByRole("heading", { name: "AI-пояснение" });
+  expect(Boolean(actionHeading.compareDocumentPosition(copilotHeading) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
 });

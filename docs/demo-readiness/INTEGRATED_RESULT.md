@@ -1,15 +1,216 @@
 # Integrated demo result
 
-Дата статической проверки: **2026-09-27**.
+Дата статической проверки: **2026-09-28**.
 
-`ENGINE = UNRESPONSIVE`.
+`ENGINE = AVAILABLE`.
+
+## Повторная browser-проверка и cold start на согласованном UI-контракте
+
+Финальный локальный test/report HEAD: `224fb4f3e65dc571da99bb2043c744a78d6845e7`.
+Свежий runtime был собран из `af38340a9c3f4ac8ed8f2ad60b771398adec8fab`;
+последующий commit `224fb4f3e65dc571da99bb2043c744a78d6845e7` меняет только
+Playwright-синхронизацию admin journey, поэтому application source между этими
+точками не менялся. Ветка не сбрасывалась, push/main merge/deployment не
+выполнялись.
+
+Локальные commits этого прохода:
+
+- `4d4d81a1a1c38bd901a0a631f1d7ece6e1d28a0f` — согласованные текущие UI labels;
+- `694107d60d76029cc1f2cb5cbecafee92049f5ba` — web-first navigation и реальный
+  OIDC reload/deep-link scope test;
+- `911a569d43c3bcc003f4ba6f9c91f13a85da518d`,
+  `dc4842fe3db202a202887e5e58a43f4704d14cec`,
+  `f22f2b93de1296011b2ba52cafa80d03ede6d9ad` — минимальный подтверждённый
+  frontend fix: dashboard filters сохраняются в URL/history без гонки двух
+  `router.replace`; обязательная Next.js Suspense boundary сохранена;
+- `af38340a9c3f4ac8ed8f2ad60b771398adec8fab` и
+  `224fb4f3e65dc571da99bb2043c744a78d6845e7` — завершённые signal/Copilot,
+  forecast, provenance-safe map и responsive admin journey assertions.
+
+### Фактические статусы
+
+- `TEST_CONTRACT_ALIGNMENT = PASS`. Проверены `Сигналы`, доменный статус
+  `NEW` с подписью `новый`, `Область: вся система (GLOBAL)`,
+  `MedSignal — ситуационный центр` и текущая формулировка исторической
+  валидации. Assertions не подгонялись под forecast values.
+- `AUTH_RELOAD_AND_DEEP_LINK = PASS` как отдельный targeted run: protected
+  `/signals` возвращается после настоящего Keycloak OIDC; hospital-manager после
+  полного reload повторно входит через существующую OIDC-сессию на безопасный
+  internal route; foreign organization API возвращает `404`, UI показывает
+  понятное unavailable-состояние и не раскрывает B1.
+- `SIGNAL_ACTION = PASS`: выбран fresh synthetic `NEW`, acknowledge дал `200`,
+  `IN_PROGRESS`, `version + 1` и сохранил причину; duplicate action исчез,
+  reload + OIDC сохранили состояние; stale card получил `409`.
+- `COPILOT_DISABLED = PASS`: реальный backend вернул `503/COPILOT_DISABLED`;
+  алгоритмическое объяснение осталось неизменным, повторное открытие не создало
+  второй POST, переход к другой карточке не перенёс private state. API key и
+  платные LLM-вызовы не использовались.
+- `FORECAST_UI = PASS`: отдельный browser test фактически выполнен `1/1` на
+  сохранённом forecast `37f6b0d4-0052-4845-9e9b-2705276b3e2a`. Проверены тот же
+  API ID, `DAILY_REFERRAL_COUNT`, `GLOBAL`, input/forecast/validation dates,
+  MAE модели и baseline в `направлений/день`, семь строк горизонта, historical
+  и synthetic limitations. Fixture и pipeline не перезапускались. Прежний
+  read-only DB/ClickHouse verifier на неизменённых backend/data остаётся отдельным
+  PASS evidence, но в этом проходе повторно не запускался.
+- `COLD_START_REPEATABILITY = PASS`: project
+  `phase8-demo-integration-repeat-20260928a`, loopback origin
+  `http://127.0.0.1:64208`, новые project-prefixed volumes, один первый `start`
+  без retry — `READY`; `clickhouse-ready`, PostgreSQL/ClickHouse migrations,
+  MinIO identities и runtime verifier прошли. Bootstrap: `30/22/24`, scope:
+  admin `[30,22,24]`, hospital/region `[15,11,12]`, disjoint `[0,0,0]`, foreign
+  hospital `404`. Project остановлен без `down`; containers/volumes/evidence
+  сохранены. Исходный forecast project `...27b` не уничтожался и снова `READY`.
+- `BROWSER_SUITE = FAIL`. Единый fresh-project invocation без retries/skip:
+  `planned=6`, `passed=4`, `failed=2`, `skipped=0`; exact failures — оба поздних
+  restricted-identity OIDC flows. В окне этой серии прогонов Nginx auth zone
+  фактически вернул `21` ответ `429`, включая `2` login-action, `2` token и
+  Keycloak static font requests.
+  Gate не ослаблялся. В разрешённом split все семь сценариев имеют clean
+  targeted PASS: четыре QA, admin journey, restricted journey и forecast; это
+  не переименовывает combined run в PASS. Для общего PASS требуется отдельное
+  infrastructure/security решение по auth-rate orchestration или static
+  resources, а не sleep, retry или suppression в тестах.
+- `IMAGE_SECURITY = FAIL`. Fresh MinIO scans: server `50 HIGH / 0 CRITICAL`,
+  client `44 HIGH / 0 CRITICAL`; signed source, reviewed backport, advisory gate
+  и network-isolated CVE probe прошли только для synthetic startup. Известные
+  CI findings backend/worker/MLflow остаются по `44 HIGH / 0 CRITICAL`, без
+  reported fixed versions. Suppression/allowlist/gate reduction не применялись.
+- `SECURITY_ADMISSION = FAIL`. Успешные functional checks и cold start не
+  означают production readiness.
+
+Fresh application image IDs: backend
+`sha256:acce3e67ec600b159d7d73586dc37a4a3f081fbb9c5280aa3ec0cb87fe398893`,
+worker `sha256:3856aaae885d7f3b007cb4d5ab8ba72f4596ba3be96b478fc51dbd7361a124ff`,
+MLflow `sha256:a7bd282d480bd1d986c631e98f29254417f1b62c55b27dffdee2717ecb07fbc9`,
+frontend `sha256:e4e1ffd9aac6fb01dccf012914c83f439b8d880b4e553e7bc16ed2dbefac285f`,
+nginx `sha256:62b51fd2e71a8de9233da70dfe9e2b2d3035867c736e7c64cf87ea2621f7397f`,
+pipeline `sha256:ed57dc9fc6fb04a27f5bd720bfd5804a1e21c7494e603cf806460a1463a2564a`.
+Source-built MinIO server/client IDs:
+`sha256:49ec3981c57e5d8d59931b0c9e988897fbe9a182b78ac071973516d658618dfe`
+и `sha256:e61c809e1073c9fc85a41d6fa7b05a4e6cd5e4152322f6aad503c47639ec2bca`.
+Frontend собран с `NEXT_PUBLIC_APP_ENV=test`,
+`NEXT_PUBLIC_SYNTHETIC_DEMO=true` и project loopback OIDC issuer.
+
+Финальные frontend checks после изменений: Vitest `23 files / 130 tests` PASS,
+ESLint PASS, TypeScript PASS, production build PASS (`12/12` pages). Bundled
+Playwright Chromium использован вместо system Chrome: системный Chrome загружал
+TumarCSP и зависал уже после test PASS на cleanup временного профиля; это
+runner/environment limitation, не было скрыто как успешный command exit.
+
+## Актуальная локальная runtime-проверка после переустановки Docker
+
+Проверенный runtime code HEAD: `37261881dbb9dc5f2653e19a35da0af673adaf82`
+на ветке `demo/integration` в отдельном worktree. Docker Server `29.8.0`,
+context `desktop-linux`. Серверная часть `docker version` отвечает, собственные
+images доступны для inspect. Docker повторно не перезапускался, чужие projects и
+volumes не изменялись.
+
+Локальные fix commits:
+
+- `a6910b11519112c5625a1385b4a9402d6a135563` — Windows Docker Desktop support
+  для signed-source GPG path/socket и fail-closed IAM probe; mobile drawer получил
+  отдельное accessible name; forecast E2E locator снова охватывает всю карточку,
+  assertions не менялись;
+- `37261881dbb9dc5f2653e19a35da0af673adaf82` — `mc` получает `--` перед
+  generated secret positional arguments. Это закрывает воспроизведённый случай,
+  когда случайный secret начинался с `-` и воспринимался как CLI flag.
+
+### Cold-start история
+
+| Project / SHA | Первый штатный start | Фактический результат |
+| --- | --- | --- |
+| `phase8-demo-integration-repro-20260927l` / `75f395be336e55bd630a139535060c4efb8e28ed` | один start, без retry | **PASS**: `READY`, migrations и `clickhouse-ready` успешны; security gate остаётся `FAIL`. |
+| `phase8-demo-integration-final-20260927a` / `a6910b11519112c5625a1385b4a9402d6a135563` | один start, без retry | **FAIL**: `minio-init` exit 1 на stage `alias`; случайный synthetic secret с ведущим `-` был принят `mc` за flag. Повторный start не выполнялся и результат не переименован в PASS. |
+| post-fix `phase8-demo-integration-final-20260927b` / `37261881dbb9dc5f2653e19a35da0af673adaf82` | один start нового project/новых volumes | **PASS**: `READY`; migrations, `clickhouse-ready`, MinIO bootstrap/runtime и четыре scoped identities — PASS. Это отдельная fresh validation после fix, а не retry failed project. |
+
+Failed и завершённый первый projects были остановлены, удалены только их
+проверенные project-scoped containers/networks/volumes. Final project `...27b`
+оставлен доступным для воспроизводимой проверки.
+
+Final application image IDs: backend
+`sha256:91fb024d8097f1642d02df6e505616aa02a111aeef8a8ea7a7c9a05ed8d301af`,
+worker `sha256:e56a9827ec8483998126b2e6972b515ab785471f57b08b3cb1c0749b58ef3167`,
+MLflow `sha256:3660641f17838c93442bd0efbb0d31ac9b042f73fd8d7e5df5ca74e3cbf1b8c5`,
+frontend `sha256:12a329864606608402d1752becfbfb6eebb192e58b5397b5f068ab80366c0c67`,
+nginx `sha256:41f17cb10208a12f8195d724e211f9d9c096f9b58e7a01ba806c6eb6245a2f7d`,
+pipeline `sha256:b0f98d600194e90bfba34bbea438de68bef15f5a6e296c2891464920975780e3`.
+Frontend собран с `NEXT_PUBLIC_APP_ENV=test`,
+`NEXT_PUBLIC_SYNTHETIC_DEMO=true` и project loopback OIDC issuer. Project-built
+MinIO server/client IDs: `sha256:64e8006d65b20f295205acecad8c2f7e453bf480cda76f42c61bb0ab3fbfc405`
+и `sha256:421840f9be603b2b6b21dbc412c22acd991a85f174c91a881f17de0a1b37b25a`.
+
+### Bootstrap, scope и forecast
+
+- Synthetic publication: `REFERRALS=30`, `WAITING=22`, `REFUSALS=24`;
+  `TREATED` намеренно не опубликован из-за неподтверждённого reporting period.
+- Signed-token scope: admin `[30,22,24]`, hospital manager `[15,11,12]`,
+  regional analyst `[15,11,12]`, disjoint intersection `[0,0,0]`, foreign
+  hospital `404`, region/organization intersection `[15,11,12]`.
+- Forecast fixture: ещё `1 989` invented referral rows; итоговая проверенная
+  история `2 019` rows / `90` days. Forecast ID
+  `37f6b0d4-0052-4845-9e9b-2705276b3e2a`, модель `weekly_naive`, период
+  `2025-04-01`—`2025-04-07`.
+- Source и read-only PostgreSQL/ClickHouse verifiers: `6` folds, `42`
+  non-overlapping chronological pairs, no leakage, сохранённый/recomputed/baseline
+  MAE `1.5714285714285714` referrals/day, `forecast.model_version` совпадает с
+  registered model version.
+- Реальный forecast browser response прошёл status `200`, schema parse,
+  `DAILY_REFERRAL_COUNT`, `GLOBAL`, `STALE`, validation-period и horizon fields,
+  затем test остановился на неизменённом text assertion: ожидалось
+  `область: глобальная`, фактический UI показывает
+  `Область: вся система (GLOBAL)`.
+
+### Browser результаты текущего runtime
+
+Четыре обязательных QA tests реально выполнены: `planned=4`, `passed=0`,
+`failed=4`, `skipped=0`. Forecast browser: `planned=1`, `passed=0`, `failed=1`,
+`skipped=0`. Assertions не ослаблялись.
+
+| Test | Failing step / actual error | Категория |
+| --- | --- | --- |
+| Analytics context | После click по организации test не дождался route transition; `page.goBack()` гоняется с незавершённой навигацией и попадает в новый OIDC callback, поэтому field `Конец` отсутствует. | Test navigation synchronization / memory-only auth expectation; analytics API до этого отвечал `200`. |
+| Protected routes | Real Keycloak login и возврат на `/signals` успешны; ожидается heading `Лента предупреждений`, фактически согласованный UI содержит `Сигналы`. | Test/design contract mismatch. |
+| Hospital scope | Scoped list корректно скрывает B1; прямой `page.goto(foreignPath)` делает full reload и теряет intentionally memory-only token, фактически остаётся пустой Next route announcer вместо ожидаемого error text. | Test auth/navigation expectation; отдельный signed-token verifier подтвердил foreign `404`. |
+| Signal action / Copilot disabled | Synthetic source найден, но ожидается exact `Новый`, фактическая доменная подпись — `новый`; state mutation и Copilot step не выполнялись. | Test/UI text mismatch; Copilot runtime assertion остаётся NOT TESTED. |
+| Forecast browser | API/schema/validation fields и forecast ID прошли; ожидается `область: глобальная`, фактически `Область: вся система (GLOBAL)`. | Test/UI text mismatch; forecast DB/API PASS, browser FAIL. |
+
+Дополнительно исходный restricted-identity journey — **PASS (1/1)**. Admin journey
+после mobile accessibility fix выполнен и остановился на более раннем design-name
+расхождении: ожидался link `MedSignal — главная`, фактически
+`MedSignal — ситуационный центр`. Полный текущий browser итог с этими двумя
+journey runs: `7` tests executed, `1` PASS, `6` FAIL.
+
+### Статические проверки после fixes
+
+- Frontend: Vitest `23 files / 130 tests` PASS; ESLint PASS; TypeScript PASS;
+  production build с test/synthetic flags PASS, `12/12` static pages.
+- Relevant Python regression: `41 passed, 1 skipped`; skip — отдельный opt-in
+  real-MinIO pytest, фактический MinIO runtime/policy probe выполнен отдельно и PASS.
+- Ruff check и format check изменённых Python files — PASS.
+
+### Security status и текущие блокеры
+
+`SECURITY_ADMISSION = FAIL`. Известные CI findings не подавлялись: backend,
+worker и MLflow — по `44 HIGH / 0 CRITICAL`, одинаковые Debian OS findings без
+reported fixed versions. Final MinIO scan: server `50 HIGH / 0 CRITICAL`, client
+`44 HIGH / 0 CRITICAL`; advisory gate допускает только synthetic functional
+startup, не production admission. Trivy gate, Host validation и остальные
+security gates не ослаблялись.
+
+До merge остаются: четыре QA browser failures, forecast browser text-contract
+failure, непроверенный Copilot disabled step и открытый image HIGH gate. Успешный
+synthetic runtime не означает production readiness. Push, main merge, deployment
+и платные LLM-вызовы не выполнялись.
 
 ## Версия и состав
 
-Объединённый код подготовлен, статические проверки выполнены, runtime ожидает восстановления среды.
+Объединённый код и локальные runtime fixes подготовлены; актуальные runtime
+результаты приведены выше. Следующие разделы сохраняют историю интеграции и
+предыдущих environment-blocked прогонов.
 
 - Ветка: `demo/integration` в отдельном managed worktree.
-- Проверенный code HEAD: `785a53e40e5328ac2802f16a537f02763e3dcf9d`.
+- Исторический integration/design HEAD: `785a53e40e5328ac2802f16a537f02763e3dcf9d`;
+  актуальный runtime code HEAD — `37261881dbb9dc5f2653e19a35da0af673adaf82`.
 - Merge commit forecast + QA/cold-start: `5a8669167ed7f504a36b0c74c4a1f86c30d88ef8`.
 - Product/Copilot ancestor: `78ff9fffc0eaee2c01d4568e5b8b9adf84712ab4`.
 - Forecast: `6014bd784f8f863f20d08ff731ffc027087a3f26`.
@@ -83,7 +284,7 @@
 
 Новый `test_mlflow_does_not_publish_host_ports` безопасно проверен mutation-run только в памяти: при синтетическом `ports` получен ожидаемый RED, фактический Compose дал `2 passed`; полный operations-набор — `179 passed, 1 skipped`. Предыдущее Minor закрыто.
 
-## Runtime и browser status
+## Исторический local runtime и browser status до переустановки Docker
 
 Общим Docker управляет только интегратор. В этом статическом прогоне containers не запускались и Docker повторно не перезапускался; чужие containers, volumes и проекты не изменялись.
 
@@ -262,7 +463,7 @@ Host RAM: 3911 MiB total; минимальное observed available во вре�
 | `PUBLIC_ACCESS` | NOT ATTEMPTED; 8003, reverse proxy, firewall и ingress не менялись |
 | `SECURITY_ADMISSION` | FAIL из-за оставшихся HIGH findings и отсутствия полного runtime evidence |
 
-## Оставшиеся блокеры и владельцы
+## Исторические environment-блокеры и владельцы
 
 | Блокер | Владелец | Критерий снятия |
 | --- | --- | --- |

@@ -155,17 +155,9 @@ def _escalation_archive(original: Path, output: Path, limited_user: str) -> None
 def _mc(
     image: str, network: str, env_file: Path, work: Path, *args: str
 ) -> subprocess.CompletedProcess[str]:
-    if os.name != "posix":
-        raise RuntimeError("Disposable IAM probe requires a Linux Docker runner")
-    # Match the host runner UID so the non-root mc process can read the 0600
-    # env file and write the exported ZIP inside the 0700 temporary directory.
-    getuid = getattr(os, "getuid", None)
-    getgid = getattr(os, "getgid", None)
-    if not callable(getuid) or not callable(getgid):
-        raise RuntimeError("Disposable IAM probe cannot resolve runner identity")
-    docker_info = _command(
-        "info", "--format", "{{json .SecurityOptions}}", success=False
-    )
+    if os.name not in ("posix", "nt"):
+        raise RuntimeError("Disposable IAM probe requires a Linux container engine")
+    docker_info = _command("info", "--format", "{{json .SecurityOptions}}", success=False)
     if docker_info.returncode:
         raise ProbeCommandError(
             docker_info.returncode,
@@ -182,14 +174,22 @@ def _mc(
         isinstance(item, str) for item in security_options
     ):
         raise RuntimeError("Disposable IAM probe cannot determine Docker security mode")
-    # In rootless Docker, container root maps to the unprivileged daemon owner
-    # and can safely write this user's 0700 bind-mounted probe directory. A host
-    # UID override instead maps through the subordinate UID range and cannot write.
-    runner_user = (
-        "0:0"
-        if "name=rootless" in security_options
-        else f"{getuid()}:{getgid()}"
-    )
+    if os.name == "nt":
+        # Docker Desktop owns the Linux VM boundary and maps this user's bind
+        # directory; container root is required because Windows has no host UID.
+        runner_user = "0:0"
+    else:
+        # Match the host runner UID so the non-root mc process can read the 0600
+        # env file and write the exported ZIP inside the 0700 temporary directory.
+        getuid = getattr(os, "getuid", None)
+        getgid = getattr(os, "getgid", None)
+        if not callable(getuid) or not callable(getgid):
+            raise RuntimeError("Disposable IAM probe cannot resolve runner identity")
+        # In rootless Docker, container root maps to the unprivileged daemon owner;
+        # a host UID maps through the subordinate UID range and cannot write.
+        runner_user = (
+            "0:0" if "name=rootless" in security_options else f"{getuid()}:{getgid()}"
+        )
     return _command(
         "run",
         "--rm",

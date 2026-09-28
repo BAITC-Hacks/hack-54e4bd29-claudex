@@ -3,7 +3,7 @@
 import { Activity, AlertTriangle, Ban, Building2, ClipboardList } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 
 import { AuthGate } from "@/features/auth/auth-gate";
 import { useAuth } from "@/features/auth/auth-context";
@@ -18,6 +18,7 @@ import { TimeSeriesChart } from "@/features/analytics/components/time-series-cha
 import { WaitingAgeSummary } from "@/features/analytics/components/waiting-age-summary";
 import { formatPeriod } from "@/features/analytics/format";
 import { useSituationCenter } from "@/features/analytics/hooks";
+import { analyticsQueryFromSearch, DEFAULT_ANALYTICS_QUERY } from "@/features/analytics/navigation-context";
 import type { AnalyticsQuery } from "@/features/analytics/types";
 import { ReferralForecastCard } from "@/features/forecasting/components/referral-forecast-card";
 import { syntheticDemoLabelEnabled } from "@/features/forecasting/demo-context";
@@ -25,22 +26,26 @@ import { useLatestReferralForecast } from "@/features/forecasting/hooks";
 import { SignalTable } from "@/features/signals/signal-table";
 import { useSignals } from "@/hooks/use-domain";
 
-const INITIAL_QUERY: AnalyticsQuery = {
-  dateFrom: "2025-01-01T00:00:00Z",
-  dateTo: "2025-03-31T23:59:59.999Z",
-  granularity: "DAY",
-};
-
 function DashboardContent() {
-  const params = useSearchParams();
   const { isAuthenticated } = useAuth();
-  const [query, setQuery] = useState<AnalyticsQuery>(() => {
-    const from = params.get("from");
-    const to = params.get("to");
-    const region = params.get("region");
-    const validPeriod = Boolean(from && to && Number.isFinite(Date.parse(from)) && Number.isFinite(Date.parse(to)) && from! <= to!);
-    return { ...(validPeriod ? { ...INITIAL_QUERY, dateFrom: from!, dateTo: to! } : INITIAL_QUERY), ...(region ? { region } : {}) };
-  });
+  const search = useSearchParams();
+  const [query, setQueryState] = useState<AnalyticsQuery>(() => analyticsQueryFromSearch(search));
+  const setQuery = useCallback((next: AnalyticsQuery) => {
+    const params = new URLSearchParams(window.location.search);
+    params.delete("from");
+    params.delete("to");
+    params.set("date_from", (next.dateFrom ?? DEFAULT_ANALYTICS_QUERY.dateFrom!).slice(0, 10));
+    params.set("date_to", (next.dateTo ?? DEFAULT_ANALYTICS_QUERY.dateTo!).slice(0, 10));
+    params.set("granularity", next.granularity === "WEEK" ? "WEEK" : "DAY");
+    if (next.region) params.set("region", next.region);
+    else params.delete("region");
+    setQueryState(next);
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}?${params.toString()}`,
+    );
+  }, []);
   const analytics = useSituationCenter(isAuthenticated, query);
   const referralForecast = useLatestReferralForecast(isAuthenticated);
   const signals = useSignals(isAuthenticated, { page: 1, pageSize: 5, regionId: query.region });
@@ -78,7 +83,7 @@ function DashboardContent() {
         <FilterBar value={query} onChange={setQuery} />
         <p className="text-sm text-muted-foreground">{query.region ? "Показатели отфильтрованы по региону, выбранному на карте." : "Показатели для всей доступной области данных."} <Link href="/command-center" className="underline">Выбрать регион на карте</Link></p>
         {pending && <LoadingState />}
-        {error && <ErrorState label="Агрегированные показатели временно недоступны. Повторите позже." />}
+        {error && <ErrorState label="Не удалось получить агрегированные данные. Повторите позже." />}
         {overview &&
           referrals &&
           refusals &&
@@ -177,7 +182,7 @@ function DashboardContent() {
                 </p>
               </div>
               {organizations.data.items.length ? (
-                <><OrganizationTable items={organizations.data.items} /><p className="mt-3 text-sm">Показано {organizations.data.items.length} из {organizations.data.total}. <Link href="/command-center" className="text-primary underline">Полный список и поиск на карте</Link></p></>
+                <><OrganizationTable items={organizations.data.items} context={query} /><p className="mt-3 text-sm">Показано {organizations.data.items.length} из {organizations.data.total}. <Link href="/command-center" className="text-primary underline">Полный список и поиск на карте</Link></p></>
               ) : (
                 <EmptyState />
               )}

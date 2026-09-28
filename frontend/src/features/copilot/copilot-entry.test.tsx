@@ -128,7 +128,7 @@ describe("CopilotEntry", () => {
   });
 
   it.each([
-    ["COPILOT_DISABLED", 503, /функция отключена/i, false],
+    ["COPILOT_DISABLED", 503, /AI-пояснение временно недоступно/i, false],
     ["COPILOT_PROVIDER_UNAVAILABLE", 503, /сервис временно недоступен/i, true],
     ["COPILOT_PROVIDER_TIMEOUT", 504, /время ожидания истекло/i, true],
     ["COPILOT_INSUFFICIENT_DATA", 422, /недостаточно данных/i, false],

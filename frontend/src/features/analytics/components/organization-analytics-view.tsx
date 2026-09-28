@@ -1,6 +1,8 @@
 "use client";
 
-import { Building2 } from "lucide-react";
+import { ArrowLeft, Building2 } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 import { AuthGate } from "@/features/auth/auth-gate";
 import { useAuth } from "@/features/auth/auth-context";
@@ -10,18 +12,24 @@ import { WaitingAgeSummary } from "@/features/analytics/components/waiting-age-s
 import { ErrorState, LoadingState } from "@/features/analytics/components/states";
 import { useOrganizationAnalytics } from "@/features/analytics/hooks";
 import { formatPeriod } from "@/features/analytics/format";
-
-const PERIOD = {
-  dateFrom: "2025-01-01T00:00:00Z",
-  dateTo: "2025-03-31T23:59:59.999Z",
-  granularity: "DAY" as const,
-};
+import { analyticsQueryFromSearch, withAnalyticsContext } from "@/features/analytics/navigation-context";
+import { STATUS_LABELS, formatDateTime } from "@/features/signals/labels";
+import { useRegions, useSignals } from "@/hooks/use-domain";
 
 export function OrganizationAnalyticsView({ organizationRef }: { organizationRef: string }) {
   const { isAuthenticated } = useAuth();
-  const analytics = useOrganizationAnalytics(isAuthenticated, organizationRef, PERIOD);
+  const query = analyticsQueryFromSearch(useSearchParams());
+  const analytics = useOrganizationAnalytics(isAuthenticated, organizationRef, query);
+  const organization = analytics.detail.data?.data.organization;
+  const regions = useRegions(isAuthenticated);
+  const signals = useSignals(isAuthenticated && Boolean(organization?.canonical_hospital_id), {
+    page: 1,
+    pageSize: 5,
+    hospitalId: organization?.canonical_hospital_id ?? undefined,
+  });
   const pending = Object.values(analytics).some((query) => query.isPending);
   const error = Object.values(analytics).find((query) => query.isError)?.error;
+  const regionName = regions.data?.items.find((region) => region.id === organization?.region_id)?.name;
 
   return (
     <AuthGate>
@@ -34,6 +42,9 @@ export function OrganizationAnalyticsView({ organizationRef }: { organizationRef
         analytics.observed.data && (
           <div className="space-y-6">
             <section>
+              <Link className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline" href={withAnalyticsContext("/dashboard", query)}>
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Вернуться к аналитике
+              </Link>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Building2 className="h-4 w-4" aria-hidden="true" />
                 {analytics.detail.data.data.organization.mapping_status === "MAPPED"
@@ -50,6 +61,7 @@ export function OrganizationAnalyticsView({ organizationRef }: { organizationRef
                   analytics.detail.data.meta.date_to,
                 )}
               </p>
+              <p className="mt-1 text-sm text-muted-foreground">Регион: {regionName ?? (organization?.region_id ? "название недоступно" : "не указан")}</p>
             </section>
             <div className="grid gap-4 md:grid-cols-3">
               <KpiCard title="Направления" value={analytics.detail.data.data.organization.referrals_total} period={formatPeriod(analytics.detail.data.meta.date_from, analytics.detail.data.meta.date_to)} source="ИС БГ" icon={Building2} />
@@ -61,6 +73,29 @@ export function OrganizationAnalyticsView({ organizationRef }: { organizationRef
               <TimeSeriesChart title="Динамика отказов" description="События отказов по дням" series={analytics.refusals.data} color="#dc2626" />
             </div>
             <WaitingAgeSummary summary={analytics.waiting.data} />
+            <section className="rounded-lg border bg-card p-5">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold">Связанные сигналы</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Сигналы этой организации из отдельного server-side запроса.</p>
+                </div>
+                <Link className="text-sm text-primary hover:underline" href="/signals">Все сигналы</Link>
+              </div>
+              {!organization?.canonical_hospital_id && <p className="mt-4 text-sm text-muted-foreground">Связь с сигналами недоступна, пока организация не сопоставлена с каноническим справочником.</p>}
+              {organization?.canonical_hospital_id && signals.isPending && <p className="mt-4 text-sm text-muted-foreground" role="status">Загружаем связанные сигналы…</p>}
+              {organization?.canonical_hospital_id && signals.isError && <p className="mt-4 text-sm text-destructive" role="alert">Связанные сигналы временно недоступны.</p>}
+              {organization?.canonical_hospital_id && signals.data?.items.length === 0 && <p className="mt-4 text-sm text-muted-foreground">Для организации нет активных записей в текущей ленте.</p>}
+              {organization?.canonical_hospital_id && signals.data && signals.data.items.length > 0 && (
+                <ul className="mt-4 divide-y rounded-lg border">
+                  {signals.data.items.map((signal) => (
+                    <li key={signal.id} className="flex flex-col gap-1 p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <Link className="font-semibold text-primary hover:underline" href={`/signals/${signal.id}`}>{signal.title}</Link>
+                      <span className="text-xs text-muted-foreground">{STATUS_LABELS[signal.status]} · {formatDateTime(signal.detected_at)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
             <section className="rounded-lg border bg-card p-5">
               <h2 className="font-semibold">Наблюдаемое время ожидания</h2>
               <p className="mt-1 text-sm text-muted-foreground">

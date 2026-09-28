@@ -18,7 +18,7 @@ test("protected routes require real Keycloak login and return to the requested p
 
   await login(page, "admin", "/signals");
   await expect(page).toHaveURL(/\/signals$/);
-  await expect(page.getByRole("heading", { name: "Лента предупреждений" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Сигналы" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Основная навигация" })).toBeVisible();
 });
 
@@ -34,7 +34,6 @@ test("hospital-scoped identity cannot list or open another synthetic organizatio
   const foreignPath = await foreignLink.getAttribute("href");
   expect(foreignPath).toMatch(/^\/hospitals\/[0-9a-f-]+$/);
 
-  await new Promise((resolve) => setTimeout(resolve, 2_000));
   const restrictedContext = await browser.newContext({ baseURL });
   const restrictedPage = await restrictedContext.newPage();
   try {
@@ -43,7 +42,18 @@ test("hospital-scoped identity cannot list or open another synthetic organizatio
     await expect(restrictedPage.getByRole("link", { name: /Медицинская организация B1/ })).toHaveCount(0);
 
     await restrictedPage.goto(foreignPath!);
-    await expect(restrictedPage.getByRole("alert")).toContainText("Не удалось получить агрегированные данные");
+    await expect(restrictedPage.getByRole("heading", { name: "Войдите в ситуационный центр" })).toBeVisible();
+    const foreignApi = restrictedPage.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname.startsWith("/api/v1/analytics/organizations/canonical%3A")
+        && response.request().method() === "GET";
+    });
+    await restrictedPage.getByRole("button", { name: "Войти через Keycloak" }).click();
+    await restrictedPage.waitForURL((url) => url.pathname === foreignPath);
+    expect((await foreignApi).status()).toBe(404);
+    await expect(restrictedPage.getByRole("alert").filter({
+      hasText: "Аналитика организации временно недоступна. Повторите позже.",
+    })).toBeVisible();
     await expect(restrictedPage.getByText(/Медицинская организация B1/)).toHaveCount(0);
   } finally {
     await restrictedContext.close();
