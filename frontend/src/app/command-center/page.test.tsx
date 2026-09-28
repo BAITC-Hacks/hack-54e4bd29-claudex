@@ -111,15 +111,32 @@ it("prioritizes current operational evidence without overstating synthetic or hi
   render(<CommandCenterPage />);
 
   expect(screen.getByRole("heading", { level: 1, name: "Ситуационный центр" })).toBeInTheDocument();
+  expect(screen.getByText("Исторические данные")).toBeInTheDocument();
+  expect(screen.getByText(/Обновлено:.*1 апр/i)).toBeInTheDocument();
   expect(screen.getByText("Активные сигналы")).toBeInTheDocument();
-  expect(within(screen.getByLabelText("Ключевые показатели")).getByText("3")).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Динамика направлений" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Последние сигналы" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Организации в текущей выборке" })).toBeInTheDocument();
+  const kpis = within(screen.getByLabelText("Ключевые показатели"));
+  expect(kpis.getByText("3")).toBeInTheDocument();
+  expect(kpis.getByText("направлений")).toBeInTheDocument();
+  expect(kpis.getByText("записей ожидания")).toBeInTheDocument();
+  expect(kpis.getByText("отказов")).toBeInTheDocument();
+  expect(kpis.getByText("сигналов")).toBeInTheDocument();
+
+  const journeyHeadings = [
+    screen.getByRole("heading", { name: "Динамика направлений" }),
+    screen.getByRole("heading", { name: "Организации в текущей выборке" }),
+    screen.getByRole("heading", { name: "Последние сигналы" }),
+    screen.getByRole("heading", { name: "Глобальный прогноз направлений" }),
+  ];
+  for (let index = 0; index < journeyHeadings.length - 1; index += 1) {
+    expect(Boolean(journeyHeadings[index]!.compareDocumentPosition(journeyHeadings[index + 1]!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  }
   expect(screen.getAllByRole("link", { name: "Городская больница" })).toHaveLength(2);
   expect(screen.getByText(/Глобальный прогноз/)).toBeInTheDocument();
   expect(screen.getAllByText(/Историческая валидация/).length).toBeGreaterThan(0);
   expect(screen.getByText(/12,3 направления в день/)).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Как читать прогноз" })).toBeInTheDocument();
+  expect(screen.getByText(/MAE показывает среднюю абсолютную ошибку на исторической временной проверке/i)).toBeInTheDocument();
+  expect(screen.getByText(/не является прогнозом свободных коек, даты выписки или медицинской рекомендацией/i)).toBeInTheDocument();
   expect(screen.queryByText(/Минздрав/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/реальные агрегаты/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/фактической нагрузки/i)).not.toBeInTheDocument();
