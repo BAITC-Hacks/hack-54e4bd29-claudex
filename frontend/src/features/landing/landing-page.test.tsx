@@ -14,15 +14,16 @@ vi.mock("@/features/auth/auth-context", () => ({
   useAuth: () => ({ isAuthenticated: false, login }),
 }));
 
-it("explains the product, its limits, and the protected entry point without invented metrics", () => {
+it("explains the product, its limits, and labels the public preview as synthetic", () => {
   render(<LandingPage />);
 
   expect(screen.getByRole("heading", { level: 1, name: "Ситуационный центр здравоохранения" })).toBeInTheDocument();
   expect(screen.getByText(/мониторинг потоков направлений/i)).toBeInTheDocument();
   expect(screen.getByText(/система поддержки решений/i)).toBeInTheDocument();
   expect(screen.getByText(/не принимает медицинские решения автономно/i)).toBeInTheDocument();
-  expect(screen.getByText("Данные доступны после входа")).toBeInTheDocument();
-  expect(screen.queryByText(/\b\d{3,}\b/)).not.toBeInTheDocument();
+  expect(screen.getByText("Демонстрационные искусственные данные")).toBeInTheDocument();
+  expect(screen.getByText("2 019")).toBeInTheDocument();
+  expect(screen.getByRole("img", { name: "Силуэт карты Казахстана" })).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: "Войти в систему" }));
   expect(login).toHaveBeenCalledTimes(1);

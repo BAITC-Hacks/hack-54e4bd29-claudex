@@ -62,10 +62,10 @@ function HeroPreview() {
       </div>
       <div className="relative z-10 mr-[27%] h-full px-5 py-8 sm:px-7 sm:py-10">
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <PreviewMetric icon={Activity} label="Направления" tone="text-cyan-700" />
-          <PreviewMetric icon={Building2} label="Ожидающие" tone="text-amber-700" />
-          <PreviewMetric icon={LineChart} label="Отказы" tone="text-rose-700" />
-          <PreviewMetric icon={BellRing} label="Сигналы" tone="text-blue-700" />
+          <PreviewMetric icon={Activity} label="Направления" value="2 019" note="за период" tone="text-cyan-700" />
+          <PreviewMetric icon={Building2} label="Ожидающие" value="22" note="снимок" tone="text-amber-700" />
+          <PreviewMetric icon={LineChart} label="Отказы" value="24" note="за период" tone="text-rose-700" />
+          <PreviewMetric icon={BellRing} label="Сигналы" value="5" note="активных" tone="text-blue-700" />
         </div>
         <div className="relative mt-5 min-h-[330px]">
           <KazakhstanMap />
@@ -76,14 +76,14 @@ function HeroPreview() {
             <div className="mt-3 border-t border-slate-100 pt-3"><p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500">Последние сигналы</p><div className="mt-2 space-y-2"><SignalRow tone="bg-red-500" /><SignalRow tone="bg-amber-400" /><SignalRow tone="bg-blue-500" /></div></div>
           </div>
         </div>
-        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-100 bg-white/90 px-3 py-2 text-[10px] font-bold text-cyan-900 shadow-sm"><LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" /> Данные доступны после входа</div>
+        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-100 bg-white/90 px-3 py-2 text-[10px] font-bold text-cyan-900 shadow-sm"><LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" /> Демонстрационные искусственные данные</div>
       </div>
     </div>
   );
 }
 
-function PreviewMetric({ icon: Icon, label, tone }: { icon: typeof Activity; label: string; tone: string }) {
-  return <div className="rounded-xl border border-white/90 bg-white/95 p-3 shadow-[0_14px_30px_-24px_rgba(15,46,68,.45)]"><Icon className={`h-4 w-4 ${tone}`} aria-hidden="true" /><p className="mt-3 text-[9px] font-bold uppercase tracking-wide text-slate-500">{label}</p><p className={`mt-1 text-xl font-extrabold ${tone}`} aria-hidden="true">—</p></div>;
+function PreviewMetric({ icon: Icon, label, value, note, tone }: { icon: typeof Activity; label: string; value: string; note: string; tone: string }) {
+  return <div className="rounded-xl border border-white/90 bg-white/95 p-3 shadow-[0_14px_30px_-24px_rgba(15,46,68,.45)]"><Icon className={`h-4 w-4 ${tone}`} aria-hidden="true" /><p className="mt-3 text-[9px] font-bold uppercase tracking-wide text-slate-500">{label}</p><p className={`mt-1 text-xl font-extrabold ${tone}`}>{value}</p><p className="mt-0.5 text-[8px] font-semibold text-slate-400">{note}</p></div>;
 }
 
 function SignalRow({ tone }: { tone: string }) {
@@ -91,5 +91,5 @@ function SignalRow({ tone }: { tone: string }) {
 }
 
 function KazakhstanMap() {
-  return <svg className="absolute left-0 top-12 h-[235px] w-[66%] text-cyan-400/30" viewBox="0 0 420 250" role="img" aria-label="Схематичная карта Казахстана без показателей"><path d="M25 98 61 72l42 2 30-31 47 10 33-21 40 24 47-4 22 28 55 8 18 31-25 22 7 34-46 4-22 24-49-6-31 24-42-19-44 7-25-31-51-11 10-30-31-18Z" fill="currentColor" stroke="#79cdd2" strokeWidth="2" /><path d="M112 76v102M196 53l-9 142M281 58l-12 127M55 119l309 25" fill="none" stroke="#f3fbfb" strokeWidth="2" opacity=".9" /><circle cx="178" cy="130" r="5" fill="#ef5968" stroke="white" strokeWidth="3" /></svg>;
+  return <div className="absolute left-0 top-8 h-[250px] w-[68%] overflow-hidden" role="img" aria-label="Силуэт карты Казахстана"><Image src="/brand/kazakhstan-silhouette.png" alt="" fill sizes="(min-width: 1024px) 36vw, 60vw" className="object-contain opacity-55 mix-blend-multiply [filter:sepia(1)_saturate(3)_hue-rotate(130deg)_brightness(1.13)]" /><span className="absolute left-[45%] top-[51%] h-3 w-3 rounded-full border-[3px] border-white bg-rose-500 shadow-[0_5px_14px_rgba(225,62,78,.42)]" /></div>;
 }
