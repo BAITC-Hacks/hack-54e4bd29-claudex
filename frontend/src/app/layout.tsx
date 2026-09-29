@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   title: "MedSignal — исследовательский пилот",
   description:
     "Система раннего предупреждения о риске перегрузки медицинских организаций",
+  icons: {
+    icon: "/brand/medsignal-icon.png",
+    apple: "/brand/medsignal-icon.png",
+  },
   robots: { index: false, follow: false },
 };
 
