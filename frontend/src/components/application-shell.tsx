@@ -22,6 +22,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { DECISION_SUPPORT_NOTICE, env } from "@/config/env";
 import { useAuth } from "@/features/auth/auth-context";
+import { LogoutButton } from "@/features/auth/logout-button";
 import { syntheticDemoLabelEnabled } from "@/features/forecasting/demo-context";
 import { cn } from "@/utils/cn";
 import { SiteHeader } from "@/components/site-header";
@@ -152,7 +153,7 @@ export function ApplicationShell({ children }: { children: ReactNode }) {
 }
 
 function ApplicationShellContent({ children, pathname }: { children: ReactNode; pathname: string }) {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated } = useAuth();
   const syntheticDemo = syntheticDemoLabelEnabled(process.env.NEXT_PUBLIC_APP_ENV, process.env.NEXT_PUBLIC_SYNTHETIC_DEMO);
   const [mobileOpen, setMobileOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -194,9 +195,9 @@ function ApplicationShellContent({ children, pathname }: { children: ReactNode; 
             <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-cyan-800">{syntheticDemo ? "Синтетические данные" : "Демо-среда"}</p>
             <p className="mt-1 text-[11px] leading-4 text-slate-600">{syntheticDemo ? "Демонстрационный исследовательский контур" : "Исследовательский контур поддержки решений"}</p>
           </div>
-          <Button type="button" variant="ghost" className="w-full justify-start text-slate-600" onClick={logout}>
+          <LogoutButton variant="ghost" className="w-full justify-start text-slate-600">
             <LogOut className="h-4 w-4" aria-hidden="true" /> Выйти
-          </Button>
+          </LogoutButton>
         </div>
       </aside>
 
@@ -263,9 +264,9 @@ function ApplicationShellContent({ children, pathname }: { children: ReactNode; 
                 ariaLabel="Мобильная навигация"
               />
             </div>
-            <Button type="button" variant="ghost" className="mt-4 justify-start border-t border-slate-200 text-slate-600" onClick={logout}>
+            <LogoutButton variant="ghost" className="mt-4 justify-start border-t border-slate-200 text-slate-600">
               <PanelLeftClose className="h-4 w-4" aria-hidden="true" /> Выйти
-            </Button>
+            </LogoutButton>
           </div>
         </div>
       )}

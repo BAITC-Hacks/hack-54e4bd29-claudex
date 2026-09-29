@@ -41,7 +41,7 @@ function CallbackHandler() {
       state,
     })
       .then((result) => {
-        setToken(result.accessToken, result.expiresInSeconds);
+        setToken(result.accessToken, result.expiresInSeconds, result.idToken);
         router.replace(result.returnTo);
       })
       .catch(() => setExchangeError("Не удалось завершить вход. Повторите попытку позже."));

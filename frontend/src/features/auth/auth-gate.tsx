@@ -1,9 +1,8 @@
 "use client";
 
-import { LockKeyhole, ShieldCheck } from "lucide-react";
-import type { ReactNode } from "react";
+import { LoaderCircle } from "lucide-react";
+import { useEffect, useRef, type ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/auth-context";
 
 /**
@@ -15,26 +14,25 @@ import { useAuth } from "@/features/auth/auth-context";
  */
 export function AuthGate({ children, returnTo }: { children: ReactNode; returnTo?: () => string }) {
   const { isAuthenticated, login } = useAuth();
+  const restoreStarted = useRef(false);
+
+  useEffect(() => {
+    if (isAuthenticated || restoreStarted.current) return;
+    restoreStarted.current = true;
+    const currentRoute = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    void login(returnTo?.() ?? currentRoute);
+  }, [isAuthenticated, login, returnTo]);
 
   if (isAuthenticated) {
     return <>{children}</>;
   }
 
   return (
-    <div className="surface-card relative overflow-hidden rounded-[24px] p-8 text-center sm:p-12">
-      <div className="pointer-events-none absolute -right-10 -top-12 h-44 w-44 rounded-full border-[28px] border-cyan-50" />
-      <div className="relative mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#0d7f87] text-white shadow-[0_16px_32px_-16px_rgba(13,127,135,.8)]">
-        <LockKeyhole size={22} />
+    <div className="flex min-h-[52vh] items-center justify-center px-4 text-center" role="status" aria-live="polite">
+      <div>
+        <LoaderCircle className="mx-auto h-7 w-7 animate-spin text-cyan-700" aria-hidden="true" />
+        <p className="mt-3 text-sm font-semibold text-slate-600">Восстанавливаем защищённую сессию…</p>
       </div>
-      <p className="eyebrow relative mt-5">Защищённый контур</p>
-      <h2 className="relative mt-2 text-xl font-extrabold tracking-[-0.035em] text-[#102f45]">Войдите в ситуационный центр</h2>
-      <p className="relative mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-500">
-        Данные медицинских организаций доступны после входа через провайдера
-        идентификации. MedSignal не хранит пароли.
-      </p>
-      <Button className="relative mt-6 h-11 bg-[#0d7f87] px-6 shadow-[0_12px_24px_-14px_rgba(13,127,135,.9)] hover:bg-[#096b72]" onClick={() => void login(returnTo?.())}>
-        <ShieldCheck size={16} /> Войти через Keycloak
-      </Button>
     </div>
   );
 }

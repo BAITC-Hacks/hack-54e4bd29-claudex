@@ -6,10 +6,11 @@ import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/auth-context";
+import { LogoutButton } from "@/features/auth/logout-button";
 import { useLocalResearch } from "@/features/monitoring/local-research";
 
 export function SiteHeader() {
-  const { isAuthenticated, login, logout } = useAuth();
+  const { isAuthenticated, login } = useAuth();
   const research = useLocalResearch();
 
   return (
@@ -39,10 +40,10 @@ export function SiteHeader() {
               >
                 Открыть центр <ArrowRight size={14} aria-hidden="true" />
               </Link>
-              <Button type="button" size="sm" variant="ghost" aria-label="Выйти" onClick={logout}>
+              <LogoutButton size="sm" variant="ghost" aria-label="Выйти">
                 <LogOut size={15} aria-hidden="true" />
                 <span className="hidden sm:inline">Выйти</span>
-              </Button>
+              </LogoutButton>
             </>
           ) : (
             <Button

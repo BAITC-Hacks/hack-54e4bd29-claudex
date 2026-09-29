@@ -75,6 +75,7 @@ export async function buildAuthorizationRequest(params: {
 
 export interface TokenExchangeResult {
   accessToken: string;
+  idToken: string;
   expiresInSeconds: number;
   returnTo: string;
 }
@@ -124,14 +125,19 @@ export async function exchangeCodeForToken(params: {
 
   const payload: unknown = await response.json();
   const token = (payload as { access_token?: unknown }).access_token;
+  const idToken = (payload as { id_token?: unknown }).id_token;
   const expiresIn = (payload as { expires_in?: unknown }).expires_in;
 
   if (typeof token !== "string" || token.length === 0) {
     throw new Error("Ответ провайдера не содержит токена доступа");
   }
+  if (typeof idToken !== "string" || idToken.length === 0) {
+    throw new Error("Ответ провайдера не содержит токена идентификации");
+  }
 
   return {
     accessToken: token,
+    idToken,
     expiresInSeconds: typeof expiresIn === "number" ? expiresIn : 300,
     returnTo,
   };

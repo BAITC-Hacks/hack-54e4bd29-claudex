@@ -28,7 +28,7 @@ interface AuthState {
   isAuthenticated: boolean;
   login: (returnTo?: string) => Promise<void>;
   logout: () => void;
-  setToken: (token: string, expiresInSeconds: number) => void;
+  setToken: (token: string, expiresInSeconds: number, idToken?: string) => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -37,6 +37,7 @@ export const AUTH_CALLBACK_PATH = "/auth/callback";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [idToken, setIdToken] = useState<string | null>(null);
 
   // Клиент API получает токен через функцию, а не через параметр:
   // обращения к API разбросаны по приложению, и передавать его
@@ -46,13 +47,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setTokenProvider(() => null);
   }, [accessToken]);
 
-  const setToken = useCallback((token: string, expiresInSeconds: number) => {
+  const setToken = useCallback((token: string, expiresInSeconds: number, nextIdToken?: string) => {
     setAccessToken(token);
+    setIdToken(nextIdToken ?? null);
     // Токен убирается из памяти до истечения срока: просроченный токен
     // даёт 401 на каждом запросе, и лучше показать вход заранее.
     const safetyMarginMs = 15_000;
     const timeout = Math.max(expiresInSeconds * 1000 - safetyMarginMs, 5_000);
-    window.setTimeout(() => setAccessToken(null), timeout);
+    window.setTimeout(() => {
+      setAccessToken(null);
+      setIdToken(null);
+    }, timeout);
   }, []);
 
   const login = useCallback(async (returnTo?: string) => {
@@ -60,7 +65,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       issuer: env.oidcIssuer,
       clientId: env.oidcClientId,
       redirectUri: `${window.location.origin}${AUTH_CALLBACK_PATH}`,
-      returnTo: returnTo ?? window.location.pathname,
+      returnTo:
+        returnTo ??
+        (window.location.pathname === "/"
+          ? "/command-center"
+          : `${window.location.pathname}${window.location.search}${window.location.hash}`),
     });
     // Адрес провайдера внешний, поэтому используется полный переход.
     window.location.assign(request.url);
@@ -68,17 +77,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     setAccessToken(null);
+    setIdToken(null);
     const query = new URLSearchParams({
       client_id: env.oidcClientId,
       post_logout_redirect_uri: window.location.origin,
     });
+    if (idToken !== null) {
+      query.set("id_token_hint", idToken);
+    }
     // Переход на внешний адрес провайдера, а не на страницу приложения:
     // маршрутизатор Next.js здесь неприменим.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign(
       `${env.oidcIssuer}/protocol/openid-connect/logout?${query.toString()}`,
     );
-  }, []);
+  }, [idToken]);
 
   const value = useMemo<AuthState>(
     () => ({
