@@ -63,28 +63,28 @@ function HeroPreview() {
       </div>
       <div className="relative z-10 mr-[27%] h-full px-5 py-8 sm:px-7 sm:py-10">
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <PreviewMetric icon={Activity} label="Направления" tone="text-cyan-700" />
-          <PreviewMetric icon={Building2} label="Ожидающие" tone="text-amber-700" />
-          <PreviewMetric icon={LineChart} label="Отказы" tone="text-rose-700" />
-          <PreviewMetric icon={BellRing} label="Сигналы" tone="text-blue-700" />
+          <PreviewMetric icon={Activity} label="Направления" value="2 019" note="за период" tone="text-cyan-700" />
+          <PreviewMetric icon={Building2} label="Ожидающие" value="22" note="снимок" tone="text-amber-700" />
+          <PreviewMetric icon={LineChart} label="Отказы" value="24" note="за период" tone="text-rose-700" />
+          <PreviewMetric icon={BellRing} label="Сигналы" value="5" note="активных" tone="text-blue-700" />
         </div>
         <div className="relative mt-5 min-h-[330px]">
           <KazakhstanMap />
-          <div className="absolute left-[20%] top-[34%] w-[175px] rounded-xl border border-white/90 bg-white/95 p-3 shadow-[0_18px_38px_-20px_rgba(15,46,68,.45)]"><p className="flex items-center gap-2 text-xs font-extrabold text-[#17364d]"><Building2 className="h-3.5 w-3.5" aria-hidden="true" /> Выбранный регион</p><p className="mt-2 text-[10px] text-slate-500">Показатели доступны после входа</p></div>
+          <div className="absolute left-[2%] top-[55%] w-[175px] rounded-xl border border-white/90 bg-white/95 p-3 shadow-[0_18px_38px_-20px_rgba(15,46,68,.45)]"><p className="flex items-center gap-2 text-xs font-extrabold text-[#17364d]"><Building2 className="h-3.5 w-3.5" aria-hidden="true" /> Выбранный регион</p><p className="mt-2 text-[10px] text-slate-500">Показатели доступны после входа</p></div>
           <div className="absolute bottom-1 right-0 w-[48%] min-w-[210px] rounded-2xl border border-white/90 bg-white/95 p-4 shadow-[0_22px_50px_-28px_rgba(15,46,68,.5)]">
             <p className="text-[10px] font-extrabold text-[#17364d]">Динамика направлений</p>
             <svg className="mt-3 h-20 w-full" viewBox="0 0 260 82" role="img" aria-label="Схема графика без открытых значений"><path d="M0 67H260M0 41H260M0 15H260" stroke="#e2e8f0" /><path d="M3 64C28 51 42 56 62 42S102 58 125 40s35 1 55-12 34 2 76-23" fill="none" stroke="#07949d" strokeLinecap="round" strokeWidth="3.5" /></svg>
             <div className="mt-3 border-t border-slate-100 pt-3"><p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500">Последние сигналы</p><div className="mt-2 space-y-2"><SignalRow tone="bg-red-500" /><SignalRow tone="bg-amber-400" /><SignalRow tone="bg-blue-500" /></div></div>
           </div>
         </div>
-        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-100 bg-white/90 px-3 py-2 text-[10px] font-bold text-cyan-900 shadow-sm"><LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" /> Данные доступны после входа</div>
+        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-100 bg-white/90 px-3 py-2 text-[10px] font-bold text-cyan-900 shadow-sm"><LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" /> Демонстрационные искусственные данные</div>
       </div>
     </div>
   );
 }
 
-function PreviewMetric({ icon: Icon, label, tone }: { icon: typeof Activity; label: string; tone: string }) {
-  return <div className="rounded-xl border border-white/90 bg-white/95 p-3 shadow-[0_14px_30px_-24px_rgba(15,46,68,.45)]"><Icon className={`h-4 w-4 ${tone}`} aria-hidden="true" /><p className="mt-3 text-[9px] font-bold uppercase tracking-wide text-slate-500">{label}</p><p className={`mt-1 text-xl font-extrabold ${tone}`} aria-hidden="true">—</p></div>;
+function PreviewMetric({ icon: Icon, label, value, note, tone }: { icon: typeof Activity; label: string; value: string; note: string; tone: string }) {
+  return <div className="rounded-xl border border-white/90 bg-white/95 p-3 shadow-[0_14px_30px_-24px_rgba(15,46,68,.45)]"><Icon className={`h-4 w-4 ${tone}`} aria-hidden="true" /><p className="mt-3 text-[9px] font-bold uppercase tracking-wide text-slate-500">{label}</p><p className={`mt-1 text-xl font-extrabold ${tone}`}>{value}</p><p className="mt-0.5 text-[8px] font-semibold text-slate-400">{note}</p></div>;
 }
 
 function SignalRow({ tone }: { tone: string }) {
@@ -92,5 +92,17 @@ function SignalRow({ tone }: { tone: string }) {
 }
 
 function KazakhstanMap() {
-  return <svg className="absolute left-0 top-12 h-[235px] w-[66%] text-cyan-400/30" viewBox="0 0 420 250" role="img" aria-label="Схематичная карта Казахстана без показателей"><path d="M25 98 61 72l42 2 30-31 47 10 33-21 40 24 47-4 22 28 55 8 18 31-25 22 7 34-46 4-22 24-49-6-31 24-42-19-44 7-25-31-51-11 10-30-31-18Z" fill="currentColor" stroke="#79cdd2" strokeWidth="2" /><path d="M112 76v102M196 53l-9 142M281 58l-12 127M55 119l309 25" fill="none" stroke="#f3fbfb" strokeWidth="2" opacity=".9" /><circle cx="178" cy="130" r="5" fill="#ef5968" stroke="white" strokeWidth="3" /></svg>;
+  return (
+    <div className="absolute -left-2 top-5 h-[270px] w-[66%]" role="img" aria-label="Силуэт карты Казахстана">
+      <Image
+        src="/brand/kazakhstan-map-teal.png"
+        alt=""
+        fill
+        unoptimized
+        sizes="(min-width: 1024px) 34vw, 60vw"
+        className="object-contain object-left-center"
+      />
+      <span className="absolute left-[48%] top-[49%] h-3 w-3 rounded-full border-[3px] border-white bg-rose-500 shadow-[0_5px_14px_rgba(225,62,78,.42)]" />
+    </div>
+  );
 }
