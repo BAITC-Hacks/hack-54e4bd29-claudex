@@ -42,9 +42,34 @@ export function fetchRegions(signal?: AbortSignal): Promise<Page<Region>> {
 export function fetchHospitals(
   regionId?: string,
   signal?: AbortSignal,
+  page = 1,
 ): Promise<Page<Hospital>> {
-  const query = buildQuery({ page_size: 100, region_id: regionId });
+  const query = buildQuery({ page, page_size: 100, region_id: regionId });
   return apiRequest(`/hospitals${query}`, hospitalPageSchema, { signal });
+}
+
+export async function fetchAllHospitals(signal?: AbortSignal): Promise<Page<Hospital>> {
+  const first = await fetchHospitals(undefined, signal);
+  const items = [...first.items];
+  const ids = new Set(items.map((item) => item.id));
+  let current = first;
+
+  while (current.has_next) {
+    signal?.throwIfAborted();
+    const next = await fetchHospitals(undefined, signal, current.page + 1);
+    if (next.page !== current.page + 1 || next.total !== first.total || next.items.length === 0) {
+      throw new Error("Справочник изменился во время загрузки. Обновите страницу.");
+    }
+    for (const item of next.items) {
+      if (ids.has(item.id)) throw new Error("Справочник изменился во время загрузки. Обновите страницу.");
+      ids.add(item.id);
+      items.push(item);
+    }
+    current = next;
+  }
+
+  if (items.length !== first.total) throw new Error("Получен неполный справочник организаций.");
+  return { ...first, items, has_next: false };
 }
 
 export function fetchSignals(
