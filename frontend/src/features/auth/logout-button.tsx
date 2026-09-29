@@ -2,6 +2,7 @@
 
 import { LogOut, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/auth-context";
@@ -43,7 +44,7 @@ export function LogoutButton({ children, ...buttonProps }: LogoutButtonProps) {
         {children}
       </Button>
 
-      {open && (
+      {open && createPortal(
         <div className="fixed inset-0 z-[100] grid place-items-center p-4">
           <button type="button" className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]" aria-label="Отменить выход" onClick={close} />
           <section
@@ -66,7 +67,8 @@ export function LogoutButton({ children, ...buttonProps }: LogoutButtonProps) {
               <Button type="button" className="bg-[#087b83] hover:bg-[#066a71]" onClick={logout}>Выйти</Button>
             </div>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
