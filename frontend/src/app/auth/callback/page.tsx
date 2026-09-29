@@ -1,11 +1,11 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { env } from "@/config/env";
 import { AUTH_CALLBACK_PATH, useAuth } from "@/features/auth/auth-context";
-import { exchangeCodeForToken } from "@/features/auth/pkce";
+import { exchangeCodeForToken, readAuthorizationReturnTo } from "@/features/auth/pkce";
 
 function CallbackHandler() {
   const params = useSearchParams();
@@ -26,6 +26,12 @@ function CallbackHandler() {
     : !code
       ? "Ответ провайдера не содержит кода авторизации"
       : null;
+
+  useLayoutEffect(() => {
+    if (responseError === null && code !== null) {
+      window.history.replaceState(null, "", readAuthorizationReturnTo());
+    }
+  }, [code, responseError]);
 
   useEffect(() => {
     if (responseError !== null || code === null || exchanged.current) {

@@ -11,6 +11,14 @@ const VERIFIER_KEY = "medsignal.pkce.verifier";
 const RETURN_KEY = "medsignal.pkce.return_to";
 const STATE_KEY = "medsignal.pkce.state";
 
+export function readAuthorizationReturnTo(): string {
+  const returnTo = sessionStorage.getItem(RETURN_KEY);
+  if (!returnTo || !returnTo.startsWith("/") || returnTo.startsWith("//")) {
+    return "/signals";
+  }
+  return returnTo;
+}
+
 function randomString(bytes = 32): string {
   const buffer = new Uint8Array(bytes);
   crypto.getRandomValues(buffer);
@@ -90,7 +98,7 @@ export async function exchangeCodeForToken(params: {
 }): Promise<TokenExchangeResult> {
   const verifier = sessionStorage.getItem(VERIFIER_KEY);
   const expectedState = sessionStorage.getItem(STATE_KEY);
-  const returnTo = sessionStorage.getItem(RETURN_KEY) ?? "/signals";
+  const returnTo = readAuthorizationReturnTo();
 
   sessionStorage.removeItem(VERIFIER_KEY);
   sessionStorage.removeItem(STATE_KEY);
