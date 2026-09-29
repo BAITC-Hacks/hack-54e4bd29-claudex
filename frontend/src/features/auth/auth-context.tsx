@@ -76,8 +76,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    setAccessToken(null);
-    setIdToken(null);
     const query = new URLSearchParams({
       client_id: env.oidcClientId,
       post_logout_redirect_uri: window.location.origin,
