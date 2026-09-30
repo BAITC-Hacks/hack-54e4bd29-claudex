@@ -36,6 +36,14 @@ def assert_persisted_contract(record: dict[str, Any]) -> None:
             raise AssertionError("Persisted forecast MAE missing or invalid")
 
 
+def assert_summary_mae(summary: object, full_precision: object) -> None:
+    """Numeric(18,6) summary may differ by at most half a stored unit."""
+    if summary is None or full_precision is None or not math.isclose(
+        float(summary), float(full_precision), rel_tol=0, abs_tol=5e-7
+    ):
+        raise AssertionError("Persisted summary MAE differs from validation metrics")
+
+
 def verify_forecast_db(forecast_id: UUID) -> dict[str, object]:
     """Compare forecast, points, model, and published referral import in PostgreSQL."""
     from app.database.postgres import get_session_factory
@@ -81,11 +89,8 @@ def verify_forecast_db(forecast_id: UUID) -> dict[str, object]:
             "point_dates": [point.forecast_date.isoformat() for point in points],
         }
         assert_persisted_contract(record)
-        if (
-            float(forecast.metric_value) != record["validation_mae"]
-            or float(forecast.baseline_metric_value) != record["baseline_mae"]
-        ):
-            raise AssertionError("Persisted summary MAE differs from validation metrics")
+        assert_summary_mae(forecast.metric_value, record["validation_mae"])
+        assert_summary_mae(forecast.baseline_metric_value, record["baseline_mae"])
         import_ids = forecast.dataset_watermark.get("import_ids", [])
         imports = [session.get(DataImport, UUID(value)) for value in import_ids]
         if len(imports) != 1 or any(

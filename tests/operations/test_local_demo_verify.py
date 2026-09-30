@@ -100,3 +100,11 @@ def test_persisted_forecast_requires_seven_ordered_points() -> None:
     assert_persisted_contract(record)
     with pytest.raises(AssertionError, match="point"):
         assert_persisted_contract({**record, "point_dates": record["point_dates"][:-1]})
+
+
+def test_persisted_summary_mae_allows_only_storage_rounding() -> None:
+    from scripts.local_demo.verify_forecast_db import assert_summary_mae
+
+    assert_summary_mae(1.595238, 1.5952380952380953)
+    with pytest.raises(AssertionError, match="MAE"):
+        assert_summary_mae(1.5953, 1.5952380952380953)
