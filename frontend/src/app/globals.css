@@ -112,9 +112,12 @@
   }
 }
 
-/* Карта ситуационного центра. Маркеры показывают только значения backend. */
+/* Карта ситуационного центра: API-маркеры и отдельно обозначенный демонстрационный слой. */
 .leaflet-container{overflow:hidden;background:#dbe9eb;outline-offset:1px}.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow,.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,.leaflet-zoom-box,.leaflet-image-layer,.leaflet-layer{position:absolute;left:0;top:0}.leaflet-container{font-family:inherit;font-size:12px;line-height:1.5}.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow{user-select:none;-webkit-user-drag:none}.leaflet-tile{filter:saturate(.68) contrast(.92) brightness(1.04);visibility:hidden}.leaflet-tile-loaded{visibility:inherit}.leaflet-zoom-animated{transform-origin:0 0}.leaflet-zoom-hide{visibility:hidden}.leaflet-overlay-pane svg{max-width:none!important;max-height:none!important}.leaflet-pane{z-index:400}.leaflet-tile-pane{z-index:200}.leaflet-overlay-pane{z-index:400}.leaflet-shadow-pane{z-index:500}.leaflet-marker-pane{z-index:600}.leaflet-tooltip-pane{z-index:650}.leaflet-popup-pane{z-index:700}.leaflet-map-pane canvas{z-index:100}.leaflet-map-pane svg{z-index:200}.leaflet-control{position:relative;z-index:800;pointer-events:auto;float:left;clear:both}.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none}.leaflet-top{top:0}.leaflet-right{right:0}.leaflet-bottom{bottom:0}.leaflet-left{left:0}.leaflet-control-zoom{margin:0 16px 16px 0;border:1px solid rgb(255 255 255 / 80%);border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgb(15 46 68 / 18%)}.leaflet-control-zoom a{display:block;width:34px;height:34px;background:rgb(255 255 255 / 94%);color:#17364d;text-align:center;text-decoration:none;font-size:18px;line-height:34px;border-bottom:1px solid #dce7eb}.leaflet-control-zoom a:last-child{border-bottom:0}.leaflet-control-attribution{margin:0!important;padding:2px 5px!important;background:rgb(255 255 255 / 75%);color:#64748b}.leaflet-control-attribution a{color:#087d85}.leaflet-tooltip{position:absolute;white-space:nowrap;pointer-events:none;background:white}.leaflet-tooltip-top:before{position:absolute;pointer-events:none;border:6px solid transparent;border-top-color:white;content:"";left:50%;margin-left:-6px;bottom:-12px}
 .region-marker-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent !important;
   border: 0 !important;
 }
@@ -151,6 +154,12 @@
 .region-marker.volume-medium { background: #24718c; }
 .region-marker.volume-high { background: #123b56; }
 .region-marker.empty { background: #64748b; }
+
+@media (max-width: 640px) {
+  .region-marker { width: 16px; height: 16px; gap: 0; border-width: 2px; }
+  .region-marker > span { width: 5px; height: 5px; }
+  .region-marker > b { display: none; }
+}
 
 .region-map-tooltip {
   border: 0 !important;

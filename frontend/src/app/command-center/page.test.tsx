@@ -1,6 +1,6 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { AnchorHTMLAttributes } from "react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import CommandCenterPage from "@/app/command-center/page";
 
@@ -41,7 +41,13 @@ vi.mock("next/link", () => ({
 }));
 vi.mock("@/features/auth/auth-context", () => ({ useAuth: () => ({ isAuthenticated: true }) }));
 vi.mock("@tanstack/react-query", () => ({ useQueries: () => [] }));
-vi.mock("@/features/map/region-map", () => ({ RegionMap: () => <div aria-label="Карта исторических показателей" /> }));
+vi.mock("@/features/map/region-map", () => ({
+  RegionMap: ({ points, onSelect }: { points: Array<{ id: string; name: string }>; onSelect: (id: string) => void }) => (
+    <div aria-label="Карта региональных показателей Казахстана">
+      {points.map((point) => <button key={point.id} type="button" onClick={() => onSelect(point.id)}>{point.name}</button>)}
+    </div>
+  ),
+}));
 vi.mock("echarts", () => ({ init: () => ({ setOption: vi.fn(), resize: vi.fn(), dispose: vi.fn() }) }));
 
 vi.mock("@/hooks/use-domain", () => ({
@@ -106,6 +112,23 @@ vi.mock("@/features/forecasting/hooks", () => ({ useLatestReferralForecast: () =
 }) }));
 
 beforeEach(() => vi.clearAllMocks());
+afterEach(() => vi.unstubAllEnvs());
+
+it("shows the Kazakhstan demo map before KPIs without applying mock regions to backend scope", () => {
+  vi.stubEnv("NEXT_PUBLIC_APP_ENV", "test");
+  vi.stubEnv("NEXT_PUBLIC_SYNTHETIC_DEMO", "true");
+  render(<CommandCenterPage />);
+
+  const mapHeading = screen.getByRole("heading", { name: "Карта региональных показателей" });
+  const kpis = screen.getByLabelText("Ключевые показатели");
+  expect(Boolean(mapHeading.compareDocumentPosition(kpis) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  expect(screen.getByText(/условные демонстрационные значения/i)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Астана" }));
+  expect(screen.getByText("Все доступные регионы")).toBeInTheDocument();
+  expect(screen.getByText("Астана", { selector: "h3" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Данные системы" }));
+  expect(screen.getByText(/нет регионов с сопоставленной географией/i)).toBeInTheDocument();
+});
 
 it("prioritizes current operational evidence without overstating synthetic or historical data", () => {
   render(<CommandCenterPage />);

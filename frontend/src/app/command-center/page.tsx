@@ -26,7 +26,8 @@ import { AuthGate } from "@/features/auth/auth-gate";
 import { useAuth } from "@/features/auth/auth-context";
 import { syntheticDemoLabelEnabled } from "@/features/forecasting/demo-context";
 import { useLatestReferralForecast } from "@/features/forecasting/hooks";
-import { RegionMap, type MapMetric, type RegionPoint } from "@/features/map/region-map";
+import { MapPanel } from "@/features/map/map-panel";
+import type { MapMetric, RegionPoint } from "@/features/map/region-map";
 import { SEVERITY_LABELS, STATUS_LABELS, formatDateTime } from "@/features/signals/labels";
 import { useRegions, useSignals } from "@/hooks/use-domain";
 import { cn } from "@/utils/cn";
@@ -35,12 +36,6 @@ const BASE_QUERY: AnalyticsQuery = {
   dateFrom: "2025-01-01T00:00:00Z",
   dateTo: "2025-03-31T23:59:59.999Z",
   granularity: "DAY",
-};
-
-const metricMeta: Record<MapMetric, { label: string; source: string; icon: LucideIcon }> = {
-  waiting: { label: "Ожидающие", source: "Предоставленный снимок", icon: Users },
-  referrals: { label: "Направления", source: "ИС БГ", icon: Activity },
-  refusals: { label: "Отказы", source: "ИС БГ", icon: Ban },
 };
 
 function cellValue(overview: Overview | undefined, metric: MapMetric): number | null {
@@ -151,6 +146,20 @@ export default function CommandCenterPage() {
         )}
         {overview && waiting && referrals && (
           <div className="space-y-6 lg:space-y-8">
+            <MapPanel
+              metric={metric}
+              onMetricChange={setMetric}
+              apiPoints={points}
+              selectedRegionId={selectedRegionId}
+              selectedRegionName={selectedRegion?.name}
+              onSelectRegion={onSelect}
+              apiValues={{
+                referrals: overview.data.referrals_total.value,
+                waiting: overview.data.waiting_records.value,
+                refusals: overview.data.refusals_total.value,
+                organizations: organizations.length,
+              }}
+            />
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ключевые показатели">
               <Kpi icon={Activity} label="Направления" value={formatNumber(overview.data.referrals_total.value)} unit="направлений" note="За выбранный период" tone="teal" />
               <Kpi icon={Users} label="Ожидающие" value={formatNumber(overview.data.waiting_records.value)} unit="записей ожидания" note={`Снимок: ${formatDate(waiting.data.snapshot_at)}`} tone="amber" />
@@ -170,63 +179,9 @@ export default function CommandCenterPage() {
             <LatestSignals query={recentSignals} />
             <ForecastSummary forecast={forecast} />
 
-            <section className="surface-card overflow-hidden rounded-2xl">
-              <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
-                <div>
-                  <p className="eyebrow">Региональный контекст</p>
-                  <h2 className="mt-1.5 text-lg font-extrabold tracking-[-0.03em] text-[#12334a]">Карта исторических показателей</h2>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">Цвет показывает сравнительный уровень внутри текущей выгрузки, а не медицинский норматив.</p>
-                </div>
-                <div className="flex w-full overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1 sm:w-fit">
-                  {(Object.keys(metricMeta) as MapMetric[]).map((key) => {
-                    const Icon = metricMeta[key].icon;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        aria-pressed={metric === key}
-                        onClick={() => setMetric(key)}
-                        className={cn(
-                          "flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-700",
-                          metric === key ? "bg-[#087b83] text-white shadow-sm" : "text-slate-600 hover:bg-white hover:text-slate-900",
-                        )}
-                      >
-                        <Icon className="h-3.5 w-3.5" aria-hidden="true" />{metricMeta[key].label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="grid xl:grid-cols-[minmax(0,1fr)_320px]">
-                <div className="relative min-h-[420px] overflow-hidden bg-slate-100 sm:min-h-[500px]">
-                  <RegionMap points={points} metric={metric} selectedRegionId={selectedRegionId} onSelect={onSelect} />
-                  <div className="absolute left-4 top-4 z-[500] rounded-xl border border-white/80 bg-white/95 px-3 py-2 text-[10px] font-bold text-slate-700 shadow-lg">
-                    {metricMeta[metric].label} · {metricMeta[metric].source}
-                  </div>
-                </div>
-                <aside className="border-t border-slate-200 bg-[#fbfdfd] p-5 xl:border-l xl:border-t-0 xl:p-6">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="rounded-full bg-cyan-50 px-2.5 py-1.5 text-[9px] font-extrabold uppercase tracking-wider text-cyan-800">{selectedRegion ? "Выбран регион" : "Общий контекст"}</span>
-                    {selectedRegion && <button type="button" className="text-[11px] font-bold text-slate-500 hover:text-slate-900" onClick={() => setSelectedRegionId(null)}>Сбросить</button>}
-                  </div>
-                  <h3 className="mt-5 text-xl font-extrabold tracking-[-0.04em] text-[#12334a]">{selectedRegion?.name ?? "Доступная выборка"}</h3>
-                  <p className="mt-2 text-xs leading-5 text-slate-500">{selectedRegion ? "Показатели пересчитаны backend в рамках выбранного региона." : "Выберите регион на карте, чтобы сузить аналитику."}</p>
-                  <dl className="mt-6 space-y-2.5">
-                    <MetricLine label="Направления" value={overview.data.referrals_total.value} />
-                    <MetricLine label="Ожидающие" value={overview.data.waiting_records.value} />
-                    <MetricLine label="Отказы" value={overview.data.refusals_total.value} />
-                    <MetricLine label="Уникальные организации" value={organizations.length} />
-                  </dl>
-                  <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-5 text-amber-950">
-                    Для расчёта загрузки коек необходим подтверждённый справочник мощностей. Этот экран его не заменяет.
-                  </div>
-                </aside>
-              </div>
-            </section>
-
             <div className="rounded-2xl border border-cyan-100 bg-cyan-50/60 p-5 text-xs leading-6 text-slate-600">
               <p className="flex items-center gap-2 font-bold text-[#12334a]"><CheckCircle2 className="h-4 w-4 text-cyan-700" aria-hidden="true" />Контроль интерпретации</p>
-              <p className="mt-1">Интерфейс не создаёт значения мощностей или географии, которых нет в источнике. Несопоставленные идентификаторы остаются видимыми.</p>
+              <p className="mt-1">Демо-слой карты отделён от агрегатов API. Интерфейс не создаёт значения мощностей коек; несопоставленные идентификаторы остаются видимыми.</p>
             </div>
           </div>
         )}
@@ -251,10 +206,6 @@ function Kpi({ icon: Icon, label, value, unit, note, tone }: { icon: LucideIcon;
       <p className="mt-1 text-[10px] font-medium text-slate-500">{note}</p>
     </article>
   );
-}
-
-function MetricLine({ label, value }: { label: string; value: number | null }) {
-  return <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-xs"><dt className="text-slate-500">{label}</dt><dd className="font-extrabold text-[#12334a]">{formatNumber(value)}</dd></div>;
 }
 
 function LatestSignals({ query }: { query: ReturnType<typeof useSignals> }) {
