@@ -29,7 +29,7 @@ def mapping_specs(profile: tuple[dict[str, str], ...]) -> tuple[MappingSpec, ...
                 (
                     "ORGANIZATION",
                     "IS_BG:REFERRALS:RECEIVING",
-                    f"SYN-ORG-{code}",
+                    f"SYN-ORG-{code}".lower(),
                     f"H-{code}",
                 ),
                 (
@@ -41,7 +41,7 @@ def mapping_specs(profile: tuple[dict[str, str], ...]) -> tuple[MappingSpec, ...
                 (
                     "ORGANIZATION",
                     "IS_BG:REFUSALS:INCOMING",
-                    f"SYN-ORG-{code}",
+                    f"SYN-ORG-{code}".lower(),
                     f"H-{code}",
                 ),
                 ("REGION", "IS_BG:WAITING:REGION", f"SYN-REG-{code}", code),

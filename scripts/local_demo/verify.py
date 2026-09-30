@@ -212,7 +212,10 @@ def verify(project_dir: Path) -> dict[str, object]:
                 {"organization": f"canonical:{hospital_ids[f'H-{code}']}"},
             ))
             if regional != values or organization != values:
-                raise AssertionError("Mapped regional or organization analytics mismatch")
+                raise AssertionError(
+                    f"Mapped analytics mismatch for {code}: "
+                    f"source={values}, region={regional}, organization={organization}"
+                )
 
         first_code = load_profile()[0]["code"]
         first_values = by_region[first_code]

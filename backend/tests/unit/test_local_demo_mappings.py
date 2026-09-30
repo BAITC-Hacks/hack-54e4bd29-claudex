@@ -18,7 +18,19 @@ def test_local_mapping_covers_five_identity_spaces_per_region() -> None:
     assert (
         "ORGANIZATION",
         "IS_BG:REFERRALS:RECEIVING",
-        "SYN-ORG-KZ-ASTANA",
+        "syn-org-kz-astana",
+        "H-KZ-ASTANA",
+    ) in specs
+    assert (
+        "ORGANIZATION",
+        "IS_BG:REFUSALS:INCOMING",
+        "syn-org-kz-astana",
+        "H-KZ-ASTANA",
+    ) in specs
+    assert (
+        "ORGANIZATION",
+        "IS_BG:WAITING:DESTINATION",
+        "SYN-WAIT-KZ-ASTANA",
         "H-KZ-ASTANA",
     ) in specs
     assert (
