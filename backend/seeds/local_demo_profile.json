@@ -1,0 +1,14 @@
+[
+  {"code": "KZ-ASTANA", "name": "Астана"},
+  {"code": "KZ-ALMATY", "name": "Алматы"},
+  {"code": "KZ-SHYMKENT", "name": "Шымкент"},
+  {"code": "KZ-ATYRAU", "name": "Атырауская область"},
+  {"code": "KZ-AKTOBE", "name": "Актюбинская область"},
+  {"code": "KZ-KARAGANDA", "name": "Карагандинская область"},
+  {"code": "KZ-KOSTANAY", "name": "Костанайская область"},
+  {"code": "KZ-KYZYLORDA", "name": "Кызылординская область"},
+  {"code": "KZ-PAVLODAR", "name": "Павлодарская область"},
+  {"code": "KZ-EAST", "name": "Восточно-Казахстанская область"},
+  {"code": "KZ-WEST", "name": "Западно-Казахстанская область"},
+  {"code": "KZ-MANGYSTAU", "name": "Мангистауская область"}
+]
