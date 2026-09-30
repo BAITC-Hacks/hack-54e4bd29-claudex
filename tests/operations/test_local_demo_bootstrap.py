@@ -60,9 +60,10 @@ def test_command_plan_never_addresses_another_project(
         lambda project, _output: ["docker", "compose", "--project-name", project],
     )
     commands = module.command_plan(PROJECT, tmp_path / PROJECT)
-    assert len(commands) == 8
+    assert len(commands) == 9
     assert all("phase8-local-main-20260929a" not in argv for argv in commands)
     assert all(argv[2:4] == ("--project-name", PROJECT) for argv in commands)
+    assert "seeds.local_demo_preflight" in commands[0]
     assert sum("approve-manifest" in argv for argv in commands) == 3
     assert sum("import" in argv for argv in commands) == 3
 
@@ -85,7 +86,8 @@ def test_bootstrap_publishes_only_generated_manifest_counts(
     assert counts["WAITING"] == 60
     assert counts["REFUSALS"] == 156
     assert counts["REFERRALS"] > 1800
-    assert len(calls) == 8
+    assert len(calls) == 9
+    assert "seeds.local_demo_preflight" in calls[0]
     assert all(PROJECT in argv for argv in calls)
     for dataset, count in counts.items():
         manifest = json.loads(
@@ -94,3 +96,30 @@ def test_bootstrap_publishes_only_generated_manifest_counts(
             )
         )
         assert manifest["expected_rows"] == count
+
+
+def test_bootstrap_checks_delivery_reuse_before_generating_or_seeding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scripts.local_demo import bootstrap as module
+
+    output = _prepared(tmp_path)
+    monkeypatch.setattr(module, "ARTIFACTS", tmp_path)
+    monkeypatch.setattr(
+        module,
+        "_compose_command",
+        lambda project, _output: ["docker", "compose", "--project-name", project],
+    )
+    calls: list[tuple[str, ...]] = []
+
+    def reject_reused_delivery(*argv: str) -> None:
+        calls.append(argv)
+        raise RuntimeError("Existing local demo delivery ID")
+
+    monkeypatch.setattr(module, "_run", reject_reused_delivery)
+    with pytest.raises(RuntimeError, match="Existing local demo delivery ID"):
+        module.bootstrap(PROJECT)
+
+    assert len(calls) == 1
+    assert "seeds.local_demo_preflight" in calls[0]
+    assert list((output / "source-empty").iterdir()) == []

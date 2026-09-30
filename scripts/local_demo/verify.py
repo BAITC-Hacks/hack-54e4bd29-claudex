@@ -7,6 +7,7 @@ import csv
 import hashlib
 import json
 import math
+import subprocess
 from collections import Counter
 from datetime import timedelta
 from pathlib import Path
@@ -14,6 +15,7 @@ from typing import Any
 
 from data_pipeline.contracts import get_contract
 from scripts.local_demo.dataset import DATASETS, FIRST_DAY, LAST_DAY, load_profile
+from scripts.operations.prepare_acceptance import ROOT, _compose_command
 
 PERIOD = ("2025-01-01T00:00:00Z", "2025-03-31T23:59:59Z")
 
@@ -133,6 +135,40 @@ def _daily_referrals(source_root: Path) -> Counter[str]:
     return days
 
 
+def verify_published_mappings(project_dir: Path) -> int:
+    """Compare the active ClickHouse projection with all 60 expected aliases."""
+    command = [
+        *_compose_command(project_dir.name, project_dir),
+        "exec", "-T", "backend", "python", "-",
+    ]
+    script = Path(__file__).with_name("verify_mappings_db.py").read_text(
+        encoding="utf-8"
+    )
+    try:
+        result = subprocess.run(  # noqa: S603 — fixed validated Compose project
+            command,
+            input=script,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError("Published mapping snapshot check unavailable") from exc
+    if result.returncode:
+        raise AssertionError("Published mapping snapshot check failed")
+    try:
+        evidence = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise AssertionError("Published mapping snapshot evidence invalid") from exc
+    if evidence != {"mapping": "PASS", "aliases": 60}:
+        raise AssertionError("Published mapping snapshot evidence mismatch")
+    return 60
+
+
 def verify(project_dir: Path) -> dict[str, object]:
     """Use actual Keycloak tokens and API responses; return only safe evidence."""
     import httpx
@@ -152,6 +188,7 @@ def verify(project_dir: Path) -> dict[str, object]:
     expected = expected_counts(source)
     by_region = expected_region_counts(source)
     days = _daily_referrals(source)
+    mapping_aliases = verify_published_mappings(project_dir)
     realm = json.loads((project_dir / "realm.json").read_text(encoding="utf-8"))
     users = {item["username"]: item for item in realm["users"]}
     params = {"date_from": PERIOD[0], "date_to": PERIOD[1]}
@@ -277,6 +314,7 @@ def verify(project_dir: Path) -> dict[str, object]:
         "source_rows": expected,
         "canonical_regions": len(region_ids),
         "canonical_hospitals": len(hospital_ids),
+        "published_mapping_aliases": mapping_aliases,
         "scope": "PASS",
         "signal_evidence": "PASS",
         "forecast_id": forecast["id"],

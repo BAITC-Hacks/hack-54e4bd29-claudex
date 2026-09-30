@@ -58,6 +58,29 @@ def test_region_coverage_requires_exact_canonical_targets() -> None:
         assert_region_coverage(expected, expected | {"KZ-EXTRA"})
 
 
+def test_published_mapping_snapshot_requires_exact_aliases_and_targets() -> None:
+    from scripts.local_demo.verify_mappings_db import assert_exact_mappings
+
+    targets = {"H-KZ-ASTANA": "hospital-1", "KZ-ASTANA": "region-1"}
+    specs = (
+        ("ORGANIZATION", "IS_BG:REFERRALS:RECEIVING", "syn-org-kz-astana", "H-KZ-ASTANA"),
+        ("REGION", "IS_BG:WAITING:REGION", "SYN-REG-KZ-ASTANA", "KZ-ASTANA"),
+    )
+    actual = (
+        ("ORGANIZATION", "IS_BG:REFERRALS:RECEIVING", "syn-org-kz-astana", "hospital-1"),
+        ("REGION", "IS_BG:WAITING:REGION", "SYN-REG-KZ-ASTANA", "region-1"),
+    )
+    assert_exact_mappings(specs, targets, actual)
+    with pytest.raises(AssertionError, match="snapshot"):
+        assert_exact_mappings(specs, targets, actual[:-1])
+    with pytest.raises(AssertionError, match="snapshot"):
+        assert_exact_mappings(specs, targets, (actual[0], actual[0]))
+    with pytest.raises(AssertionError, match="snapshot"):
+        assert_exact_mappings(
+            specs, targets, (actual[0], (*actual[1][:3], "wrong-region"))
+        )
+
+
 def test_forecast_contract_rejects_wrong_horizon_or_cutoff() -> None:
     from scripts.local_demo.verify import assert_forecast_contract
 

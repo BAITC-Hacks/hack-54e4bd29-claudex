@@ -7,7 +7,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from scripts.local_demo.dataset import DATASETS, generate
+from scripts.local_demo.dataset import DATASETS, DELIVERY_IDS, generate
 from scripts.operations.prepare_acceptance import (
     ARTIFACTS,
     ROOT,
@@ -42,6 +42,9 @@ def command_plan(project: str, output: Path) -> tuple[tuple[str, ...], ...]:
     validate_project_name(project)
     compose = tuple(_compose_command(project, output))
     commands = [(
+        *compose, "exec", "-T", "-e", "LOCAL_SYNTHETIC_DEMO=1", "backend",
+        "python", "-m", "seeds.local_demo_preflight", *DELIVERY_IDS,
+    ), (
         *compose, "exec", "-T", "-e", "LOCAL_SYNTHETIC_DEMO=1", "backend",
         "python", "-m", "seeds.local_demo_seed",
     )]
@@ -90,8 +93,9 @@ def bootstrap(project: str) -> dict[str, int]:
         raise ValueError("Local demo source directory must be empty")
 
     commands = command_plan(project, output)
+    _run(*commands[0])
     counts = generate(source)
-    for command in commands:
+    for command in commands[1:]:
         _run(*command)
     return counts
 

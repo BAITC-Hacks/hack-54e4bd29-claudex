@@ -19,6 +19,9 @@ FIRST_DAY = date(2025, 1, 1)
 LAST_DAY = date(2025, 3, 31)
 LOAD_DATE = "2025-04-01 03:00:00"
 DATASETS = ("REFERRALS", "WAITING", "REFUSALS")
+DELIVERY_IDS = tuple(
+    f"phase8-synthetic-local-demo-{dataset.lower()}-v1" for dataset in DATASETS
+)
 
 
 def load_profile() -> tuple[dict[str, str], ...]:
@@ -138,7 +141,7 @@ def generate(root: Path) -> dict[str, int]:
         snapshot = dataset == "WAITING"
         last_refusal = FIRST_DAY + timedelta(days=84)
         manifest: dict[str, Any] = {
-            "delivery_id": f"phase8-synthetic-local-demo-{dataset.lower()}-v1",
+            "delivery_id": DELIVERY_IDS[DATASETS.index(dataset)],
             "dataset_type": dataset,
             "source_system": contract.source_system,
             "schema_version": "phase8-synthetic-local-demo-v1",
