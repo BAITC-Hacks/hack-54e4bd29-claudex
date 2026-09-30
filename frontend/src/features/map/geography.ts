@@ -24,7 +24,8 @@ const CENTERS: Array<{ keys: string[]; lat: number; lng: number }> = [
 ];
 
 export function centerFor(name: string, code: string): [number, number] | null {
-  const values = [name, code].map((value) => value.trim().toLowerCase());
+  const values = [name.replace(/ \[синтетические данные\]$/i, ""), code]
+    .map((value) => value.trim().toLowerCase());
   const center = CENTERS.find((item) => item.keys.some((key) => values.includes(key)));
   return center ? [center.lat, center.lng] : null;
 }

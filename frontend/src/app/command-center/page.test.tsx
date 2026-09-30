@@ -4,6 +4,12 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import CommandCenterPage from "@/app/command-center/page";
 
+const { situationSpy } = vi.hoisted(() => ({ situationSpy: vi.fn() }));
+const REGIONS = [
+  { id: "00000000-0000-0000-0000-000000000201", code: "KZ-ASTANA", name: "Астана [синтетические данные]" },
+  { id: "00000000-0000-0000-0000-000000000202", code: "KZ-ALMATY", name: "Алматы [синтетические данные]" },
+];
+
 const meta = {
   date_from: "2025-01-01T00:00:00Z",
   date_to: "2025-03-31T23:59:59Z",
@@ -40,18 +46,25 @@ vi.mock("next/link", () => ({
     <a href={href} {...props}>{children}</a>,
 }));
 vi.mock("@/features/auth/auth-context", () => ({ useAuth: () => ({ isAuthenticated: true }) }));
-vi.mock("@tanstack/react-query", () => ({ useQueries: () => [] }));
+vi.mock("@tanstack/react-query", () => ({ useQueries: () => [
+  { isPending: false, isError: false, data: { data: {
+    waiting_records: { value: 5, suppressed: false }, referrals_total: { value: 100, suppressed: false }, refusals_total: { value: 2, suppressed: false },
+  } } },
+  { isPending: false, isError: false, data: { data: {
+    waiting_records: { value: 7, suppressed: false }, referrals_total: { value: 120, suppressed: false }, refusals_total: { value: 3, suppressed: false },
+  } } },
+] }));
 vi.mock("@/features/map/region-map", () => ({
-  RegionMap: ({ points, onSelect }: { points: Array<{ id: string; name: string }>; onSelect: (id: string) => void }) => (
+  RegionMap: ({ points, onSelect }: { points: Array<{ id: string; name: string; value: number | null }>; onSelect: (id: string) => void }) => (
     <div aria-label="Карта региональных показателей Казахстана">
-      {points.map((point) => <button key={point.id} type="button" onClick={() => onSelect(point.id)}>{point.name}</button>)}
+      {points.map((point) => <button key={point.id} type="button" data-testid={`map-point-${point.id}`} onClick={() => onSelect(point.id)}>{point.name}: {point.value}</button>)}
     </div>
   ),
 }));
 vi.mock("echarts", () => ({ init: () => ({ setOption: vi.fn(), resize: vi.fn(), dispose: vi.fn() }) }));
 
 vi.mock("@/hooks/use-domain", () => ({
-  useRegions: () => ({ data: { items: [], page: 1, page_size: 20, total: 0, has_next: false } }),
+  useRegions: () => ({ isPending: false, isError: false, data: { items: REGIONS, page: 1, page_size: 20, total: 2, has_next: false } }),
   useSignals: (_enabled: boolean, query: { status?: string }) => ({
     isPending: false,
     isError: false,
@@ -65,9 +78,11 @@ vi.mock("@/hooks/use-domain", () => ({
 }));
 
 vi.mock("@/features/analytics/hooks", () => ({
-  useSituationCenter: () => ({
+  useSituationCenter: (enabled: boolean, query: { region?: string }) => {
+    situationSpy(enabled, query);
+    return {
     overview: { isPending: false, error: null, data: { meta, data: {
-      referrals_total: { value: 1248, suppressed: false }, waiting_records: { value: 124, suppressed: false },
+      referrals_total: { value: query.region ? 100 : 1248, suppressed: false }, waiting_records: { value: query.region ? 5 : 124, suppressed: false },
       refusals_total: { value: 17, suppressed: false }, hospitalized_total: { value: 0, suppressed: false },
       data_quality_warnings: { value: 0, suppressed: false }, represented_organizations: { value: 8, suppressed: false },
       represented_regions: { value: 3, suppressed: false },
@@ -92,7 +107,8 @@ vi.mock("@/features/analytics/hooks", () => ({
       referrals_total: { value: 0, suppressed: false }, waiting_records: { value: 0, suppressed: false },
       refusals_total: { value: 8, suppressed: false }, observed_waiting_median_days: { value: null, suppressed: false },
     }], page: 1, page_size: 20, total: 1, has_next: false } } },
-  }),
+    };
+  },
 }));
 
 vi.mock("@/features/forecasting/hooks", () => ({ useLatestReferralForecast: () => ({
@@ -114,7 +130,7 @@ vi.mock("@/features/forecasting/hooks", () => ({ useLatestReferralForecast: () =
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.unstubAllEnvs());
 
-it("shows the Kazakhstan demo map before KPIs without applying mock regions to backend scope", () => {
+it("uses only canonical API map points and applies the selected region to backend scope", () => {
   vi.stubEnv("NEXT_PUBLIC_APP_ENV", "test");
   vi.stubEnv("NEXT_PUBLIC_SYNTHETIC_DEMO", "true");
   render(<CommandCenterPage />);
@@ -122,12 +138,13 @@ it("shows the Kazakhstan demo map before KPIs without applying mock regions to b
   const mapHeading = screen.getByRole("heading", { name: "Карта региональных показателей" });
   const kpis = screen.getByLabelText("Ключевые показатели");
   expect(Boolean(mapHeading.compareDocumentPosition(kpis) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
-  expect(screen.getByText(/условные демонстрационные значения/i)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Астана" }));
-  expect(screen.getByText("Все доступные регионы")).toBeInTheDocument();
-  expect(screen.getByText("Астана", { selector: "h3" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Данные системы" }));
-  expect(screen.getByText(/нет регионов с сопоставленной географией/i)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Демо-слой" })).not.toBeInTheDocument();
+  expect(screen.getByTestId(`map-point-${REGIONS[0]!.id}`)).toHaveTextContent("5");
+  expect(screen.getByTestId(`map-point-${REGIONS[1]!.id}`)).toHaveTextContent("7");
+  fireEvent.click(screen.getByTestId(`map-point-${REGIONS[0]!.id}`));
+  expect(situationSpy).toHaveBeenLastCalledWith(true, expect.objectContaining({ region: REGIONS[0]!.id }));
+  expect(screen.getByText("Астана [синтетические данные]", { selector: "h3" })).toBeInTheDocument();
+  expect(screen.getByText("Показатели пересчитаны backend в рамках выбранного региона.")).toBeInTheDocument();
 });
 
 it("prioritizes current operational evidence without overstating synthetic or historical data", () => {

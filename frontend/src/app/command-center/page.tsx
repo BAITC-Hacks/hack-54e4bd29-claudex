@@ -106,7 +106,7 @@ export default function CommandCenterPage() {
     (item.display_name ?? item.identity_label ?? item.organization_ref).toLowerCase().includes(search.toLowerCase()),
   );
   const pending = analytics.overview.isPending || analytics.referrals.isPending || analytics.waiting.isPending || analytics.organizations.isPending;
-  const hasError = Boolean(analytics.overview.error ?? analytics.referrals.error ?? analytics.waiting.error ?? analytics.organizations.error);
+  const hasError = Boolean(regions.isError || analytics.overview.error || analytics.referrals.error || analytics.waiting.error || analytics.organizations.error);
   const activeSignals = newSignals.data && inProgressSignals.data ? newSignals.data.total + inProgressSignals.data.total : null;
 
   return (
@@ -150,13 +150,15 @@ export default function CommandCenterPage() {
               metric={metric}
               onMetricChange={setMetric}
               apiPoints={points}
+              apiLoading={regions.isPending}
+              apiError={regions.isError}
               selectedRegionId={selectedRegionId}
               selectedRegionName={selectedRegion?.name}
               onSelectRegion={onSelect}
               apiValues={{
-                referrals: overview.data.referrals_total.value,
-                waiting: overview.data.waiting_records.value,
-                refusals: overview.data.refusals_total.value,
+                referrals: cellValue(overview, "referrals"),
+                waiting: cellValue(overview, "waiting"),
+                refusals: cellValue(overview, "refusals"),
                 organizations: organizations.length,
               }}
             />
@@ -181,7 +183,7 @@ export default function CommandCenterPage() {
 
             <div className="rounded-2xl border border-cyan-100 bg-cyan-50/60 p-5 text-xs leading-6 text-slate-600">
               <p className="flex items-center gap-2 font-bold text-[#12334a]"><CheckCircle2 className="h-4 w-4 text-cyan-700" aria-hidden="true" />Контроль интерпретации</p>
-              <p className="mt-1">Демо-слой карты отделён от агрегатов API. Интерфейс не создаёт значения мощностей коек; несопоставленные идентификаторы остаются видимыми.</p>
+              <p className="mt-1">Карта и агрегаты получают значения из API. Интерфейс не создаёт значения мощностей коек; несопоставленные идентификаторы остаются видимыми.</p>
             </div>
           </div>
         )}

@@ -12,6 +12,11 @@ describe("map geography", () => {
     expect(centerFor("Новый алматинский округ", "unknown")).toBeNull();
   });
 
+  it("recognizes exact canonical names with the synthetic provenance suffix", () => {
+    expect(centerFor("Астана [синтетические данные]", "KZ-ASTANA")).toEqual([51.17, 71.43]);
+    expect(centerFor("Новый алматинский округ [синтетические данные]", "unknown")).toBeNull();
+  });
+
   it("uses neutral volume classes and explicit states", () => {
     expect(volumeClass(80, 100)).toBe("volume-high");
     expect(volumeClass(null, 100)).toBe("empty");
