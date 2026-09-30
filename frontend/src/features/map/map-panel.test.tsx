@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 import { MapPanel } from "./map-panel";
 import { pointLabel } from "./geography";
@@ -19,6 +19,18 @@ const base = {
   onSelectRegion: vi.fn(),
   apiValues: { referrals: null, waiting: null, refusals: null, organizations: 0 },
 };
+
+afterEach(() => vi.unstubAllEnvs());
+
+it("shows synthetic provenance without a duplicate warning below the map", () => {
+  vi.stubEnv("NEXT_PUBLIC_APP_ENV", "test");
+  vi.stubEnv("NEXT_PUBLIC_SYNTHETIC_DEMO", "true");
+  render(<MapPanel {...base} apiError={false} apiLoading={false} />);
+
+  expect(screen.getByText(/Синтетические данные · исторический период · значения из API/)).toBeInTheDocument();
+  expect(screen.queryByText(/Карта не показывает загрузку коек/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/не медицинский норматив/)).not.toBeInTheDocument();
+});
 
 it("reports API errors and loading without substituting invented values", () => {
   const { rerender } = render(<MapPanel {...base} apiError apiLoading={false} />);

@@ -34,18 +34,9 @@
     </section>
 
     <section class="form-panel">
-      <div class="locale">
-        <button class="locale-toggle" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="locale-menu">
-          RU <span aria-hidden="true">⌄</span>
-        </button>
-        <div class="locale-menu" id="locale-menu" role="menu" hidden>
-          <button type="button" role="menuitem" class="locale-option is-active" aria-current="true">
-            <span><strong>Русский</strong><small>RU</small></span><span aria-hidden="true">✓</span>
-          </button>
-          <button type="button" role="menuitem" class="locale-option" disabled aria-disabled="true">
-            <span><strong>Қазақ</strong><small>KK</small></span><em>Скоро</em>
-          </button>
-        </div>
+      <div class="locale" role="group" aria-label="Язык интерфейса">
+        <button type="button" data-language="ru" aria-pressed="true">РУС</button>
+        <button type="button" data-language="kk" aria-pressed="false">ҚАЗ</button>
       </div>
       <div class="form-content">
         <p class="eyebrow">Добро пожаловать</p>

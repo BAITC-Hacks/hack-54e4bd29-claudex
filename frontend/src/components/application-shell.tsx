@@ -19,10 +19,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { BrandMark } from "@/components/brand-mark";
-import { Button } from "@/components/ui/button";
 import { DECISION_SUPPORT_NOTICE, env } from "@/config/env";
 import { useAuth } from "@/features/auth/auth-context";
 import { LogoutButton } from "@/features/auth/logout-button";
+import { LanguageSwitch } from "@/features/i18n/i18n-context";
 import { syntheticDemoLabelEnabled } from "@/features/forecasting/demo-context";
 import { cn } from "@/utils/cn";
 import { SiteHeader } from "@/components/site-header";
@@ -218,6 +218,7 @@ function ApplicationShellContent({ children, pathname }: { children: ReactNode; 
               <p className="truncate text-sm font-extrabold tracking-[-0.02em] text-[#102f45]">{title}</p>
               <p className="hidden text-[11px] text-slate-500 sm:block">Защищённый аналитический контур</p>
             </div>
+            <LanguageSwitch />
             <span
               aria-label={syntheticDemo ? "Синтетические демонстрационные данные" : undefined}
               className="inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-2 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.08em] text-cyan-900 sm:px-3 sm:text-[10px] sm:tracking-[0.1em]"

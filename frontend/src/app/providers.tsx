@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
 import { AuthProvider } from "@/features/auth/auth-context";
+import { LanguageProvider } from "@/features/i18n/i18n-context";
 import { shouldRetryQuery } from "@/services/query-retry";
 
 /**
@@ -27,7 +28,7 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>{children}</AuthProvider>
+      <LanguageProvider><AuthProvider>{children}</AuthProvider></LanguageProvider>
     </QueryClientProvider>
   );
 }

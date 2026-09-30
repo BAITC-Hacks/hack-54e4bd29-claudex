@@ -3,6 +3,7 @@ import type { AnchorHTMLAttributes } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import CommandCenterPage from "@/app/command-center/page";
+import { LanguageProvider, LanguageSwitch } from "@/features/i18n/i18n-context";
 
 const { situationSpy } = vi.hoisted(() => ({ situationSpy: vi.fn() }));
 const REGIONS = [
@@ -151,6 +152,9 @@ it("prioritizes current operational evidence without overstating synthetic or hi
   render(<CommandCenterPage />);
 
   expect(screen.getByRole("heading", { level: 1, name: "Ситуационный центр" })).toBeInTheDocument();
+  expect(screen.getByText("Исторические агрегаты направлений, ожидания и отказов за выбранный период.")).toBeInTheDocument();
+  expect(screen.queryByText(/Показатели не измеряют загрузку коек/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Интерфейс не создаёт значения мощностей коек/)).not.toBeInTheDocument();
   expect(screen.getByText("Исторические данные")).toBeInTheDocument();
   expect(screen.getByText(/Обновлено:.*1 апр/i)).toBeInTheDocument();
   expect(screen.getByText("Активные сигналы")).toBeInTheDocument();
@@ -181,4 +185,12 @@ it("prioritizes current operational evidence without overstating synthetic or hi
   expect(screen.queryByText(/реальные агрегаты/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/фактической нагрузки/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/реальные строки источников/i)).not.toBeInTheDocument();
+});
+
+it("formats visible dates in Kazakh after switching language", () => {
+  render(<LanguageProvider><LanguageSwitch /><CommandCenterPage /></LanguageProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Қаз" }));
+
+  const localizedDate = new Intl.DateTimeFormat("kk-KZ", { day: "numeric", month: "short", year: "numeric" }).format(new Date(meta.latest_import_completed_at));
+  expect(screen.getByText(new RegExp(localizedDate), { selector: "span" })).toBeInTheDocument();
 });

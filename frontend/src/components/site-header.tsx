@@ -7,10 +7,12 @@ import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/auth-context";
 import { LogoutButton } from "@/features/auth/logout-button";
+import { LanguageSwitch, useI18n } from "@/features/i18n/i18n-context";
 import { useLocalResearch } from "@/features/monitoring/local-research";
 
 export function SiteHeader() {
   const { isAuthenticated, login } = useAuth();
+  const { t } = useI18n();
   const research = useLocalResearch();
 
   return (
@@ -29,8 +31,9 @@ export function SiteHeader() {
         </Link>
 
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <LanguageSwitch />
           <span className="hidden rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.11em] text-cyan-900 sm:inline-flex">
-            {research ? "Локальный пилот" : "Исследовательский пилот"}
+            {t(research ? "Локальный пилот" : "Исследовательский пилот")}
           </span>
           {isAuthenticated ? (
             <>
@@ -38,11 +41,11 @@ export function SiteHeader() {
                 href="/command-center"
                 className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#087b83] px-3.5 text-xs font-bold text-white transition hover:bg-[#066a71] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-700 focus-visible:ring-offset-2"
               >
-                Открыть центр <ArrowRight size={14} aria-hidden="true" />
+                {t("Открыть центр")} <ArrowRight size={14} aria-hidden="true" />
               </Link>
               <LogoutButton size="sm" variant="ghost" aria-label="Выйти">
                 <LogOut size={15} aria-hidden="true" />
-                <span className="hidden sm:inline">Выйти</span>
+                <span className="hidden sm:inline">{t("Выйти")}</span>
               </LogoutButton>
             </>
           ) : (
@@ -53,7 +56,7 @@ export function SiteHeader() {
               variant="outline"
               onClick={() => void login()}
             >
-              <LogIn size={15} aria-hidden="true" /> Войти
+              <LogIn size={15} aria-hidden="true" /> {t("Войти")}
             </Button>
           )}
         </div>

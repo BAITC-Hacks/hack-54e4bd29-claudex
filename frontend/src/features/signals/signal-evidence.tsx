@@ -17,7 +17,7 @@ export function SignalEvidence({ detail }: { detail: SignalDetail }) {
         <div className="flex flex-wrap gap-2">
           <Badge variant="neutral">{SCOPE_LABELS[detail.scope_type]}</Badge>
           <Badge variant={detail.data_current ? "neutral" : "warning"}>
-            {detail.data_current ? "Данные актуальны для правила" : "Данные неактуальны"}
+            {detail.data_current ? "Данные актуальны для правила" : "Исторические данные"}
           </Badge>
         </div>
         {detail.forecast_id && (

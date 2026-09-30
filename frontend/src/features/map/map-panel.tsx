@@ -55,7 +55,6 @@ export function MapPanel({ metric, onMetricChange, apiPoints, apiLoading, apiErr
         <div>
           <p className="eyebrow">Региональный контекст · Қазақстан</p>
           <h2 className="mt-1.5 text-lg font-extrabold tracking-[-0.03em] text-[#12334a]">Карта региональных показателей</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500">На карте показан только Казахстан. Цвет обозначает сравнительный уровень, а не медицинский норматив.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <div className="flex overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1">
@@ -83,7 +82,6 @@ export function MapPanel({ metric, onMetricChange, apiPoints, apiLoading, apiErr
           <h3 className="mt-5 text-xl font-extrabold tracking-[-0.04em] text-[#12334a]">{selectedRegionName ?? "Доступная выборка"}</h3>
           <p className="mt-2 text-xs leading-5 text-slate-500">{context}</p>
           {!apiError && !apiLoading && <dl className="mt-6 space-y-2.5"><MetricLine label="Направления" value={apiValues.referrals} /><MetricLine label="Ожидающие" value={apiValues.waiting} /><MetricLine label="Отказы" value={apiValues.refusals} /><MetricLine label="Уникальные организации" value={apiValues.organizations} /></dl>}
-          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-5 text-amber-950">Карта не показывает загрузку коек и не заменяет подтверждённые медицинские данные.</div>
         </aside>
       </div>
     </section>

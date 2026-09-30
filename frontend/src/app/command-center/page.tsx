@@ -26,6 +26,7 @@ import { AuthGate } from "@/features/auth/auth-gate";
 import { useAuth } from "@/features/auth/auth-context";
 import { syntheticDemoLabelEnabled } from "@/features/forecasting/demo-context";
 import { useLatestReferralForecast } from "@/features/forecasting/hooks";
+import { useI18n, type Language } from "@/features/i18n/i18n-context";
 import { MapPanel } from "@/features/map/map-panel";
 import type { MapMetric, RegionPoint } from "@/features/map/region-map";
 import { SEVERITY_LABELS, STATUS_LABELS, formatDateTime } from "@/features/signals/labels";
@@ -48,13 +49,14 @@ function formatNumber(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : value.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
 }
 
-function formatDate(value: string | null | undefined): string {
+function formatDate(value: string | null | undefined, language: Language): string {
   if (!value) return "не указана";
-  return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+  return new Intl.DateTimeFormat(language === "kk" ? "kk-KZ" : "ru-RU", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
 }
 
 export default function CommandCenterPage() {
   const { isAuthenticated } = useAuth();
+  const { language } = useI18n();
   const [metric, setMetric] = useState<MapMetric>("waiting");
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -116,7 +118,7 @@ export default function CommandCenterPage() {
           <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] text-cyan-700">Обзор операционной ситуации</p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.045em] text-[#102f45]">Ситуационный центр</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Исторические агрегаты направлений, ожидания и отказов. Показатели не измеряют загрузку коек.
+            Исторические агрегаты направлений, ожидания и отказов за выбранный период.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-[10px] font-bold text-slate-600">
@@ -126,7 +128,7 @@ export default function CommandCenterPage() {
             <Database className="h-3.5 w-3.5 text-cyan-700" aria-hidden="true" />
             <span>
               <span className="block">{hasError ? "Источник недоступен" : overview ? "Исторические данные" : "Ожидание данных"}</span>
-              {overview?.meta.latest_import_completed_at && <span className="mt-0.5 block font-medium text-slate-400">Обновлено: {formatDate(overview.meta.latest_import_completed_at)}</span>}
+              {overview?.meta.latest_import_completed_at && <span className="mt-0.5 block font-medium text-slate-400">Обновлено: {formatDate(overview.meta.latest_import_completed_at, language)}</span>}
             </span>
           </span>
         </div>
@@ -164,7 +166,7 @@ export default function CommandCenterPage() {
             />
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ключевые показатели">
               <Kpi icon={Activity} label="Направления" value={formatNumber(overview.data.referrals_total.value)} unit="направлений" note="За выбранный период" tone="teal" />
-              <Kpi icon={Users} label="Ожидающие" value={formatNumber(overview.data.waiting_records.value)} unit="записей ожидания" note={`Снимок: ${formatDate(waiting.data.snapshot_at)}`} tone="amber" />
+              <Kpi icon={Users} label="Ожидающие" value={formatNumber(overview.data.waiting_records.value)} unit="записей ожидания" note={`Снимок: ${formatDate(waiting.data.snapshot_at, language)}`} tone="amber" />
               <Kpi icon={Ban} label="Отказы" value={formatNumber(overview.data.refusals_total.value)} unit="отказов" note="За выбранный период" tone="red" />
               <Kpi icon={RadioTower} label="Активные сигналы" value={formatNumber(activeSignals)} unit="сигналов" note="Новые и в работе" tone="blue" />
             </section>
@@ -181,10 +183,6 @@ export default function CommandCenterPage() {
             <LatestSignals query={recentSignals} />
             <ForecastSummary forecast={forecast} />
 
-            <div className="rounded-2xl border border-cyan-100 bg-cyan-50/60 p-5 text-xs leading-6 text-slate-600">
-              <p className="flex items-center gap-2 font-bold text-[#12334a]"><CheckCircle2 className="h-4 w-4 text-cyan-700" aria-hidden="true" />Контроль интерпретации</p>
-              <p className="mt-1">Карта и агрегаты получают значения из API. Интерфейс не создаёт значения мощностей коек; несопоставленные идентификаторы остаются видимыми.</p>
-            </div>
           </div>
         )}
       </AuthGate>
@@ -341,6 +339,7 @@ function MiniMetric({ label, value }: { label: string; value: number | null }) {
 }
 
 function ForecastSummary({ forecast }: { forecast: ReturnType<typeof useLatestReferralForecast> }) {
+  const { language } = useI18n();
   const data = forecast.data;
   return (
     <section className="surface-card rounded-2xl p-5 sm:p-6">
@@ -356,12 +355,12 @@ function ForecastSummary({ forecast }: { forecast: ReturnType<typeof useLatestRe
       {(forecast.error || !data) && !forecast.isPending && <p className="mt-5 rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">Прогноз недоступен для этой области данных.</p>}
       {data && (
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <ForecastFact icon={CalendarDays} label="Период прогноза" value={`${formatDate(data.forecast_start)} — ${formatDate(data.forecast_end)}`} />
+          <ForecastFact icon={CalendarDays} label="Период прогноза" value={`${formatDate(data.forecast_start, language)} — ${formatDate(data.forecast_end, language)}`} />
           <ForecastFact icon={Activity} label="Целевой показатель" value="Ежедневное число направлений" />
           <ForecastFact icon={Clock3} label="Модель" value={`${data.selected_model} · ${data.model_version}`} />
           <ForecastFact icon={CheckCircle2} label="MAE модели" value={`${formatNumber(data.metrics.mae)} направления в день`} />
           <div className="md:col-span-2 xl:col-span-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">
-            <p><b className="text-slate-800">Историческая валидация:</b> {data.validation_period_start && data.validation_period_end ? `${formatDate(data.validation_period_start)} — ${formatDate(data.validation_period_end)}` : "период не указан"}</p>
+            <p><b className="text-slate-800">Историческая валидация:</b> {data.validation_period_start && data.validation_period_end ? `${formatDate(data.validation_period_start, language)} — ${formatDate(data.validation_period_end, language)}` : "период не указан"}</p>
             <p className="mt-1"><b className="text-slate-800">MAE baseline:</b> {formatNumber(data.baseline_metrics.mae)} направления в день</p>
             {syntheticDemoLabelEnabled(process.env.NEXT_PUBLIC_APP_ENV, process.env.NEXT_PUBLIC_SYNTHETIC_DEMO) && <p className="mt-2 font-bold text-amber-800">Синтетические демонстрационные данные</p>}
             <p className="mt-2">{data.disclaimer}</p>

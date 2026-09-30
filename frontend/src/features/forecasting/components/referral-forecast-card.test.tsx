@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { ReferralForecastCard } from "@/features/forecasting/components/referral-forecast-card";
+import { buildForecastChartOption, ReferralForecastCard } from "@/features/forecasting/components/referral-forecast-card";
 import { ApiError } from "@/services/api-client";
 import type { ReferralForecast } from "@/features/forecasting/types";
 
@@ -35,6 +35,15 @@ const forecast: ReferralForecast = {
 };
 
 describe("ReferralForecastCard", () => {
+  it("uses Kazakh legend and date labels in the forecast chart", () => {
+    const labels: Record<string, string> = { "История": "Тарих", "Прогноз": "Болжам", "Простое сравнение": "Қарапайым салыстыру" };
+    const option = buildForecastChartOption(forecast, "kk", (text) => labels[text] ?? text);
+    expect(option).toEqual(expect.objectContaining({
+      legend: { data: ["Тарих", "Болжам", "Қарапайым салыстыру"] },
+      xAxis: expect.objectContaining({ data: expect.arrayContaining([expect.stringMatching(/нау/), expect.stringMatching(/сәу/)]) }),
+    }));
+  });
+
   it("shows persisted forecast provenance, baseline and limitation", () => {
     render(<ReferralForecastCard forecast={forecast} isLoading={false} error={null} isSyntheticDemo />);
 

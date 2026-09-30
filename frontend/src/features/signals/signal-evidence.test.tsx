@@ -57,9 +57,11 @@ describe("SignalEvidence", () => {
     expect(screen.getByText(/аналитическ/i)).toBeInTheDocument();
   });
 
-  it("marks stale evidence explicitly", () => {
+  it("labels older evidence as historical while retaining its evaluation period", () => {
     render(<SignalEvidence detail={{ ...detail, data_current: false }} />);
-    expect(screen.getByText(/данные неактуальны/i)).toBeInTheDocument();
+    expect(screen.getByText("Исторические данные")).toBeInTheDocument();
+    expect(screen.getByText("2025-03-25 — 2025-03-31")).toBeInTheDocument();
+    expect(screen.queryByText(/данные неактуальны/i)).not.toBeInTheDocument();
   });
 });
 
