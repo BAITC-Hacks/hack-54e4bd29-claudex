@@ -115,6 +115,7 @@ services:
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
+      NEXT_PUBLIC_OIDC_ISSUER: ${NEXT_PUBLIC_OIDC_ISSUER:-http://localhost/auth/realms/medsignal}
       NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-local}
       NEXT_PUBLIC_DISCLAIMER_ENABLED: ${NEXT_PUBLIC_DISCLAIMER_ENABLED:-true}
       NEXT_PUBLIC_SYNTHETIC_DEMO: ${NEXT_PUBLIC_SYNTHETIC_DEMO:-false}
