@@ -55,8 +55,11 @@ test("one real local dataset powers map, analytics, forecast and human action", 
   expect(forecast.horizon_days).toBe(7);
   expect(forecast.validation_period_start).toBeTruthy();
   expect(forecast.validation_period_end).toBeTruthy();
-  await expect(page.getByText(`${forecast.metrics.mae.toLocaleString("ru-RU", { maximumFractionDigits: 1 })} направления в день`)).toBeVisible();
-  await expect(page.getByText(/MAE baseline:/)).toContainText(
+  await expect(page.getByText(
+    `${forecast.metrics.mae.toLocaleString("ru-RU", { maximumFractionDigits: 1 })} направления в день`,
+    { exact: true },
+  )).toBeVisible();
+  await expect(page.getByText(/MAE baseline:/).locator("..")).toContainText(
     forecast.baseline_metrics.mae.toLocaleString("ru-RU", { maximumFractionDigits: 1 }),
   );
 

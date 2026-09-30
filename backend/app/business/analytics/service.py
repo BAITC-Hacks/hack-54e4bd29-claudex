@@ -490,6 +490,7 @@ class AnalyticsService:
         raw: RawOrganization,
         *,
         hospital_names: dict[uuid.UUID, str] | None = None,
+        hospital_region_ids: dict[uuid.UUID, uuid.UUID] | None = None,
         waiting_confirmed: bool = True,
     ) -> OrganizationSummary:
         if raw.canonical_hospital_id is not None:
@@ -507,10 +508,13 @@ class AnalyticsService:
             )
             name = raw.source_value
             label = "Организация не сопоставлена"
+        region_id = None
+        if raw.canonical_hospital_id is not None and hospital_region_ids is not None:
+            region_id = hospital_region_ids.get(raw.canonical_hospital_id)
         return OrganizationSummary(
             identity=identity,
             organization_name=name,
-            region_id=None,
+            region_id=region_id,
             referrals_total=_exact(raw.referrals_total),
             waiting_records=_exact(raw.waiting_records if waiting_confirmed else None),
             refusals_total=_exact(raw.refusals_total),
@@ -564,6 +568,7 @@ class AnalyticsService:
             )
         )
         hospital_names = self._metadata.hospital_names(hospital_ids)
+        hospital_region_ids = self._metadata.hospital_region_ids(hospital_ids)
         return OrganizationSummariesResult(
             metadata=self._metadata_for(
                 filters, watermark, limitations=(MAPPING_LIMITATION,)
@@ -572,6 +577,7 @@ class AnalyticsService:
                 self._organization_summary(
                     row,
                     hospital_names=hospital_names,
+                    hospital_region_ids=hospital_region_ids,
                     waiting_confirmed=bool(scope.waiting_import_ids),
                 )
                 for row in rows
@@ -597,6 +603,9 @@ class AnalyticsService:
             raise NotFoundError("Организация не найдена")
         raw, treated = result
         watermark = self._watermark()
+        hospital_region_ids = self._metadata.hospital_region_ids(
+            (raw.canonical_hospital_id,) if raw.canonical_hospital_id is not None else ()
+        )
         return OrganizationDetail(
             metadata=self._metadata_for(
                 filters,
@@ -604,7 +613,9 @@ class AnalyticsService:
                 limitations=(MAPPING_LIMITATION, TREATED_LIMITATION),
             ),
             organization=self._organization_summary(
-                raw, waiting_confirmed=bool(scope.waiting_import_ids)
+                raw,
+                hospital_region_ids=hospital_region_ids,
+                waiting_confirmed=bool(scope.waiting_import_ids),
             ),
             treated_snapshot=(
                 TreatedSnapshot(

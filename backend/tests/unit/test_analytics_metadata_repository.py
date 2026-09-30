@@ -73,3 +73,26 @@ def test_hospital_names_skips_database_for_empty_input() -> None:
 
     assert repository.hospital_names(()) == {}
     session_factory.assert_not_called()
+
+
+def test_hospital_region_ids_loads_canonical_metadata_in_one_query() -> None:
+    first, second, region = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    session = MagicMock()
+    session.execute.return_value.all.return_value = [(first, region), (second, region)]
+    session_factory = MagicMock()
+    session_factory.return_value.__enter__.return_value = session
+    repository = SqlAlchemyAnalyticsMetadataRepository(session_factory)
+
+    assert repository.hospital_region_ids((first, second)) == {
+        first: region,
+        second: region,
+    }
+    session.execute.assert_called_once()
+
+
+def test_hospital_region_ids_skips_database_for_empty_input() -> None:
+    session_factory = MagicMock()
+    repository = SqlAlchemyAnalyticsMetadataRepository(session_factory)
+
+    assert repository.hospital_region_ids(()) == {}
+    session_factory.assert_not_called()

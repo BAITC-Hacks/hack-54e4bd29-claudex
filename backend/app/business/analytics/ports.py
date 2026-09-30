@@ -102,6 +102,10 @@ class AnalyticsMetadataRepository(Protocol):
         self, hospital_ids: tuple[uuid.UUID, ...]
     ) -> dict[uuid.UUID, str]: ...
 
+    def hospital_region_ids(
+        self, hospital_ids: tuple[uuid.UUID, ...]
+    ) -> dict[uuid.UUID, uuid.UUID]: ...
+
 
 class AnalyticsCache(Protocol):
     def get_overview(self, key: str) -> RawOverview | None: ...

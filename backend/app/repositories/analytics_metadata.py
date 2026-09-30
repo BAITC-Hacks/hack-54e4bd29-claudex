@@ -156,3 +156,16 @@ class SqlAlchemyAnalyticsMetadataRepository:
                 select(Hospital.id, Hospital.name).where(Hospital.id.in_(hospital_ids))
             ).all()
         return {row[0]: row[1] for row in rows}
+
+    def hospital_region_ids(
+        self, hospital_ids: tuple[uuid.UUID, ...]
+    ) -> dict[uuid.UUID, uuid.UUID]:
+        if not hospital_ids:
+            return {}
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(Hospital.id, Hospital.region_id).where(
+                    Hospital.id.in_(hospital_ids)
+                )
+            ).all()
+        return dict(rows)

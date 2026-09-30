@@ -62,6 +62,7 @@ class FakeAnalyticsRepository:
 class FakeMetadataRepository:
     def __init__(self, hospital_ids: tuple[uuid.UUID, ...]) -> None:
         self.hospital_ids = hospital_ids
+        self.hospital_regions: dict[uuid.UUID, uuid.UUID] = {}
         self.watermark = ImportWatermark(
             mapping_version="mapping-1",
             mapping_generation=1,
@@ -88,6 +89,15 @@ class FakeMetadataRepository:
 
     def hospital_names(self, hospital_ids: tuple[uuid.UUID, ...]) -> dict[uuid.UUID, str]:
         return {hospital_id: f"Hospital {hospital_id}" for hospital_id in hospital_ids}
+
+    def hospital_region_ids(
+        self, hospital_ids: tuple[uuid.UUID, ...]
+    ) -> dict[uuid.UUID, uuid.UUID]:
+        return {
+            hospital_id: self.hospital_regions[hospital_id]
+            for hospital_id in hospital_ids
+            if hospital_id in self.hospital_regions
+        }
 
 
 class FakeCache:
@@ -156,6 +166,34 @@ def make_service(
         cache_ttl_seconds=60,
         clock=lambda: NOW,
     )
+
+
+def test_mapped_organization_list_and_detail_include_canonical_region() -> None:
+    hospital_id, region_id = uuid.uuid4(), uuid.uuid4()
+    raw = RawOrganization(
+        identity_space="IS_BG:REFERRALS:RECEIVING",
+        source_system="ИС БГ",
+        source_value="SYN-ORG-KZ-ASTANA",
+        canonical_hospital_id=hospital_id,
+        referrals_total=20,
+        waiting_records=5,
+        refusals_total=1,
+        observed_waiting_median_days=None,
+    )
+    repository = FakeAnalyticsRepository()
+    repository.organizations = lambda *_args, **_kwargs: ((raw,), 1)  # type: ignore[method-assign]
+    repository.organization_detail = lambda *_args: (raw, None)  # type: ignore[attr-defined]
+    metadata = FakeMetadataRepository(())
+    metadata.hospital_regions[hospital_id] = region_id
+    service = make_service(repository, metadata, FakeCache())
+
+    listed = service.organizations(context(Role.ADMIN), DATE_FILTER, page=1, page_size=10)
+    detail = service.organization_detail(
+        context(Role.ADMIN), OrganizationIdentity.canonical(hospital_id), DATE_FILTER
+    )
+
+    assert listed.organizations[0].region_id == region_id
+    assert detail.organization.region_id == region_id
 
 
 def test_hospital_role_queries_only_explicit_canonical_hospitals() -> None:

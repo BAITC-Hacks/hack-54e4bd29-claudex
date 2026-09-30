@@ -17,8 +17,15 @@ function testPassword(username: string): string {
 
 export async function login(page: Page, username: string, returnTo = "/dashboard") {
   await page.goto(returnTo);
-  await page.getByRole("button", { name: "Войти через Keycloak" }).click();
-  await page.locator("#username").fill(username);
+  const loginButton = page.getByRole("button", { name: "Войти через Keycloak" });
+  const usernameInput = page.locator("#username");
+  // Protected routes may redirect straight to Keycloak or render a sign-in button.
+  await Promise.any([
+    loginButton.waitFor({ state: "visible" }),
+    usernameInput.waitFor({ state: "visible" }),
+  ]);
+  if (await loginButton.isVisible()) await loginButton.click();
+  await usernameInput.fill(username);
   await page.locator("#password").fill(testPassword(username));
   await page.locator("#kc-login").click();
   await page.getByRole("button", { name: "Выйти" }).waitFor();
